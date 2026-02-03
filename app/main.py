@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TLEX - Telegram Media Server",
     description="Self-hosted streaming platform using Telegram as storage backend",
-    version="1.0.1",
+    version="1.0.3",
     lifespan=lifespan,
 )
 
@@ -75,7 +75,7 @@ async def root():
     """Health check endpoint."""
     return {
         "name": "TLEX",
-        "version": "1.0.1",
+        "version": "1.0.3",
         "status": "running",
         "environment": settings.environment,
     }

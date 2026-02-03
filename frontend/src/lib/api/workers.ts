@@ -25,7 +25,7 @@ export interface WorkersStatusResponse {
 }
 
 export async function getWorkersStatus(): Promise<WorkersStatusResponse> {
-  const response = await api.get<WorkersStatusResponse>("/workers/status");
+  const response = await api.get<WorkersStatusResponse>("/api/v1/workers/status");
   return response.data;
 }
 
@@ -43,6 +43,7 @@ export interface SystemStats {
 }
 
 export async function getSystemStats(): Promise<SystemStats> {
-  const response = await api.get<SystemStats>("/stats");
+  const response = await api.get<SystemStats>("/api/v1/stats");
   return response.data;
 }
+

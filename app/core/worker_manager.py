@@ -28,6 +28,7 @@ class WorkerManager:
 
     def __init__(self) -> None:
         self._clients: dict[int, Client] = {}  # worker_id -> Client
+        self._worker_loads: dict[int, int] = {}  # worker_id -> current_load
         self._lock = asyncio.Lock()
 
     async def load_workers(self, session: AsyncSession) -> int:
@@ -113,28 +114,24 @@ class WorkerManager:
 
     async def acquire_worker(self, session: AsyncSession, worker: Worker) -> None:
         """Increment worker load when starting a stream."""
+        # Update in-memory load
+        self._worker_loads[worker.id] = self._worker_loads.get(worker.id, 0) + 1
+        
+        # We don't update DB for every stream to avoid write contention
+        # But we update last_used_at
         stmt = (
             update(Worker)
             .where(Worker.id == worker.id)
-            .values(
-                current_load=Worker.current_load + 1,
-                last_used_at=utc_now(),
-            )
+            .values(last_used_at=utc_now())
         )
         await session.execute(stmt)
         await session.commit()
 
-    async def release_worker(self, session: AsyncSession, worker: Worker) -> None:
+    async def release_worker(self, worker_id: int) -> None:
         """Decrement worker load when stream ends."""
-        stmt = (
-            update(Worker)
-            .where(Worker.id == worker.id)
-            .values(
-                current_load=Worker.current_load - 1,
-            )
-        )
-        await session.execute(stmt)
-        await session.commit()
+        # Update in-memory load
+        if worker_id in self._worker_loads:
+            self._worker_loads[worker_id] = max(0, self._worker_loads[worker_id] - 1)
 
     async def handle_flood_wait(
         self, session: AsyncSession, worker: Worker, wait_seconds: int
@@ -209,7 +206,7 @@ class WorkerManager:
                 "phone": w.phone_number[-4:] if w.phone_number else "****",  # Last 4 digits only
                 "is_premium": w.is_premium,
                 "status": w.status.value,
-                "current_load": w.current_load,
+                "current_load": self._worker_loads.get(w.id, 0),
                 "is_connected": w.id in self._clients,
             }
 
@@ -222,8 +219,8 @@ class WorkerManager:
             workers_info.append(info)
 
         # Summary
-        active_count = sum(1 for w in workers_info if w["status"] == "active")
-        flood_count = sum(1 for w in workers_info if w["status"] == "flood_wait")
+        active_count = sum(1 for w in workers_info if w["status"] == "ACTIVE")
+        flood_count = sum(1 for w in workers_info if w["status"] == "FLOOD_WAIT")
 
         return {
             "workers": workers_info,

@@ -98,10 +98,13 @@ class VirtualStreamReader:
             return False
 
         self._worker, self._client = result
+        await worker_manager.acquire_worker(self._session, self._worker)
         return True
 
     async def _release_worker(self) -> None:
         """Release the worker when done streaming."""
+        if self._worker:
+            await worker_manager.release_worker(self._worker.id)
         self._worker = None
         self._client = None
 
@@ -138,27 +141,39 @@ class VirtualStreamReader:
         # Pre-refresh all file_ids to avoid FileReferenceExpired during streaming
         await self._refresh_all_file_ids()
 
-        current_offset = start
-        bytes_remaining = end - start
-
         try:
-            while bytes_remaining > 0:
-                position = self._find_part_for_offset(current_offset)
-                if position is None:
+            current_offset = start
+            bytes_read = 0
+            total_bytes_to_read = end - start
+
+            while current_offset < end:
+                # Find which part contains the current offset
+                pos = self._find_part_for_offset(current_offset)
+                if not pos:
                     break
 
-                part = position.part
-                local_offset = position.local_offset
-
                 # Calculate how many bytes to read from this part
-                bytes_in_part = part.file_size - local_offset
-                bytes_to_read = min(bytes_remaining, bytes_in_part)
+                part_remaining_bytes = pos.part.file_size - pos.local_offset
+                # Don't read past the global end
+                chunk_len = min(part_remaining_bytes, end - current_offset)
 
-                async for chunk in self._stream_part(part, local_offset, bytes_to_read):
+                # Stream from this part
+                async for chunk in self._stream_part(
+                    pos.part,
+                    offset=pos.local_offset,
+                    length=chunk_len,
+                ):
                     yield chunk
-                    chunk_len = len(chunk)
-                    current_offset += chunk_len
-                    bytes_remaining -= chunk_len
+                    chunk_size = len(chunk)
+                    current_offset += chunk_size
+                    bytes_read += chunk_size
+
+                    # Verify we didn't overshoot
+                    if current_offset >= end:
+                        break
+
+                # If connection dropped or part ended, loop will continue to next part
+                # or break if done
 
         finally:
             await self._release_worker()
