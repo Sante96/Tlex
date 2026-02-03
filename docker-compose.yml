@@ -1,0 +1,135 @@
+
+
+services:
+  # ============================================
+  # PostgreSQL 15 - The Truth Source
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: tlex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tlex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tlex_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-tlex_db}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tlex} -d ${POSTGRES_DB:-tlex_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis - Cache & Locks for Worker Coordination
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: tlex-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # pgAdmin 4 - Database Management UI
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tlex-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@tlex.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - ./data/pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ============================================
+  # Cloudflared - Tunnel for HTTPS Exposure
+  # ============================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tlex-cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - postgres
+      - redis
+    # NOTE: You need to configure the tunnel via Cloudflare Dashboard
+    # The token should be set in .env file after running:
+    # cloudflared tunnel login
+    # cloudflared tunnel create tlex
+    # Then copy the token to CLOUDFLARE_TUNNEL_TOKEN
+
+  # ============================================
+  # Backend (FastAPI)
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tlex-backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-tlex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tlex_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-tlex_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Override localhost with container names for internal comms
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data  # Persist data
+      - ./cache:/app/cache # Persist cache
+      - ./sessions:/app/sessions # Persist sessions
+
+  # ============================================
+  # Frontend (Next.js)
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tlex-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # If SSR needs to talk to backend, use http://backend:8000
+      # But for client side (browser), it needs public URL (localhost:8000)
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: tlex-network
