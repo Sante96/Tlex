@@ -17,8 +17,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+
 parts/
 sdist/
 var/
@@ -49,6 +48,7 @@ ENV/
 *.swp
 *.swo
 *~
+.ruff_cache/
 
 # ============================================
 # Docker Volumes (Data)

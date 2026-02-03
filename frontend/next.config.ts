@@ -12,6 +12,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://backend:8000/api/:path*",
+      },
+      {
+        source: "/docs",
+        destination: "http://backend:8000/docs",
+      },
+      {
+        source: "/openapi.json",
+        destination: "http://backend:8000/openapi.json",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
