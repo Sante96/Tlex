@@ -59,17 +59,17 @@ services:
         condition: service_healthy
 
   # ============================================
-  # Cloudflared - Quick Tunnel (Temporary URL)
+  # Cloudflared - Quick Tunnel (Default)
   # ============================================
+  # Note: This creates a temporary random URL.
+  # To use a custom domain, use docker-compose.override.yml
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: tlex-cloudflared
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    command: tunnel --url http://frontend:3000
     depends_on:
-      - frontend
-
-  # ============================================
+      - frontend # ============================================
   # Backend (FastAPI)
   # ============================================
   backend:

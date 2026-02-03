@@ -1,0 +1,12 @@
+services:
+  # ============================================
+  # Cloudflared - Secure Tunnel (Optional)
+  # ============================================
+  # Uncomment to use Cloudflare Tunnel
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: tlex-cloudflared
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+  #   depends_on:
+  #     - frontend

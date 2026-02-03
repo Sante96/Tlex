@@ -109,3 +109,5 @@ next-env.d.ts
 
 
 avatars/
+# Docker Overrides
+docker-compose.override.yml
