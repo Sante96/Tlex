@@ -95,7 +95,7 @@ async def update_progress(
             WatchProgress.media_item_id == media_id,
         )
     )
-    progress = result.scalar_one_or_none()
+    progress = result.scalars().first()
 
     if not progress:
         progress = WatchProgress(

@@ -61,8 +61,8 @@ class FFmpegRemuxer:
             "-hide_banner",
             "-loglevel",
             "warning",
-            "-probesize", "1M",
-            "-analyzeduration", "1M",
+            "-probesize", "10M",
+            "-analyzeduration", "10M",
             "-seekable", "1",
         ]
 
