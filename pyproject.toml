@@ -1,9 +1,9 @@
 [project]
 name = "tlex"
-version = "0.1.0"
+version = "1.0.1"
 description = "Telegram Media Server - Self-hosted streaming platform using Telegram as storage backend"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 
 dependencies = [

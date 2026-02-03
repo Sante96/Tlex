@@ -115,9 +115,8 @@ class SubtitleExtractor:
         """
         Extract a subtitle track directly from a VirtualStreamReader.
 
-        This method reads the full file content from the virtual reader and processes it
-        with FFmpeg. This avoids HTTP conflicts and allows extracting subtitles from
-        files that are split across multiple parts.
+        This method downloads the file to a temp location and runs FFmpeg on it.
+        FFmpeg needs seekable input for MKV containers, so piping doesn't work reliably.
 
         Args:
             reader: The VirtualStreamReader instance to read from.
@@ -133,7 +132,7 @@ class SubtitleExtractor:
         # Read ENTIRE file - MKV subtitles are distributed throughout the file
         read_size = reader.total_size
 
-        logger.info(f"Reading {read_size / 1024 / 1024:.1f}MB for subtitle extraction (full file)")
+        logger.debug(f"Reading {read_size / 1024 / 1024:.1f}MB for subtitle extraction")
 
         # Write to temp file
         with tempfile.NamedTemporaryFile(suffix=".mkv", delete=False) as tmp:
@@ -143,7 +142,7 @@ class SubtitleExtractor:
                 tmp.write(chunk)
                 bytes_written += len(chunk)
 
-        logger.info(f"Wrote {bytes_written} bytes to temp file: {tmp_path}")
+        logger.debug(f"Wrote {bytes_written / 1024 / 1024:.1f}MB to temp file")
 
         cmd = [
             self._ffmpeg_path,
@@ -157,7 +156,7 @@ class SubtitleExtractor:
             "-",
         ]
 
-        logger.info(f"Extracting subtitle from temp file: stream {stream_index} as {output_format}")
+        logger.debug(f"Extracting subtitle stream {stream_index} as {output_format}")
         logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
         # Use subprocess.run in thread
@@ -165,7 +164,7 @@ class SubtitleExtractor:
             return subprocess.run(
                 cmd,
                 capture_output=True,
-                timeout=60,
+                timeout=120,  # Increased timeout for large files
             )
 
         try:
@@ -173,7 +172,7 @@ class SubtitleExtractor:
             with ThreadPoolExecutor() as executor:
                 result = await loop.run_in_executor(executor, run_ffmpeg)
 
-            logger.info(f"FFmpeg finished: returncode={result.returncode}, stdout={len(result.stdout)} bytes")
+            logger.debug(f"FFmpeg: code={result.returncode}, output={len(result.stdout)} bytes")
             if result.stderr:
                 logger.warning(f"FFmpeg stderr: {result.stderr.decode()}")
 
@@ -182,7 +181,7 @@ class SubtitleExtractor:
                 logger.error(f"Subtitle extraction failed (code {result.returncode}): {error_msg}")
                 raise RuntimeError(error_msg or f"FFmpeg failed with code {result.returncode}")
 
-            logger.info(f"Extracted subtitle from reader: {len(result.stdout)} bytes")
+            logger.debug(f"Extracted {len(result.stdout)} bytes subtitle")
             return result.stdout
 
         except subprocess.TimeoutExpired:

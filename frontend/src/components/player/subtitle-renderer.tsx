@@ -52,7 +52,8 @@ declare class SubtitlesOctopus {
   resize(width?: number, height?: number, top?: number, left?: number): void;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use empty string for relative paths (API calls go through Next.js rewrites)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export const SubtitleRenderer = forwardRef<
   SubtitleRendererHandle,

@@ -12,6 +12,7 @@ from app.api.v1 import (
     stream,
     subtitles,
     watchlist,
+    workers,
 )
 
 router = APIRouter(prefix="/v1")
@@ -24,3 +25,5 @@ router.include_router(subtitles.router, prefix="/subtitles", tags=["subtitles"])
 router.include_router(progress.router)
 router.include_router(profiles.router)
 router.include_router(watchlist.router)
+router.include_router(workers.router, tags=["workers"])
+

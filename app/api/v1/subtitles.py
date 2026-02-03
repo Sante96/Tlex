@@ -45,7 +45,7 @@ async def get_subtitle(
     Returns:
     - ASS/SRT file content (original, unmodified)
     """
-    logger.info(f"GET subtitle request: media={media_id}, track={track}, format={format}")
+    logger.debug(f"Subtitle request: media={media_id}, track={track}, format={format}")
 
     if format not in ("ass", "srt"):
         raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
@@ -53,7 +53,7 @@ async def get_subtitle(
     # Check cache first (must exist AND have content)
     cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{track}.{format}"
     if cache_file.exists() and cache_file.stat().st_size > 0:
-        logger.info(f"Serving cached subtitle: {cache_file}")
+        logger.debug(f"Serving cached subtitle: {cache_file.name}")
         content = cache_file.read_bytes()
     else:
         # Need to extract - validate media exists
@@ -93,7 +93,7 @@ async def get_subtitle(
         if relative_index is None:
             raise HTTPException(status_code=400, detail=f"Subtitle track {track} not found")
 
-        logger.info(f"Extracting subtitle: media={media_id}, track={track}, relative={relative_index}")
+        logger.debug(f"Extracting subtitle: media={media_id}, track={track}")
 
         try:
             content = await subtitle_extractor.extract_subtitle_from_reader(
@@ -103,7 +103,7 @@ async def get_subtitle(
             )
             # Cache the result
             cache_file.write_bytes(content)
-            logger.info(f"Cached subtitle: {cache_file}")
+            logger.debug(f"Cached subtitle: {cache_file.name}")
         except RuntimeError as e:
             logger.error(f"Subtitle extraction failed: {e}")
             raise HTTPException(status_code=500, detail=str(e) or "Extraction failed") from None

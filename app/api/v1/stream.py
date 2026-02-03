@@ -65,7 +65,6 @@ async def warm_stream(
     """
     import time
 
-    from app.services.virtual_stream import _FILE_ID_CACHE
 
     start = time.time()
 
@@ -73,19 +72,15 @@ async def warm_stream(
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
-    # Log part IDs before refresh
-    part_ids = [p.id for p in reader._parts]
-    logger.debug(f"[WARM] Part IDs for media {media_id}: {part_ids}")
-    logger.debug(f"[WARM] Cache keys before: {list(_FILE_ID_CACHE.keys())}")
+    logger.debug(f"Warm: media={media_id}, parts={len(reader._parts)}")
 
     # Force refresh of all file_ids
     await reader._refresh_all_file_ids()
 
-    # Log cache state after refresh
-    logger.debug(f"[WARM] Cache keys after: {list(_FILE_ID_CACHE.keys())}")
+
 
     elapsed = time.time() - start
-    logger.info(f"[WARM] Pre-warmed file_id for media {media_id} in {elapsed:.2f}s")
+    logger.debug(f"Pre-warmed cache for media {media_id} in {elapsed:.2f}s")
 
     return {"status": "ok", "elapsed_ms": int(elapsed * 1000)}
 
@@ -211,13 +206,13 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
                 safe_idx = max(0, idx)
                 if safe_idx >= 0:
                     keyframe = keyframes[safe_idx]
-                    logger.info(f"Seek: target {target_time}s, keyframe {keyframe}s (idx {safe_idx})")
+                    logger.debug(f"Seek: target={target_time}s -> keyframe={keyframe}s")
                     return keyframe
         except json.JSONDecodeError:
             pass
 
     # Extract via MKV Cues (fast: only reads ~3MB)
-    logger.info(f"Extracting keyframes via MKV Cues for media {media_id}...")
+    logger.debug(f"Extracting keyframes for media {media_id}")
     base_url = f"http://127.0.0.1:{settings.app_port}"
     input_url = f"{base_url}/api/v1/stream/raw/{media_id}"
 
@@ -226,7 +221,7 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
     if keyframes:
         media.keyframes_index = json.dumps(keyframes)
         await session.commit()
-        logger.info(f"Cached {len(keyframes)} keyframes for media {media_id}")
+        logger.debug(f"Cached {len(keyframes)} keyframes for media {media_id}")
 
         # Find keyframe closest to target (no pre-roll)
         idx = bisect.bisect_right(keyframes, target_time) - 1
@@ -312,7 +307,7 @@ async def stream_play(
     pre_seek_buffer = 5.0
     pre_seek_time = max(0.0, keyframe_time - pre_seek_buffer)
 
-    logger.info(f"Keyframe Seek: requested={t}s, keyframe={keyframe_time}s, pre_seek={pre_seek_time}s")
+    logger.debug(f"Keyframe seek: req={t}s, keyframe={keyframe_time}s, pre_seek={pre_seek_time}s")
 
     options = RemuxOptions(
         video_stream=video,
@@ -321,7 +316,7 @@ async def stream_play(
         pre_seek_time=pre_seek_time if pre_seek_time > 0 else None,
     )
 
-    logger.info(f"Starting playback: media={media_id}, audio={audio}, video={video}, t={keyframe_time}")
+    logger.debug(f"Starting playback: media={media_id}, audio={audio}, video={video}, t={keyframe_time}")
 
     return StreamingResponse(
         ffmpeg_remuxer.stream(input_url, options),

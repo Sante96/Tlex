@@ -163,7 +163,7 @@ class FFmpegRemuxer:
         start_time = time.time()
 
         cmd = self.build_command(input_url, options)
-        logger.info(f"[FFMPEG] Command: {' '.join(cmd)}")
+        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
         chunk_size = 64 * 1024  # 64KB chunks
         queue: Queue[bytes | None] = Queue(maxsize=100)
@@ -181,9 +181,9 @@ class FFmpegRemuxer:
                     if chunk_count == 1:
                         first_chunk_time[0] = time.time()
                         elapsed = first_chunk_time[0] - start_time
-                        logger.info(f"[FFMPEG] First chunk received after {elapsed:.2f}s")
+                        logger.debug(f"FFmpeg first chunk after {elapsed:.2f}s")
                     q.put(chunk)
-                logger.info(f"[FFMPEG] Total chunks: {chunk_count}")
+                logger.debug(f"FFmpeg stream complete: {chunk_count} chunks")
             except Exception as e:
                 logger.error(f"Reader thread error: {e}")
             finally:

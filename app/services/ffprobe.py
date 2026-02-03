@@ -205,7 +205,7 @@ class FFProbeService:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 temp_path = tmp.name
 
-            logger.info(f"Streaming first {max_mb}MB for analysis: {file_id[:20]}...")
+            logger.debug(f"Streaming first {max_mb}MB for analysis: {file_id[:20]}...")
 
             # Stream only first chunks (1 chunk = 1MB in Pyrogram)
             bytes_written = 0
@@ -213,10 +213,10 @@ class FFProbeService:
                 async for chunk in client.stream_media(file_id, limit=max_mb):
                     f.write(chunk)
                     bytes_written += len(chunk)
-                    if bytes_written % (10 * 1024 * 1024) == 0:  # Log every 10MB
-                        logger.info(f"Downloaded {bytes_written // (1024*1024)}MB...")
+                    if bytes_written % (10 * 1024 * 1024) == 0:
+                        logger.debug(f"Downloaded {bytes_written // (1024*1024)}MB")
 
-            logger.info(f"Download complete: {bytes_written // (1024*1024)}MB")
+            logger.debug(f"Download complete: {bytes_written // (1024*1024)}MB")
 
             result = await self.probe_file(temp_path)
             return result
@@ -281,7 +281,7 @@ class FFProbeService:
                             break
 
             keyframes.sort()
-            logger.info(f"Extracted {len(keyframes)} keyframes from {file_path}")
+            logger.debug(f"Extracted {len(keyframes)} keyframes")
             return keyframes
 
         except subprocess.TimeoutExpired:
@@ -358,7 +358,7 @@ class FFProbeService:
                             continue
 
             if best_keyframe > 0:
-                logger.info(f"Found keyframe at {best_keyframe}s for target {target_time}s")
+                logger.debug(f"Found keyframe at {best_keyframe:.2f}s for target {target_time:.1f}s")
                 return best_keyframe
 
             logger.warning(f"No keyframe found before {target_time}s, using target")

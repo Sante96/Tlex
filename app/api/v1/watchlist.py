@@ -11,7 +11,7 @@ from app.schemas import WatchlistListResponse, WatchlistMediaResponse
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
-@router.get("/", response_model=WatchlistListResponse)
+@router.get("", response_model=WatchlistListResponse)
 async def get_watchlist(
     session: DBSession,
     current_user: User = Depends(get_current_user),

@@ -54,6 +54,13 @@ class WorkerManager:
                 await client.start()
                 self._clients[worker.id] = client
 
+                # Export and save updated session string to preserve MTProto state
+                # This prevents BadMsgNotification errors after container restarts
+                updated_session = await client.export_session_string()
+                if updated_session != worker.session_string:
+                    worker.session_string = updated_session
+                    logger.debug(f"Updated session_string for worker {worker.id}")
+
                 # Mark as active
                 worker.status = WorkerStatus.ACTIVE
                 await session.commit()

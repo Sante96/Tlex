@@ -76,7 +76,7 @@ class ScannerService:
         try:
             from pyrogram.raw import functions
 
-            logger.info(f"Getting topics for channel {channel_id}")
+            logger.debug(f"Getting topics for channel {channel_id}")
 
             async for dialog in client.get_dialogs():
                 if dialog.chat.id == channel_id:
@@ -99,9 +99,9 @@ class ScannerService:
                     if topic.id == 1:
                         continue
                     topics.append({"id": topic.id, "title": topic.title})
-                    logger.info(f"Found topic: {topic.title} (id={topic.id})")
+                    logger.debug(f"Found topic: {topic.title} (id={topic.id})")
 
-            logger.info(f"Found {len(topics)} topics to scan")
+            logger.debug(f"Found {len(topics)} topics to scan")
 
             for topic in topics:
                 await self._scan_topic(
@@ -126,7 +126,7 @@ class ScannerService:
         try:
             is_movies_topic = topic_id == settings.scanner_movies_topic_id
 
-            logger.info(
+            logger.debug(
                 f"Scanning topic {topic_id} ({topic_name or 'unknown'})"
                 f" - Type: {'Movies' if is_movies_topic else 'Series'}"
             )

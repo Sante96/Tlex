@@ -9,6 +9,28 @@ from loguru import logger
 from app.config import get_settings
 
 
+class StderrFilter:
+    """Filter stderr to suppress noisy Pyrogram BadMsgNotification errors."""
+
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.suppress_patterns = [
+            "BadMsgNotification",
+            "'BadMsgNotification' object has no attribute",
+        ]
+
+    def write(self, msg):
+        # Suppress messages matching patterns
+        if not any(pattern in msg for pattern in self.suppress_patterns):
+            self.original_stderr.write(msg)
+
+    def flush(self):
+        self.original_stderr.flush()
+
+    def fileno(self):
+        return self.original_stderr.fileno()
+
+
 def json_serializer(record: dict) -> str:
     """Serialize log record to JSON for structured logging."""
     log_entry = {
@@ -46,6 +68,9 @@ def setup_logging() -> None:
 
     # Remove default handler
     logger.remove()
+
+    # Install stderr filter to suppress noisy Pyrogram errors
+    sys.stderr = StderrFilter(sys.stderr)
 
     if settings.environment == "dev":
         # Development: colored console output
@@ -91,7 +116,9 @@ def setup_logging() -> None:
         "httpx",
         "httpcore",
         "pyrogram",
+        "pyrogram.session",
+        "pyrogram.connection",
     ]:
-        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+        logging.getLogger(noisy_logger).setLevel(logging.ERROR)
 
     logger.info(f"Logging configured for {settings.environment} environment")

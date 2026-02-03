@@ -28,26 +28,26 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info("🚀 Starting TLEX...")
+    logger.info("Starting TLEX...")
 
     # Load workers
     async with async_session_maker() as session:
         count = await worker_manager.load_workers(session)
-        logger.info(f"📡 Loaded {count} Telegram workers")
+        logger.info(f"Loaded {count} Telegram workers")
 
     yield
 
     # Shutdown
-    logger.info("🛑 Shutting down TLEX...")
+    logger.info("Shutting down TLEX...")
     await worker_manager.shutdown()
     await engine.dispose()
-    logger.info("👋 Goodbye!")
+    logger.info("Goodbye!")
 
 
 app = FastAPI(
     title="TLEX - Telegram Media Server",
     description="Self-hosted streaming platform using Telegram as storage backend",
-    version="0.1.0",
+    version="1.0.1",
     lifespan=lifespan,
 )
 
@@ -75,7 +75,7 @@ async def root():
     """Health check endpoint."""
     return {
         "name": "TLEX",
-        "version": "0.1.0",
+        "version": "1.0.1",
         "status": "running",
         "environment": settings.environment,
     }

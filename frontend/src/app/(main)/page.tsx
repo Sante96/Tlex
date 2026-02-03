@@ -129,7 +129,7 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold text-white mb-4">
               Continua a guardare
             </h2>
-            <StaggerContainer className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <StaggerContainer className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
               {continueWatching.map((item) => (
                 <StaggerItem key={item.id}>
                   <ContinueWatchingCard item={item} />
@@ -204,19 +204,35 @@ function SeriesCard({ series }: { series: SeriesItem }) {
 }
 
 function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
-  const imageUrl =
-    getTmdbImageUrl(item.backdrop_path, "w780") ||
-    getTmdbImageUrl(item.poster_path, "w300");
+  // Always use vertical poster for Plex-style look
+  const imageUrl = item.series_id
+    ? getTmdbImageUrl(item.series_poster_path ?? null, "w300") ||
+    getTmdbImageUrl(item.poster_path, "w300")
+    : getTmdbImageUrl(item.poster_path, "w300");
+
+  // Line 1: Series title for episodes, movie title for movies
+  const title = item.series_title || item.title;
+
+  // Line 2: Episode title for series, year for movies
+  const subtitle = item.series_id
+    ? cleanEpisodeTitle(item.title) // Episode title
+    : item.title; // For movies we could show year but we don't have it, show nothing
+
+  // Line 3: "S3 · E11" format for episodes, nothing for movies
+  const episodeIndicator =
+    item.season_number && item.episode_number
+      ? `S${item.season_number} · E${item.episode_number}`
+      : null;
 
   return (
     <Link href={`/watch/${item.id}`} className="group block">
-      <div className="relative aspect-video bg-zinc-800 rounded-lg overflow-hidden">
+      <div className="relative aspect-[2/3] bg-zinc-800 rounded-lg overflow-hidden">
         {imageUrl ? (
           <Image
             src={imageUrl}
-            alt={item.title}
+            alt={title}
             fill
-            className="object-cover"
+            className="object-cover transition-transform group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-600">
@@ -238,14 +254,15 @@ function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
         </div>
       </div>
 
-      <div className="mt-2">
-        <h3 className="text-sm font-medium text-white truncate">
-          {cleanEpisodeTitle(item.title)}
-        </h3>
-        <p className="text-xs text-zinc-400">
-          {formatTime(item.position_seconds)} /{" "}
-          {formatTime(item.duration_seconds)}
-        </p>
+      {/* Plex-style 3-line text */}
+      <div className="mt-2 space-y-0.5">
+        <h3 className="text-sm font-medium text-white truncate">{title}</h3>
+        {subtitle && subtitle !== title && (
+          <p className="text-xs text-zinc-400 truncate">{subtitle}</p>
+        )}
+        {episodeIndicator && (
+          <p className="text-xs text-zinc-500">{episodeIndicator}</p>
+        )}
       </div>
     </Link>
   );

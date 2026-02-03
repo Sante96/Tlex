@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.models import MediaItem, User, WatchProgress
+from app.models import MediaItem, Series, User, WatchProgress
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -39,6 +39,12 @@ class ContinueWatchingItem(BaseModel):
     position_seconds: int
     duration_seconds: int
     progress_percent: float
+    # Series metadata for Plex-style grouping
+    series_id: int | None = None
+    series_title: str | None = None
+    series_poster_path: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
 
 
 @router.get("/{media_id}", response_model=ProgressResponse | None)
@@ -120,39 +126,77 @@ async def update_progress(
     )
 
 
-@router.get("/", response_model=list[ContinueWatchingItem])
+@router.get("", response_model=list[ContinueWatchingItem])
 async def get_continue_watching(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     limit: int = 10,
 ):
-    """Get list of media items to continue watching."""
+    """Get list of media items to continue watching.
+
+    For episodes: groups by series and returns the first incomplete episode
+    (earliest season/episode number). Uses series poster for display.
+    For movies: returns individual items.
+    """
+    # Get all incomplete progress items with media and series info
     result = await db.execute(
-        select(WatchProgress, MediaItem)
+        select(WatchProgress, MediaItem, Series)
         .join(MediaItem, WatchProgress.media_item_id == MediaItem.id)
+        .outerjoin(Series, MediaItem.series_id == Series.id)
         .where(
             WatchProgress.user_id == current_user.id,
             WatchProgress.completed == False,  # noqa: E712
             WatchProgress.position_seconds > 0,
         )
         .order_by(WatchProgress.updated_at.desc())
-        .limit(limit)
     )
     rows = result.all()
 
-    return [
-        ContinueWatchingItem(
-            id=media.id,
-            title=media.title,
-            poster_path=media.poster_path,
-            backdrop_path=media.backdrop_path,
-            media_type=media.media_type.value,
-            position_seconds=progress.position_seconds,
-            duration_seconds=progress.duration_seconds,
-            progress_percent=progress.progress_percent,
-        )
-        for progress, media in rows
-    ]
+    # Group episodes by series, keep first incomplete per series
+    seen_series: dict[int, bool] = {}  # series_id -> already added
+    items: list[ContinueWatchingItem] = []
+
+    for progress, media, series in rows:
+        # Movies: always include individually
+        if media.series_id is None:
+            items.append(
+                ContinueWatchingItem(
+                    id=media.id,
+                    title=media.title,
+                    poster_path=media.poster_path,
+                    backdrop_path=media.backdrop_path,
+                    media_type=media.media_type.value,
+                    position_seconds=progress.position_seconds,
+                    duration_seconds=progress.duration_seconds,
+                    progress_percent=progress.progress_percent,
+                )
+            )
+        else:
+            # Episodes: only one per series (first incomplete by S:E order)
+            if media.series_id not in seen_series:
+                seen_series[media.series_id] = True
+                items.append(
+                    ContinueWatchingItem(
+                        id=media.id,
+                        title=media.title,
+                        poster_path=series.poster_path if series else media.poster_path,
+                        backdrop_path=series.backdrop_path if series else media.backdrop_path,
+                        media_type=media.media_type.value,
+                        position_seconds=progress.position_seconds,
+                        duration_seconds=progress.duration_seconds,
+                        progress_percent=progress.progress_percent,
+                        series_id=media.series_id,
+                        series_title=series.title if series else None,
+                        series_poster_path=series.poster_path if series else None,
+                        season_number=media.season_number,
+                        episode_number=media.episode_number,
+                    )
+                )
+
+        if len(items) >= limit:
+            break
+
+    return items
 
 
 @router.delete("/{media_id}")

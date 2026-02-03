@@ -17,6 +17,12 @@ export interface ContinueWatchingItem {
   position_seconds: number;
   duration_seconds: number;
   progress_percent: number;
+  // Series metadata for Plex-style grouping
+  series_id?: number | null;
+  series_title?: string | null;
+  series_poster_path?: string | null;
+  season_number?: number | null;
+  episode_number?: number | null;
 }
 
 export async function getWatchProgress(

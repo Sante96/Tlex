@@ -1,9 +1,15 @@
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
 WORKDIR /app
 
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
+
+# Install build tools (needed for tgcrypto on Python 3.13)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies
 COPY pyproject.toml uv.lock ./
@@ -14,13 +20,14 @@ RUN uv sync --frozen --no-install-project
 # ============================================
 # Final Image
 # ============================================
-FROM python:3.11-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 WORKDIR /app
 
-# Install system dependencies (e.g., ffmpeg is required for this project)
+# Install system dependencies (ffmpeg for remuxing, mkvtoolnix for font extraction)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    mkvtoolnix \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder

@@ -193,7 +193,7 @@ class VirtualStreamReader:
             return None
 
         try:
-            logger.info(f"Refreshing file_id for part {part.part_index}")
+            logger.debug(f"Refreshing file_id for part {part.part_index}")
 
             messages = await self._client.get_messages(
                 chat_id=part.channel_id,
@@ -225,7 +225,7 @@ class VirtualStreamReader:
 
             part.telegram_file_id = new_file_id
             _FILE_ID_CACHE[part.id] = (new_file_id, time.time())
-            logger.info(f"Refreshed file_id for part {part.part_index}")
+            logger.debug(f"Refreshed file_id for part {part.part_index}")
             return new_file_id
 
         except Exception as e:
@@ -301,9 +301,8 @@ class VirtualStreamReader:
         # Calculate how many chunks we need
         chunks_needed = (length + skip_bytes + PYROGRAM_CHUNK_SIZE - 1) // PYROGRAM_CHUNK_SIZE
 
-        logger.info(
-            f"Streaming part {part.part_index}: byte_offset={offset}, length={length}, "
-            f"chunk_offset={chunk_offset}, skip={skip_bytes}, chunks_needed={chunks_needed}"
+        logger.debug(
+            f"Streaming part {part.part_index}: offset={offset}, len={length}, chunks={chunks_needed}"
         )
 
         # Check cache for already downloaded chunks
@@ -392,7 +391,7 @@ class VirtualStreamReader:
                 new_file_id = await self._refresh_file_id(part)
                 if new_file_id:
                     file_id = new_file_id
-                    logger.info(f"Retrying with new file_id for part {part.id}")
+                    logger.debug(f"Retrying with new file_id for part {part.id}")
                     continue
                 else:
                     raise RuntimeError("Failed to refresh expired file reference") from None
@@ -400,6 +399,23 @@ class VirtualStreamReader:
             except FloodWait as e:
                 logger.warning(f"FloodWait {e.value}s, waiting...")
                 await asyncio.sleep(e.value)
+
+            except AttributeError as e:
+                # BadMsgNotification causes "'BadMsgNotification' object has no attribute 'bytes'"
+                # This happens when MTProto session is desync'd - retry usually works
+                if "BadMsgNotification" in str(e) or "bytes" in str(e):
+                    if attempt < max_retries - 1:
+                        wait_time = 0.5 * (attempt + 1)
+                        logger.warning(
+                            f"Session desync on part {part.id}, retry {attempt + 1}/{max_retries} in {wait_time}s"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"Max retries for session desync on part {part.id}")
+                        raise
+                else:
+                    raise
 
             except TimeoutError:
                 if attempt < max_retries - 1:

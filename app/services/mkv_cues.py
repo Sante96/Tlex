@@ -190,7 +190,7 @@ def extract_timecode_scale(data: bytes) -> int:
 
         if inner_id == TIMECODE_SCALE_ID:
             timecode_scale = read_uint(data, offset, inner_size)
-            logger.info(f"Found TimecodeScale: {timecode_scale} ns")
+            logger.debug(f"Found TimecodeScale: {timecode_scale} ns")
             return timecode_scale
 
         offset += inner_size
@@ -334,7 +334,7 @@ async def extract_keyframes_from_url(
         timecode_scale = DEFAULT_TIMECODE_SCALE
         if header_response.status_code in (200, 206):
             header_data = header_response.content
-            logger.info(f"Read {len(header_data)} bytes from MKV header")
+            logger.debug(f"Read {len(header_data)} bytes from MKV header")
             timecode_scale = extract_timecode_scale(header_data)
         else:
             logger.warning(f"Failed to read MKV header: HTTP {header_response.status_code}")
@@ -349,7 +349,7 @@ async def extract_keyframes_from_url(
             return []
 
         tail_data = tail_response.content
-        logger.info(f"Read {len(tail_data)} bytes from MKV tail for Cues parsing")
+        logger.debug(f"Read {len(tail_data)} bytes from MKV tail")
 
         # Find and parse Cues with correct timecode_scale
         cues_offset = find_cues_offset(tail_data)
@@ -357,12 +357,12 @@ async def extract_keyframes_from_url(
             logger.warning("Cues element not found in MKV tail")
             return []
 
-        logger.info(f"Found Cues at offset {cues_offset} in tail data")
+        logger.debug(f"Found Cues at offset {cues_offset}")
 
         keyframes = parse_cues(tail_data, cues_offset, timecode_scale)
         keyframes.sort()
 
-        logger.info(f"Extracted {len(keyframes)} keyframes from MKV Cues (scale={timecode_scale}ns)")
+        logger.debug(f"Extracted {len(keyframes)} keyframes from MKV Cues")
         return keyframes
 
 

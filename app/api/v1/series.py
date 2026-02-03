@@ -13,7 +13,7 @@ from app.services.tmdb import tmdb_client
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 async def list_series(
     session: DBSession,
     page: int = 1,

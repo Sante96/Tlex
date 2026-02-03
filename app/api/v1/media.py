@@ -23,7 +23,7 @@ from app.services.tmdb import tmdb_client
 router = APIRouter()
 
 
-@router.get("/", response_model=MediaListResponse)
+@router.get("", response_model=MediaListResponse)
 async def list_media(
     session: DBSession,
     page: int = 1,

@@ -30,7 +30,7 @@ async def process_group(
         )
     )
     if existing_part.scalar_one_or_none():
-        logger.info(f"Skipping existing: {group.base_name}")
+        logger.debug(f"Skipping existing: {group.base_name}")
         return None
 
     guess = guessit(group.base_name)
@@ -109,7 +109,7 @@ async def process_group(
                 )
                 session.add(series_obj)
                 await session.flush()
-                logger.info(f"Created series: {series_obj.title} (genres={series_obj.genres}, rating={series_obj.vote_average})")
+                logger.debug(f"Created series: {series_obj.title}")
 
     # Get episode details
     episode_title = tmdb_result.title if tmdb_result else title
@@ -176,7 +176,7 @@ async def process_group(
         await analyze_streams(session, media_item, group.files[0], client)
 
     await session.commit()
-    logger.info(f"Created: {media_item.title} ({len(group.files)} parts)")
+    logger.debug(f"Created: {media_item.title} ({len(group.files)} parts)")
 
     return media_item
 
@@ -189,7 +189,7 @@ async def analyze_streams(
 ) -> None:
     """Analyze media streams using ffprobe."""
     try:
-        logger.info(f"Analyzing streams for: {media_item.title}")
+        logger.debug(f"Analyzing streams for: {media_item.title}")
 
         probe_result = await ffprobe_service.analyze_from_telegram(client, first_file.file_id)
 
@@ -209,7 +209,7 @@ async def analyze_streams(
                 )
                 session.add(stream)
 
-            logger.info(f"Found {len(probe_result.streams)} streams")
+            logger.debug(f"Found {len(probe_result.streams)} streams")
 
     except Exception as e:
         logger.error(f"Failed to analyze streams: {e}")
