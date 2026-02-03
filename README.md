@@ -123,6 +123,11 @@ graph TD
     - **Web UI**: [http://localhost:3000](http://localhost:3000)
     - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
     - **pgAdmin**: [http://localhost:5050](http://localhost:5050) (Login with email/pass from `.env`)
+    - **Remote Access (Quick Tunnel)**:
+        Check the logs to get your temporary `trycloudflare.com` URL:
+        ```bash
+        docker logs tlex-cloudflared
+        ```
 
 ### First Run Setup
 1.  **Add Workers**: You need to authenticate at least one Telegram account.
@@ -147,7 +152,6 @@ Key environment variables in `.env`:
 | `SCANNER_CHANNEL_IDS` | Comma-separated list of Channel/Group IDs to scan | |
 | `SCANNER_MOVIES_TOPIC_ID` | Specific Topic ID where you upload Movies | |
 | `TMDB_API_KEY` | Key for fetching media metadata | |
-| `CLOUDFLARE_TUNNEL_TOKEN`| Token for external access | |
 
 ### 📚 Library Setup
 
@@ -174,3 +178,14 @@ Contributions are welcome! Please read `CONTRIBUTING.md` for details on our code
 ## 📄 License
 
 This project is licensed under the MIT License - see the `LICENSE` file for details.
+
+---
+
+## ⚠️ Disclaimer
+
+**TLEX is strictly for educational and research purposes.**
+
+- The developers of this project do not host, distribute, or promote any copyrighted content.
+- This software is a client interface for the Telegram API. Users are solely responsible for the content they access and store.
+- You must comply with Telegram's Terms of Service and the copyright laws of your country.
+- The developers are not liable for any misuse of this software.

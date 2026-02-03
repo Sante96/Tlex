@@ -61,23 +61,17 @@ services:
         condition: service_healthy
 
   # ============================================
-  # Cloudflared - Tunnel for HTTPS Exposure
+  # Cloudflared - Quick Tunnel (Temporary URL)
   # ============================================
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: tlex-cloudflared
     restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: tunnel --url http://frontend:3000
     depends_on:
-      - postgres
-      - redis
-    # NOTE: You need to configure the tunnel via Cloudflare Dashboard
-    # The token should be set in .env file after running:
-    # cloudflared tunnel login
-    # cloudflared tunnel create tlex
-    # Then copy the token to CLOUDFLARE_TUNNEL_TOKEN
+      - frontend
+    # NOTE: The public URL will be printed in the logs
+    # Run: docker logs tlex-cloudflared
 
   # ============================================
   # Backend (FastAPI)
