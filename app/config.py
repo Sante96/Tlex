@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # ============================================
     environment: Literal["dev", "test", "prod"] = "dev"
     debug: bool = True
+    enable_registration: bool = True
 
     # ============================================
     # Telegram API

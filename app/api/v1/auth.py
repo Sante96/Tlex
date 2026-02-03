@@ -45,6 +45,14 @@ async def _create_tokens(session: DBSession, user: User) -> TokenResponse:
 @limiter.limit(AUTH_LIMIT)
 async def register(request: Request, user_data: UserCreate, session: DBSession) -> User:
     """Register a new user."""
+    from app.config import get_settings
+
+    if not get_settings().enable_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is currently disabled",
+        )
+
     stmt = select(User).where(User.email == user_data.email)
     result = await session.execute(stmt)
     existing_user = result.scalar_one_or_none()

@@ -106,3 +106,6 @@ next-env.d.ts
 .pnp.js
 .yarn/
 *.pem
+
+
+avatars/

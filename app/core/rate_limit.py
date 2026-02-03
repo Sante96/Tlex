@@ -10,7 +10,7 @@ settings = get_settings()
 # Create limiter instance with IP-based key function
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["100/minute"] if not settings.debug else ["1000/minute"],
+    default_limits=["1000/minute"] if not settings.debug else ["3000/minute"],
     storage_uri=settings.redis_url,
     strategy="fixed-window",
 )
