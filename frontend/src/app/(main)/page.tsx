@@ -207,7 +207,7 @@ function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
   // Always use vertical poster for Plex-style look
   const imageUrl = item.series_id
     ? getTmdbImageUrl(item.series_poster_path ?? null, "w300") ||
-    getTmdbImageUrl(item.poster_path, "w300")
+      getTmdbImageUrl(item.poster_path, "w300")
     : getTmdbImageUrl(item.poster_path, "w300");
 
   // Line 1: Series title for episodes, movie title for movies
