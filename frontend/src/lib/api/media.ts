@@ -12,6 +12,8 @@ export interface MediaItem {
   duration_seconds: number | null;
   season_number?: number | null;
   episode_number?: number | null;
+  vote_average?: number | null;
+  genres?: string[] | null;
   watch_progress?: number;
   unwatched_count?: number;
 }

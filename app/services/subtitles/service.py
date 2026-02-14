@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
 from loguru import logger
 
 from app.core.utils import find_ffmpeg, find_ffprobe, find_mkvextract, find_mkvmerge
@@ -37,74 +36,6 @@ class SubtitleExtractor:
         self._ffprobe_path = find_ffprobe()
         self._mkvextract_path = find_mkvextract()
         self._mkvmerge_path = find_mkvmerge()
-
-    async def extract_subtitle(
-        self,
-        input_url: str,
-        stream_index: int,
-        output_format: str = "ass",
-    ) -> bytes:
-        """
-        Extract a subtitle track from media via URL.
-
-        DEPRECATED: Use extract_subtitle_from_reader to avoid HTTP conflicts.
-
-        Args:
-            input_url: URL to media stream
-            stream_index: Subtitle stream index
-            output_format: Output format (ass, srt)
-
-        Returns:
-            Subtitle content as bytes
-        """
-        cmd = [
-            self._ffmpeg_path,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-analyzeduration", "100M",
-            "-probesize", "100M",
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-i",
-            input_url,
-            "-map",
-            f"0:s:{stream_index}",
-            "-c:s",
-            output_format,
-            "-f",
-            output_format,
-            "-",
-        ]
-
-        logger.debug(f"Extracting subtitle: stream {stream_index} as {output_format}")
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
-
-        def run_ffmpeg():
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=300,
-            )
-            return result
-
-        try:
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                result = await loop.run_in_executor(executor, run_ffmpeg)
-        except Exception as e:
-            logger.error(f"FFmpeg execution error: {e}")
-            raise RuntimeError(f"FFmpeg execution failed: {e}") from e
-
-        if result.returncode != 0:
-            error_msg = result.stderr.decode() if result.stderr else "Unknown error"
-            logger.error(f"Subtitle extraction failed (code {result.returncode}): {error_msg}")
-            raise RuntimeError(error_msg or f"FFmpeg failed with code {result.returncode}")
-
-        stdout = result.stdout
-        logger.info(f"Extracted subtitle: {len(stdout)} bytes")
-        return stdout
 
     async def extract_subtitle_from_reader(
         self,
@@ -211,8 +142,8 @@ class SubtitleExtractor:
         Returns:
             A list of AttachedFont objects found in the file header.
         """
-        # Header Snipe: Download only first 30MB (attachments are in MKV header)
-        HEADER_SIZE = 30 * 1024 * 1024  # 30MB
+        # Header Snipe: Download only first 5MB (attachments are in MKV header)
+        HEADER_SIZE = 5 * 1024 * 1024  # 5MB
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -228,46 +159,6 @@ class SubtitleExtractor:
                 logger.debug(f"Read {len(header_data)} bytes directly for header snipe")
             except Exception as e:
                 logger.warning(f"Header read failed: {type(e).__name__}: {e}")
-                return []
-
-            return await self._extract_fonts_from_header(header_file, tmp_path)
-
-    async def extract_all_fonts(self, input_url: str) -> list[AttachedFont]:
-        """
-        Extract all attached fonts from MKV container using "Header Snipe" technique.
-
-        DEPRECATED: Use extract_all_fonts_from_reader for better performance.
-
-        Downloads only the first 30MB of the file (where attachments live in MKV header)
-        and uses mkvextract on that truncated file. Much faster than downloading entire file.
-
-        Args:
-            input_url: URL to media stream
-
-        Returns:
-            List of AttachedFont objects
-        """
-        # Header Snipe: Download only first 30MB (attachments are in MKV header)
-        HEADER_SIZE = 30 * 1024 * 1024  # 30MB
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
-            header_file = tmp_path / "header.mkv"
-
-            # Download only the header portion using Range request
-            try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    headers = {"Range": f"bytes=0-{HEADER_SIZE - 1}"}
-                    response = await client.get(input_url, headers=headers)
-
-                    if response.status_code not in (200, 206):
-                        logger.warning(f"Failed to download header: {response.status_code}")
-                        return []
-
-                    header_file.write_bytes(response.content)
-                    logger.debug(f"Downloaded {len(response.content)} bytes for header snipe")
-            except Exception as e:
-                logger.warning(f"Header download failed: {type(e).__name__}: {e}")
                 return []
 
             return await self._extract_fonts_from_header(header_file, tmp_path)

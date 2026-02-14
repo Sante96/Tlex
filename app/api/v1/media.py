@@ -29,6 +29,7 @@ async def list_media(
     page: int = 1,
     page_size: int = 20,
     media_type: MediaType | None = None,
+    search: str | None = None,
 ) -> MediaListResponse:
     """List all media items with pagination."""
     offset = (page - 1) * page_size
@@ -38,11 +39,15 @@ async def list_media(
 
     if media_type:
         query = query.where(MediaItem.media_type == media_type)
+    if search:
+        query = query.where(MediaItem.title.ilike(f"%{search}%"))
 
     # Get total count
     count_query = select(func.count()).select_from(MediaItem)
     if media_type:
         count_query = count_query.where(MediaItem.media_type == media_type)
+    if search:
+        count_query = count_query.where(MediaItem.title.ilike(f"%{search}%"))
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -82,13 +87,23 @@ async def get_media(session: DBSession, media_id: int) -> MediaItemDetailRespons
     query = (
         select(MediaItem)
         .where(MediaItem.id == media_id)
-        .options(selectinload(MediaItem.parts), selectinload(MediaItem.streams))
+        .options(
+            selectinload(MediaItem.parts),
+            selectinload(MediaItem.streams),
+            selectinload(MediaItem.series),
+        )
     )
     result = await session.execute(query)
     item = result.scalar_one_or_none()
 
     if not item:
         raise HTTPException(status_code=404, detail="Media not found")
+
+    # vote_average and genres live on Series, not MediaItem
+    series = item.series
+    vote_average = series.vote_average if series else None
+    genres_raw = series.genres if series else None
+    genres = genres_raw.split(",") if genres_raw else None
 
     return MediaItemDetailResponse(
         id=item.id,
@@ -104,6 +119,8 @@ async def get_media(session: DBSession, media_id: int) -> MediaItemDetailRespons
         episode_number=item.episode_number,
         total_size=item.total_size,
         parts_count=len(item.parts),
+        vote_average=vote_average,
+        genres=genres,
         parts=[
             MediaPartResponse(
                 id=p.id,

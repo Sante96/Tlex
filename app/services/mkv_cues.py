@@ -199,30 +199,38 @@ def extract_timecode_scale(data: bytes) -> int:
     return DEFAULT_TIMECODE_SCALE
 
 
-def parse_cues(
+CUE_CLUSTER_POSITION_ID = 0xF1
+
+@dataclass
+class CueData:
+    """Cue point data with timestamp and cluster position."""
+    time_ms: int
+    cluster_position: int
+    track: int
+
+
+def parse_cues_for_clusters(
     data: bytes,
     offset: int,
-    timecode_scale: int = 1000000,
-    video_track: int = 1,
-) -> list[float]:
+    segment_offset: int = 0,
+) -> list[int]:
     """
-    Parse Cues element and extract keyframe timestamps for video track only.
+    Parse Cues element and extract unique Cluster positions.
 
     Args:
         data: Raw bytes containing the Cues element
         offset: Offset where Cues element starts
-        timecode_scale: Nanoseconds per timestamp unit (default: 1ms)
-        video_track: Video track number to filter (default: 1)
+        segment_offset: Offset of the Segment element (Cluster positions are relative to this)
 
     Returns:
-        List of keyframe timestamps in seconds (video track only)
+        List of absolute Cluster offsets (sorted)
     """
-    keyframes: list[float] = []
+    cluster_positions: set[int] = set()
 
     # Read Cues element header
     element_id, id_len = read_element_id(data, offset)
     if element_id != CUES_ID:
-        return keyframes
+        return []
 
     offset += id_len
     cues_size, size_len = read_vint(data, offset)
@@ -243,10 +251,91 @@ def parse_cues(
         offset += size_len
 
         if elem_id == CUE_POINT_ID:
-            # Parse CuePoint to extract CueTime and CueTrack
+            cue_end = offset + elem_size
+
+            while offset < cue_end and offset < len(data):
+                inner_id, inner_id_len = read_element_id(data, offset)
+                if inner_id_len == 0:
+                    break
+                offset += inner_id_len
+
+                inner_size, inner_size_len = read_vint(data, offset)
+                if inner_size_len == 0:
+                    break
+                offset += inner_size_len
+
+                if inner_id == CUE_TRACK_POSITIONS_ID:
+                    # Parse CueTrackPositions
+                    track_end = offset + inner_size
+                    track_offset = offset
+                    cluster_pos = None
+
+                    while track_offset < track_end:
+                        track_id, track_id_len = read_element_id(data, track_offset)
+                        if track_id_len == 0:
+                            break
+                        track_offset += track_id_len
+                        track_size, track_size_len = read_vint(data, track_offset)
+                        if track_size_len == 0:
+                            break
+                        track_offset += track_size_len
+
+                        if track_id == CUE_CLUSTER_POSITION_ID:
+                            cluster_pos = read_uint(data, track_offset, track_size)
+                            # Found position, add to set (absolute offset)
+                            cluster_positions.add(segment_offset + cluster_pos)
+
+                        track_offset += track_size
+
+                offset += inner_size
+
+            offset = cue_end
+        else:
+            offset += elem_size
+
+    return sorted(cluster_positions)
+
+
+def parse_cues(data: bytes, offset: int, timecode_scale: int) -> list[float]:
+    """
+    Parse Cues element and extract keyframe timestamps.
+
+    Args:
+        data: Raw bytes containing the Cues element.
+        offset: Offset where Cues element starts.
+        timecode_scale: TimecodeScale from Segment Info.
+
+    Returns:
+        List of keyframe timestamps in seconds.
+    """
+    keyframes: list[float] = []
+
+    # Read Cues element header
+    element_id, id_len = read_element_id(data, offset)
+    if element_id != CUES_ID:
+        return []
+
+    offset += id_len
+    cues_size, size_len = read_vint(data, offset)
+    offset += size_len
+
+    cues_end = offset + cues_size
+
+    # Parse CuePoint elements
+    while offset < cues_end and offset < len(data):
+        elem_id, id_len = read_element_id(data, offset)
+        if id_len == 0:
+            break
+        offset += id_len
+
+        elem_size, size_len = read_vint(data, offset)
+        if size_len == 0:
+            break
+        offset += size_len
+
+        if elem_id == CUE_POINT_ID:
             cue_end = offset + elem_size
             cue_time = None
-            cue_track = None
 
             while offset < cue_end and offset < len(data):
                 inner_id, inner_id_len = read_element_id(data, offset)
@@ -260,32 +349,14 @@ def parse_cues(
                 offset += inner_size_len
 
                 if inner_id == CUE_TIME_ID:
-                    # CueTime is the timestamp in timecode units
-                    cue_time = read_uint(data, offset, inner_size)
-                elif inner_id == CUE_TRACK_POSITIONS_ID:
-                    # Parse CueTrackPositions to get track number
-                    track_end = offset + inner_size
-                    track_offset = offset
-                    while track_offset < track_end:
-                        track_id, track_id_len = read_element_id(data, track_offset)
-                        if track_id_len == 0:
-                            break
-                        track_offset += track_id_len
-                        track_size, track_size_len = read_vint(data, track_offset)
-                        if track_size_len == 0:
-                            break
-                        track_offset += track_size_len
-                        if track_id == CUE_TRACK_ID:
-                            cue_track = read_uint(data, track_offset, track_size)
-                            break
-                        track_offset += track_size
+                    raw_time = read_uint(data, offset, inner_size)
+                    # Convert to seconds: raw_time * timecode_scale (ns) / 1e9
+                    cue_time = (raw_time * timecode_scale) / 1_000_000_000.0
 
                 offset += inner_size
 
-            # Only add keyframe if it's for the video track
-            if cue_time is not None and cue_track == video_track:
-                time_seconds = (cue_time * timecode_scale) / 1_000_000_000
-                keyframes.append(time_seconds)
+            if cue_time is not None:
+                keyframes.append(cue_time)
 
             offset = cue_end
         else:

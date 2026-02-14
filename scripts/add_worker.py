@@ -7,7 +7,6 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyrogram import Client  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 from app.database import async_session_maker, engine  # noqa: E402
@@ -35,6 +34,8 @@ async def main() -> None:
     print()
 
     # Create client and login
+    from pyrogram import Client
+    
     client = Client(
         name="new_worker",
         api_id=settings.api_id,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DSButton } from "@/components/ds";
 import {
   addToWatchlist,
   removeFromWatchlist,
@@ -12,15 +12,10 @@ import { cn } from "@/lib/utils";
 
 interface WatchlistButtonProps {
   mediaId: number;
-  size?: "default" | "icon";
   className?: string;
 }
 
-export function WatchlistButton({
-  mediaId,
-  size = "icon",
-  className,
-}: WatchlistButtonProps) {
+export function WatchlistButton({ mediaId, className }: WatchlistButtonProps) {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -29,8 +24,8 @@ export function WatchlistButton({
       try {
         const status = await checkWatchlistStatus(mediaId);
         setInWatchlist(status);
-      } catch (error) {
-        console.error("Failed to check watchlist status:", error);
+      } catch {
+        // Failed to check watchlist status
       } finally {
         setLoading(false);
       }
@@ -48,28 +43,28 @@ export function WatchlistButton({
         await addToWatchlist(mediaId);
         setInWatchlist(true);
       }
-    } catch (error) {
-      console.error("Failed to toggle watchlist:", error);
+    } catch {
+      // Failed to toggle watchlist
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Button
-      variant="outline"
-      size={size}
+    <DSButton
+      variant="ghost"
       onClick={handleToggle}
       disabled={loading}
-      className={cn(className)}
+      className={cn("!px-2 !h-10 !w-10", className)}
       title={inWatchlist ? "Rimuovi dalla lista" : "Aggiungi alla lista"}
-    >
-      <Heart
-        className={cn(
-          "h-5 w-5 transition-colors",
-          inWatchlist && "fill-red-500 text-red-500",
-        )}
-      />
-    </Button>
+      icon={
+        <Heart
+          className={cn(
+            "h-5 w-5 transition-colors",
+            inWatchlist && "fill-red-500 text-red-500",
+          )}
+        />
+      }
+    />
   );
 }

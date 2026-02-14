@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     scanner_video_extensions: str = ".mkv,.mp4,.avi,.webm"
     scanner_split_extensions: str = ".001,.002,.003"
     scanner_movies_topic_id: int | None = None  # Topic ID for Movies Archive (bucket strategy)
+    scanner_auto_interval_hours: int = 0  # Auto-scan interval in hours (0 = disabled)
 
     @property
     def channel_ids_list(self) -> list[int]:

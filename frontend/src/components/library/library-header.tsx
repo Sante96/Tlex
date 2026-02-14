@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCw, Grid3X3, List } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DSButton } from "@/components/ds";
 import {
   Select,
   SelectContent,
@@ -49,31 +49,32 @@ export function LibraryHeader({
 
         {/* View toggle */}
         <div className="flex border border-zinc-700 rounded-md overflow-hidden">
-          <Button
+          <DSButton
             variant="ghost"
-            size="icon"
-            className="rounded-none bg-zinc-800"
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="rounded-none">
-            <List className="h-4 w-4" />
-          </Button>
+            className="!rounded-none bg-zinc-800 !px-2 !h-9"
+            icon={<Grid3X3 className="h-4 w-4" />}
+          />
+          <DSButton
+            variant="ghost"
+            className="!rounded-none !px-2 !h-9"
+            icon={<List className="h-4 w-4" />}
+          />
         </div>
 
         {/* Refresh */}
         {onRefresh && (
-          <Button
-            variant="outline"
-            size="sm"
+          <DSButton
+            variant="secondary"
             onClick={onRefresh}
             disabled={isRefreshing}
+            icon={
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+            }
           >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
-            />
             Aggiorna
-          </Button>
+          </DSButton>
         )}
       </div>
     </div>

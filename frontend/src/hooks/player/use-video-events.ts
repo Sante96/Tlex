@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 interface VideoEventsProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -89,10 +89,8 @@ export function useVideoEvents({
 
     const onCanPlay = () => {
       setIsSeeking(false);
-      video.play().catch((e) => {
-        if (e.name !== "AbortError") {
-          console.warn("Video play failed:", e);
-        }
+      video.play().catch(() => {
+        // Video play failed (likely user interaction required)
       });
     };
 

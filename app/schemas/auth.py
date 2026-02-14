@@ -33,3 +33,10 @@ class RefreshRequest(BaseModel):
     """Request model for token refresh."""
 
     refresh_token: str
+
+
+class ChangePassword(BaseModel):
+    """Request model for password change."""
+
+    current_password: str
+    new_password: str

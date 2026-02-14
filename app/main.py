@@ -27,6 +27,8 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
+    import asyncio
+
     # Startup
     logger.info("Starting TLEX...")
 
@@ -34,6 +36,26 @@ async def lifespan(app: FastAPI):
     async with async_session_maker() as session:
         count = await worker_manager.load_workers(session)
         logger.info(f"Loaded {count} Telegram workers")
+
+    # Start background cache population (fire and forget)
+    async def populate_caches_background():
+        try:
+            # Wait for app to be fully ready
+            await asyncio.sleep(5)
+            async with async_session_maker() as session:
+                from app.services.subtitles.cache import populate_all_caches
+                await populate_all_caches(session)
+        except Exception as e:
+            logger.warning(f"Background cache population failed: {e}")
+
+    asyncio.create_task(populate_caches_background())
+    logger.info("Background subtitle cache population started")
+
+    # Start auto-scan scheduler if enabled
+    from app.services.scheduler import auto_scan_scheduler
+    if settings.scanner_auto_interval_hours > 0:
+        asyncio.create_task(auto_scan_scheduler.start())
+        logger.info(f"Auto-scan scheduler started (interval: {settings.scanner_auto_interval_hours}h)")
 
     yield
 

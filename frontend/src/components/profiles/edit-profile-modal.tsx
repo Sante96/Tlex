@@ -30,9 +30,8 @@ export function EditProfileModal({
       await deleteProfile(profile.id);
       await refreshProfiles();
       onClose();
-    } catch (err) {
+    } catch {
       setError("Errore nell'eliminazione del profilo");
-      console.error(err);
     } finally {
       setIsDeleting(false);
     }

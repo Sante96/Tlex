@@ -44,6 +44,14 @@
 
 Tutte le fasi principali sono completate! 🎉
 
+### ✅ Concurrent Streaming (2026-02-04)
+- [x] Multi-client per worker account (premium: 4, standard: 2)
+- [x] Persistenza sessioni extra in DB (`extra_sessions` JSON)
+- [x] Client pool con tracking usage (`_client_in_use`)
+- [x] Script migrazione `migrate_extra_sessions.py`
+- [x] Fix FFmpeg zombie processes on browser refresh
+- [x] Auto-kill previous FFmpeg when new request for same media arrives
+
 ---
 
 ## 🟡 NEXT UP (Nice to Have)
@@ -77,7 +85,8 @@ Tutte le fasi principali sono completate! 🎉
 
 ### Ideas
 
-- [ ] Auto-refresh file_id on expiration (transparent to user)
+- [x] Auto-refresh file_id on expiration (transparent to user) ✅
+- [x] Auto-scan scheduler (periodic channel scanning) ✅
 - [ ] Admin Panel - web-based management interface
 - [ ] TMDB image base URL in config
 - [ ] FloodWait feedback migliorato

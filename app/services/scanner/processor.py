@@ -197,6 +197,7 @@ async def analyze_streams(
             if probe_result.duration_seconds:
                 media_item.duration_seconds = probe_result.duration_seconds
 
+            has_subtitles = False
             for stream_info in probe_result.streams:
                 stream = MediaStream(
                     media_item_id=media_item.id,
@@ -208,8 +209,29 @@ async def analyze_streams(
                     is_default=stream_info.is_default,
                 )
                 session.add(stream)
+                if stream_info.codec_type.value == "subtitle":
+                    has_subtitles = True
 
             logger.debug(f"Found {len(probe_result.streams)} streams")
+
+            # Pre-extract fonts/subtitles in background if media has subtitles
+            if has_subtitles:
+                import asyncio
+
+                from app.database import async_session_maker
+                from app.services.subtitles.cache import ensure_cache_populated
+
+                async def extract_in_background():
+                    try:
+                        # Wait a bit for commit to complete
+                        await asyncio.sleep(2)
+                        async with async_session_maker() as bg_session:
+                            await ensure_cache_populated(media_item.id, bg_session)
+                    except Exception as e:
+                        logger.warning(f"Background cache extraction failed: {e}")
+
+                asyncio.create_task(extract_in_background())
+                logger.debug(f"Queued background subtitle cache extraction for: {media_item.title}")
 
     except Exception as e:
         logger.error(f"Failed to analyze streams: {e}")

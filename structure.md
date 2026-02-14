@@ -4,9 +4,10 @@
 
 # ============================================
 
-# Last updated: 2026-02-02
+# Last updated: 2026-02-04
 
 # Phase: 13 Complete - Security, Watchlist, Settings, Tests, Logging
+# + Concurrent Streaming: Multi-client per worker (premium/standard)
 
 tlex/
 ├── 📁 app/ # Main application package
@@ -78,7 +79,8 @@ tlex/
 ├── 📁 scripts/ # CLI utilities
 │ ├── create_tables.py # Initialize database
 │ ├── add_worker.py # Add Telegram worker account
-│ └── migrate_profiles.py # 🆕 Manual DB migration for profiles
+│ ├── migrate_profiles.py # Manual DB migration for profiles
+│ └── migrate_extra_sessions.py # 🆕 Add extra_sessions column for concurrent streams
 │
 ├── 📁 tests/ # Test suite
 │ ├── **init**.py

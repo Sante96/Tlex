@@ -2,7 +2,14 @@
 export { api, API_BASE_URL } from "./client";
 
 // Auth
-export { login, register, getCurrentUser } from "./auth";
+export {
+  login,
+  register,
+  getCurrentUser,
+  changePassword,
+  getRegistrationStatus,
+  setRegistrationStatus,
+} from "./auth";
 export type { LoginResponse, UserResponse } from "./auth";
 
 // Media
@@ -74,10 +81,25 @@ export {
 export type { WatchlistItem, WatchlistResponse } from "./watchlist";
 
 // Workers & Stats
-export { getWorkersStatus, getSystemStats } from "./workers";
+export {
+  getWorkersStatus,
+  getSystemStats,
+  sendWorkerCode,
+  verifyWorkerCode,
+  deleteWorker,
+} from "./workers";
 export type {
   WorkerInfo,
   WorkersSummary,
   WorkersStatusResponse,
   SystemStats,
 } from "./workers";
+
+// Scanner
+export {
+  getAutoScanStatus,
+  getScanStatus as getScannerStatus,
+  triggerScan as triggerManualScan,
+  setAutoScanInterval,
+} from "./scanner";
+export type { AutoScanStatus, ScanStatus } from "./scanner";

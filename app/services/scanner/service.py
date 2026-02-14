@@ -74,32 +74,15 @@ class ScannerService:
     ) -> None:
         """Scan all topics in a forum channel."""
         try:
-            from pyrogram.raw import functions
-
             logger.debug(f"Getting topics for channel {channel_id}")
 
-            async for dialog in client.get_dialogs():
-                if dialog.chat.id == channel_id:
-                    break
-
-            peer = await client.resolve_peer(channel_id)
-            result = await client.invoke(
-                functions.channels.GetForumTopics(
-                    channel=peer,
-                    offset_date=0,
-                    offset_id=0,
-                    offset_topic=0,
-                    limit=100,
-                )
-            )
-
+            # Use pyrogram's get_forum_topics method
             topics = []
-            for topic in result.topics:
-                if hasattr(topic, "title") and hasattr(topic, "id"):
-                    if topic.id == 1:
-                        continue
-                    topics.append({"id": topic.id, "title": topic.title})
-                    logger.debug(f"Found topic: {topic.title} (id={topic.id})")
+            async for topic in client.get_forum_topics(channel_id):
+                if topic.message_thread_id == 1:  # Skip "General" topic
+                    continue
+                topics.append({"id": topic.message_thread_id, "title": topic.name})
+                logger.debug(f"Found topic: {topic.name} (id={topic.message_thread_id})")
 
             logger.debug(f"Found {len(topics)} topics to scan")
 

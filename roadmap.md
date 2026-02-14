@@ -348,9 +348,10 @@ The API endpoint that feeds the frontend.
 
 - [ ] Auto-refresh file_id on expiration (transparent to user)
 - [ ] PRE_FETCH - prefetch next chunks during streaming
-- [ ] Quality replacement - auto-replace with better quality uploads
 - [ ] Admin Panel - web-based management interface
 - [ ] Mobile app (React Native / Expo)
+- [ ] TV app (React Native / Expo)
+- [ ] **Dynamic Client Scaling** - Start with 1 client per stream, monitor throughput, auto-add clients when load > 85%, remove when stable. Optimizes resource usage while maximizing performance.
 
 ---
 

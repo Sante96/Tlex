@@ -45,6 +45,8 @@ class MediaItemResponse(BaseModel):
     episode_number: int | None
     total_size: int
     parts_count: int
+    vote_average: float | None = None
+    genres: list[str] | None = None
 
     class Config:
         from_attributes = True

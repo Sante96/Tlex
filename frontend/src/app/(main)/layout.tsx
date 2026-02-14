@@ -1,23 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import {
   Sidebar,
   TopBar,
-  SIDEBAR_WIDTH_EXPANDED,
-  SIDEBAR_WIDTH_COLLAPSED,
+  SIDEBAR_EXPANDED,
+  SIDEBAR_COLLAPSED,
 } from "@/components/layout";
 import { AuthGuard } from "@/components/auth-guard";
-import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { SplashScreen } from "@/components/splash-screen";
+import { RouteTransitionProvider } from "@/contexts/route-transition-context";
+import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 
-function MainLayoutContent({ children }: { children: React.ReactNode }) {
+function MainContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebar();
-  const sidebarWidth = isCollapsed
-    ? SIDEBAR_WIDTH_COLLAPSED
-    : SIDEBAR_WIDTH_EXPANDED;
+  const marginLeft = isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
+
+  return (
+    <motion.div
+      animate={{ marginLeft }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+    >
+      <TopBar />
+      <main>
+        <RouteTransitionProvider>{children}</RouteTransitionProvider>
+      </main>
+    </motion.div>
+  );
+}
+
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [showSplash, setShowSplash] = useState(() => {
-    // Check if splash was already shown this session (runs only on client)
     if (typeof window !== "undefined") {
       return !sessionStorage.getItem("splashShown");
     }
@@ -30,31 +48,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <>
-      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
-      <div className="min-h-screen bg-zinc-950">
-        <Sidebar />
-        <div
-          className="transition-all duration-300"
-          style={{ marginLeft: sidebarWidth }}
-        >
-          <TopBar />
-          <main className="p-6">{children}</main>
-        </div>
-      </div>
-    </>
-  );
-}
-
-export default function MainLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
     <AuthGuard requireAuth={true} redirectTo="/login">
+      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
       <SidebarProvider>
-        <MainLayoutContent>{children}</MainLayoutContent>
+        <div className="min-h-screen" style={{ backgroundColor: "#09090b" }}>
+          <Sidebar />
+          <MainContent>{children}</MainContent>
+        </div>
       </SidebarProvider>
     </AuthGuard>
   );

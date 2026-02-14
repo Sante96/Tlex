@@ -6,8 +6,8 @@ from collections.abc import AsyncIterator
 
 from loguru import logger
 from pyrogram import Client
-from pyrogram.errors import FileReferenceExpired, FloodWait
-from sqlalchemy import select, update
+from pyrogram.errors import FileReferenceExpired, FloodWait, RPCError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from app.services.streaming.cache import (
     PYROGRAM_CHUNK_SIZE,
     _cache_chunk,
     _get_cached_chunk,
+    invalidate_file_id_cache,
 )
 from app.services.streaming.models import StreamPosition
 
@@ -50,8 +51,11 @@ class VirtualStreamReader:
         self._parts: list[MediaPart] = sorted(media_item.parts, key=lambda p: p.part_index)
         self._total_size = sum(p.file_size for p in self._parts)
         self._current_position = 0
-        self._worker = None
-        self._client: Client | None = None
+        self._current_position = 0
+        self._workers: list = []
+        self._clients: list[Client] = []
+        self._batch_mode_active = False
+        self._rr_counter = 0  # Round-robin counter
 
     @property
     def total_size(self) -> int:
@@ -87,26 +91,61 @@ class VirtualStreamReader:
 
         return None
 
-    async def _ensure_worker(self) -> bool:
-        """Ensure we have a worker client available."""
-        if self._client is not None:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def batch_mode(self):
+        """
+        Context manager for batch operations (e.g. subtitle extraction).
+
+        Acquires workers and refreshes file IDs ONCE, then allows multiple
+        read_range calls without repeated overhead.
+        """
+        if self._batch_mode_active:
+            yield
+            return
+
+        if not await self._ensure_workers():
+            raise RuntimeError("No workers available")
+
+        # Refresh all IDs once using the first client
+        await self._refresh_all_file_ids()
+
+        self._batch_mode_active = True
+        try:
+            yield
+        finally:
+            self._batch_mode_active = False
+            await self._release_workers()
+
+    async def _ensure_workers(self) -> bool:
+        """Ensure we have worker clients available (pool)."""
+        if self._clients:
             return True
 
-        result = await worker_manager.get_best_worker(self._session)
-        if result is None:
+        # Use 3 clients for striping (parallel download from multiple workers)
+        clients = await worker_manager.get_available_clients(limit=3)
+        if not clients:
             logger.error("No workers available for streaming")
             return False
 
-        self._worker, self._client = result
-        await worker_manager.acquire_worker(self._session, self._worker)
+        self._clients = clients
+        self._workers = []  # Not needed anymore
+
+        logger.debug(f"Using {len(self._clients)} workers for striping")
         return True
 
-    async def _release_worker(self) -> None:
-        """Release the worker when done streaming."""
-        if self._worker:
-            await worker_manager.release_worker(self._worker.id)
-        self._worker = None
-        self._client = None
+    async def _release_workers(self) -> None:
+        """Release workers back to the pool for reuse."""
+        if self._batch_mode_active:
+            return
+
+        # Release clients back to the pool so other requests can use them
+        if self._clients:
+            worker_manager.release_clients(self._clients)
+
+        self._workers = []
+        self._clients = []
 
     async def read_range(self, start: int, end: int | None = None) -> AsyncIterator[bytes]:
         """
@@ -135,16 +174,28 @@ class VirtualStreamReader:
         if start >= end:
             return
 
-        if not await self._ensure_worker():
-            raise RuntimeError("No workers available")
-
-        # Pre-refresh all file_ids to avoid FileReferenceExpired during streaming
-        await self._refresh_all_file_ids()
-
         try:
+            if not self._batch_mode_active:
+                if not await self._ensure_workers():
+                    raise RuntimeError("No workers available")
+
+                # Pre-refresh all file_ids to avoid FileReferenceExpired during streaming
+                await self._refresh_all_file_ids()
+
+            # Select worker for this range request (Round-Robin)
+            if not self._clients:
+                raise RuntimeError("No clients available")
+
+            client_idx = self._rr_counter % len(self._clients)
+            self._rr_counter += 1
+            client = self._clients[client_idx]
+
+            # Proactively refresh file_ids for THIS client before streaming
+            # file_reference is session-specific, so each client needs its own
+            await self._ensure_file_ids_for_client(client)
+
             current_offset = start
             bytes_read = 0
-            total_bytes_to_read = end - start
 
             while current_offset < end:
                 # Find which part contains the current offset
@@ -157,8 +208,9 @@ class VirtualStreamReader:
                 # Don't read past the global end
                 chunk_len = min(part_remaining_bytes, end - current_offset)
 
-                # Stream from this part
+                # Stream from this part using the selected client
                 async for chunk in self._stream_part(
+                    client,
                     pos.part,
                     offset=pos.local_offset,
                     length=chunk_len,
@@ -175,42 +227,72 @@ class VirtualStreamReader:
                 # If connection dropped or part ended, loop will continue to next part
                 # or break if done
 
+        except asyncio.CancelledError:
+            raise
         finally:
-            await self._release_worker()
+            if not self._batch_mode_active:
+                try:
+                    await self._release_workers()
+                except Exception:
+                    # Ensure workers are released even if cleanup fails
+                    if self._clients:
+                        worker_manager.release_clients(self._clients)
+                    self._workers = []
+                    self._clients = []
 
     async def _populate_peer_cache(self) -> None:
-        """Populate Pyrogram peer cache by iterating dialogs."""
-        if self._client is None:
+        """Populate Pyrogram peer cache (using first client)."""
+        if not self._clients:
             return
 
+        client = self._clients[0]
         channel_ids = {p.channel_id for p in self._parts}
+
         for channel_id in channel_ids:
+            logger.debug(f"Ensuring peer knowledge for channel {channel_id}")
             try:
-                async for dialog in self._client.get_dialogs():
+                # Fast path: direct lookup (fetches if needed, uses cache if available)
+                await client.get_chat(channel_id)
+                continue
+            except Exception as e:
+                logger.debug(f"get_chat({channel_id}) failed: {e}. Falling back to dialogs scan.")
+
+            # Slow path: iterate dialogs
+            try:
+                found = False
+                async for dialog in client.get_dialogs():
                     if dialog.chat and dialog.chat.id == channel_id:
                         logger.debug(f"Found channel {channel_id} in dialogs cache")
+                        found = True
                         break
+                if not found:
+                    logger.warning(f"Channel {channel_id} not found in dialogs")
             except Exception as e:
-                logger.warning(f"Failed to populate peer cache: {e}")
+                logger.warning(f"Failed to populate peer cache via dialogs: {e}")
 
-    async def _refresh_file_id(self, part: MediaPart, commit: bool = True) -> str | None:
+    async def _refresh_file_id(
+        self, part: MediaPart, commit: bool = False, client: Client | None = None
+    ) -> str | None:
         """
         Refresh expired file_id by fetching the original message.
 
-        Args:
-            part: The MediaPart with expired file_id
-            commit: Whether to commit the session after update
+        NOTE: Does NOT update DB to avoid race conditions during parallel streaming.
+        The file_id is only cached in memory. DB will be updated during next scan.
 
-        Returns:
-            New file_id or None if refresh failed
+        Args:
+            part: The media part to refresh
+            commit: Ignored (kept for API compatibility)
+            client: Specific client to use (important: file_reference is session-specific!)
         """
-        if self._client is None:
-            return None
+        if client is None:
+            if not self._clients:
+                return None
+            client = self._clients[0]
 
         try:
             logger.debug(f"Refreshing file_id for part {part.part_index}")
 
-            messages = await self._client.get_messages(
+            messages = await client.get_messages(
                 chat_id=part.channel_id,
                 message_ids=part.message_id,
             )
@@ -228,18 +310,8 @@ class VirtualStreamReader:
 
             new_file_id = doc.file_id
 
-            stmt = (
-                update(MediaPart)
-                .where(MediaPart.id == part.id)
-                .values(telegram_file_id=new_file_id)
-            )
-            await self._session.execute(stmt)
-
-            if commit:
-                await self._session.commit()
-
+            # Only update in-memory, no DB operations to avoid race conditions
             part.telegram_file_id = new_file_id
-            _FILE_ID_CACHE[part.id] = (new_file_id, time.time())
             logger.debug(f"Refreshed file_id for part {part.part_index}")
             return new_file_id
 
@@ -248,9 +320,15 @@ class VirtualStreamReader:
             return None
 
     async def _refresh_all_file_ids(self) -> None:
-        """Pre-refresh all file_ids to prevent FileReferenceExpired during streaming."""
-        if not await self._ensure_worker():
-            logger.warning("No worker available for file_id refresh")
+        """
+        Pre-refresh all file_ids to prevent FileReferenceExpired during streaming.
+
+        NOTE: With multiple workers, this only refreshes for client[0].
+        Other clients will refresh on-demand in _stream_part when they encounter
+        FileReferenceExpired, since file_reference is session-specific.
+        """
+        if not await self._ensure_workers():
+            logger.warning("No workers available for file_id refresh")
             return
 
         now = time.time()
@@ -281,48 +359,66 @@ class VirtualStreamReader:
             if cached and (now - cached[1]) <= _FILE_ID_CACHE_TTL:
                 part.telegram_file_id = cached[0]
                 continue
-            await self._refresh_file_id(part, commit=False)
+            await self._refresh_file_id(part)
 
-        await self._session.commit()
+    async def _ensure_file_ids_for_client(self, client: Client) -> None:
+        """
+        Ensure all parts have valid file_ids for the specified client.
 
-    async def _stream_part(self, part: MediaPart, offset: int, length: int) -> AsyncIterator[bytes]:
+        Since file_reference is session-specific in Telegram, each client needs
+        its own refresh. This is called proactively before streaming to avoid
+        FileReferenceExpired errors during the stream.
+        """
+        # Use client-specific cache key
+        client_id = id(client)
+
+        for part in self._parts:
+            cache_key = (part.id, client_id)
+
+            # Check if we have a recent file_id for this client+part combo
+            cached = _FILE_ID_CACHE.get(cache_key)
+            now = time.time()
+
+            if cached and (now - cached[1]) <= _FILE_ID_CACHE_TTL:
+                # Use cached file_id
+                part.telegram_file_id = cached[0]
+                continue
+
+            # Need to refresh for this client
+            logger.debug(f"Refreshing file_id for part {part.part_index} (client {client_id})")
+            new_file_id = await self._refresh_file_id(part, client=client)
+            if new_file_id:
+                # Cache with client-specific key
+                _FILE_ID_CACHE[cache_key] = (new_file_id, now)
+
+    async def _stream_part(self, client: Client, part: MediaPart, offset: int, length: int) -> AsyncIterator[bytes]:
         """
         Stream bytes from a single part with retry logic.
 
-        Uses Pyrogram's `stream_media` with offset/limit calculated in chunks (1MB).
-        It handles:
-        - Calculation of chunk offsets and alignment.
-        - Skipping initial bytes if offset is not chunk-aligned.
-        - Retry logic for expired file references and flood waits.
-
-        Args:
-            part: The MediaPart to stream from.
-            offset: Local byte offset within the part.
-            length: Number of bytes to read.
-
-        Yields:
-            Chunks of bytes.
+        Handles FileReferenceExpired by refreshing file_id and resuming from
+        the last successfully downloaded chunk position.
         """
-        if self._client is None:
-            raise RuntimeError("No client available")
+        if not client:
+            raise RuntimeError("No client provided")
 
         max_retries = 5
-        bytes_read = 0
+        bytes_yielded = 0
         file_id = part.telegram_file_id
 
-        chunk_offset = offset // PYROGRAM_CHUNK_SIZE
-        skip_bytes = offset % PYROGRAM_CHUNK_SIZE  # Bytes to skip in first chunk
+        initial_chunk_offset = offset // PYROGRAM_CHUNK_SIZE
+        initial_skip_bytes = offset % PYROGRAM_CHUNK_SIZE
 
-        # Calculate how many chunks we need
-        chunks_needed = (length + skip_bytes + PYROGRAM_CHUNK_SIZE - 1) // PYROGRAM_CHUNK_SIZE
+        # Calculate total chunks needed
+        total_chunks_needed = (length + initial_skip_bytes + PYROGRAM_CHUNK_SIZE - 1) // PYROGRAM_CHUNK_SIZE
 
         logger.debug(
-            f"Streaming part {part.part_index}: offset={offset}, len={length}, chunks={chunks_needed}"
+            f"Streaming part {part.part_index}: offset={offset}, len={length}, chunks={total_chunks_needed}"
         )
 
-        # Check cache for already downloaded chunks
+        # Phase 1: Serve from cache
         cache_hits = 0
-        for idx in range(chunk_offset, chunk_offset + chunks_needed):
+        skip_bytes = initial_skip_bytes
+        for idx in range(initial_chunk_offset, initial_chunk_offset + total_chunks_needed):
             cached = _get_cached_chunk(part.id, idx)
             if cached:
                 cache_hits += 1
@@ -339,111 +435,176 @@ class VirtualStreamReader:
                     continue
 
                 chunk_len = len(chunk)
-                if bytes_read + chunk_len > length:
-                    needed = length - bytes_read
+                if bytes_yielded + chunk_len > length:
+                    needed = length - bytes_yielded
                     yield chunk[:needed]
-                    bytes_read += needed
+                    bytes_yielded += needed
                 else:
                     yield chunk
-                    bytes_read += chunk_len
+                    bytes_yielded += chunk_len
 
-                if bytes_read >= length:
+                if bytes_yielded >= length:
                     if cache_hits > 0:
                         logger.debug(f"Served {cache_hits} chunks from cache")
                     return
             else:
                 break
 
-        if bytes_read >= length:
+        if bytes_yielded >= length:
             if cache_hits > 0:
                 logger.debug(f"Served {cache_hits} chunks from cache (complete)")
             return
 
-        remaining_offset = chunk_offset + cache_hits
-        remaining_chunks = chunks_needed - cache_hits
+        # Phase 2: Fetch remaining chunks from Telegram with retry
+        # Track position for resume after errors
+        next_chunk_to_fetch = initial_chunk_offset + cache_hits
+        chunks_remaining = total_chunks_needed - cache_hits
+        skip_bytes_for_fetch = initial_skip_bytes if cache_hits == 0 else 0
 
         if cache_hits > 0:
-            logger.debug(f"Cache hit: {cache_hits} chunks, fetching {remaining_chunks} more")
+            logger.debug(f"Cache hit: {cache_hits} chunks, fetching {chunks_remaining} more")
 
-        current_chunk_idx = remaining_offset
-        for attempt in range(max_retries):
+        # Use while loop so refresh doesn't consume an attempt
+        attempt = 0
+        consecutive_failures = 0
+        max_consecutive_failures = 3
+
+        while attempt < max_retries:
             try:
-                async for chunk in self._client.stream_media(
+                chunks_fetched_this_attempt = 0
+                async for chunk in client.stream_media(
                     file_id,
-                    offset=remaining_offset,
-                    limit=remaining_chunks,
+                    offset=next_chunk_to_fetch,
+                    limit=chunks_remaining,
                 ):
-                    _cache_chunk(part.id, current_chunk_idx, chunk)
-                    current_chunk_idx += 1
+                    # Cache the chunk
+                    _cache_chunk(part.id, next_chunk_to_fetch, chunk)
+                    chunks_fetched_this_attempt += 1
 
-                    if skip_bytes > 0:
-                        if len(chunk) <= skip_bytes:
-                            skip_bytes -= len(chunk)
+                    # Update position for potential resume
+                    next_chunk_to_fetch += 1
+                    chunks_remaining -= 1
+
+                    # Handle skip bytes for first chunk
+                    if skip_bytes_for_fetch > 0:
+                        if len(chunk) <= skip_bytes_for_fetch:
+                            skip_bytes_for_fetch -= len(chunk)
                             continue
-                        chunk = chunk[skip_bytes:]
-                        skip_bytes = 0
+                        chunk = chunk[skip_bytes_for_fetch:]
+                        skip_bytes_for_fetch = 0
 
                     if not chunk:
                         continue
 
                     chunk_len = len(chunk)
-                    if bytes_read + chunk_len > length:
-                        needed = length - bytes_read
+                    if bytes_yielded + chunk_len > length:
+                        needed = length - bytes_yielded
                         yield chunk[:needed]
-                        bytes_read += needed
+                        bytes_yielded += needed
                         return
                     else:
                         yield chunk
-                        bytes_read += chunk_len
+                        bytes_yielded += chunk_len
 
-                    if bytes_read >= length:
+                    if bytes_yielded >= length:
                         return
 
+                # Check if we got all expected chunks
+                if chunks_remaining > 0:
+                    consecutive_failures += 1
+                    wait_time = 1.0 * consecutive_failures
+                    logger.warning(
+                        f"[INCOMPLETE] Stream ended early for part {part.id}: "
+                        f"got {chunks_fetched_this_attempt} chunks this attempt, "
+                        f"{chunks_remaining} remaining (failure {consecutive_failures}/{max_consecutive_failures})"
+                    )
+
+                    if consecutive_failures >= max_consecutive_failures:
+                        # Too many consecutive failures with 0 chunks - refresh file_id
+                        logger.warning(
+                            f"[REFRESH] {consecutive_failures} consecutive failures, "
+                            f"refreshing file_id for part {part.id}"
+                        )
+                        await asyncio.sleep(wait_time)
+                        invalidate_file_id_cache(part.id, client_id=id(client))
+                        new_file_id = await self._refresh_file_id(part, client=client)
+                        if new_file_id:
+                            file_id = new_file_id
+                            consecutive_failures = 0  # Reset after successful refresh
+                            logger.info(f"[REFRESH] Got new file_id for part {part.id}, retrying")
+                            attempt += 1  # Count as attempt only after refresh
+                            continue
+                        else:
+                            logger.error("Failed to refresh file_id")
+                            raise RuntimeError("Failed to refresh expired file reference")
+                    else:
+                        # Wait and retry without refresh
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                # Successfully completed
                 return
 
-            except FileReferenceExpired as e:
-                logger.warning(f"FileReferenceExpired for part {part.id}: {e}")
-                new_file_id = await self._refresh_file_id(part)
-                if new_file_id:
-                    file_id = new_file_id
-                    logger.debug(f"Retrying with new file_id for part {part.id}")
-                    continue
-                else:
-                    raise RuntimeError("Failed to refresh expired file reference") from None
+            except RPCError as e:
+                logger.warning(f"[RETRY] Caught RPCError at chunk {next_chunk_to_fetch}: {type(e).__name__}")
+                attempt += 1
 
-            except FloodWait as e:
-                logger.warning(f"FloodWait {e.value}s, waiting...")
-                await asyncio.sleep(e.value)
+                is_expired = isinstance(e, FileReferenceExpired)
+                if not is_expired:
+                    err_str = str(e)
+                    err_id = getattr(e, "ID", "")
+                    if "FILE_REFERENCE" in err_id or "FILE_REFERENCE" in err_str:
+                        is_expired = True
+
+                if is_expired:
+                    logger.warning(
+                        f"FileReferenceExpired for part {part.id}, attempt {attempt}/{max_retries}"
+                    )
+                    invalidate_file_id_cache(part.id, client_id=id(client))
+                    new_file_id = await self._refresh_file_id(part, client=client)
+                    if new_file_id:
+                        file_id = new_file_id
+                        logger.info(f"Refreshed file_id, resuming from chunk {next_chunk_to_fetch}")
+                        continue
+                    else:
+                        raise RuntimeError("Failed to refresh expired file reference") from e
+
+                if isinstance(e, FloodWait):
+                    logger.warning(f"FloodWait {e.value}s, waiting...")
+                    await asyncio.sleep(e.value)
+                    continue
+
+                raise
 
             except AttributeError as e:
-                # BadMsgNotification causes "'BadMsgNotification' object has no attribute 'bytes'"
-                # This happens when MTProto session is desync'd - retry usually works
                 if "BadMsgNotification" in str(e) or "bytes" in str(e):
-                    if attempt < max_retries - 1:
-                        wait_time = 0.5 * (attempt + 1)
-                        logger.warning(
-                            f"Session desync on part {part.id}, retry {attempt + 1}/{max_retries} in {wait_time}s"
-                        )
+                    attempt += 1
+                    if attempt < max_retries:
+                        wait_time = 0.5 * attempt
+                        logger.warning(f"Session desync, retry {attempt}/{max_retries} in {wait_time}s")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        logger.error(f"Max retries for session desync on part {part.id}")
                         raise
                 else:
                     raise
 
             except TimeoutError:
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2
-                    logger.warning(f"Timeout on part {part.id}, retry {attempt + 1}/{max_retries} in {wait_time}s")
+                attempt += 1
+                if attempt < max_retries:
+                    wait_time = attempt * 2
+                    logger.warning(f"Timeout, retry {attempt}/{max_retries} in {wait_time}s")
                     await asyncio.sleep(wait_time)
+                    continue
                 else:
-                    logger.error(f"Max retries reached for part {part.id}")
                     raise
 
             except Exception as e:
-                logger.error(f"Error streaming part {part.id}: {e}")
+                logger.error(f"Unexpected error streaming part {part.id}: {type(e).__name__}: {e}")
                 raise
+
+        logger.error(f"Exhausted all {max_retries} retries for part {part.id}")
+        raise RuntimeError(f"Failed to stream part {part.id} after {max_retries} retries")
 
 
 async def get_virtual_reader(session: AsyncSession, media_id: int) -> VirtualStreamReader | None:

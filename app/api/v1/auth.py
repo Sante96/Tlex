@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from loguru import logger
 from sqlalchemy import delete, select
 
-from app.api.deps import DBSession, get_current_user
+from app.api.deps import DBSession, get_admin_user, get_current_user
 from app.core.rate_limit import AUTH_LIMIT, limiter
 from app.core.security import (
     create_access_token,
@@ -17,7 +17,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import RefreshToken, User
-from app.schemas import RefreshRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas import ChangePassword, RefreshRequest, TokenResponse, UserCreate, UserResponse
 
 router = APIRouter()
 
@@ -151,6 +151,58 @@ async def logout(
 
     logger.info(f"User logged out: {current_user.email}")
     return {"message": "Logged out successfully"}
+
+
+@router.put("/change-password")
+async def change_password(
+    body: ChangePassword,
+    session: DBSession,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Change current user's password."""
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters",
+        )
+
+    current_user.password_hash = hash_password(body.new_password)
+    await session.commit()
+
+    logger.info(f"Password changed for: {current_user.email}")
+    return {"message": "Password changed successfully"}
+
+
+@router.get("/registration-status")
+async def get_registration_status(
+    _admin=Depends(get_admin_user),
+) -> dict:
+    """Get whether registration is open or closed (admin only)."""
+    from app.config import get_settings
+    return {"enabled": get_settings().enable_registration}
+
+
+@router.put("/registration-status")
+async def set_registration_status(
+    body: dict,
+    _admin=Depends(get_admin_user),
+) -> dict:
+    """Toggle registration open/closed at runtime (admin only)."""
+    from app.config import get_settings
+
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(status_code=400, detail="'enabled' must be a boolean")
+
+    get_settings().enable_registration = enabled
+    logger.info(f"Registration {'enabled' if enabled else 'disabled'} by admin")
+    return {"enabled": enabled}
 
 
 @router.get("/me", response_model=UserResponse)

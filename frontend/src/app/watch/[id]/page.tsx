@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DSButton } from "@/components/ds";
 import { VideoPlayer } from "@/components/player";
 import {
   getMediaDetails,
@@ -40,8 +40,7 @@ export default function WatchPage() {
         if (progress && !progress.completed && progress.position_seconds > 0) {
           setInitialPosition(progress.position_seconds);
         }
-      } catch (err) {
-        console.error("Failed to load media:", err);
+      } catch {
         setError("Failed to load media");
       } finally {
         setLoading(false);
@@ -69,10 +68,13 @@ export default function WatchPage() {
     return (
       <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4">
         <p className="text-white text-xl">{error || "Media not found"}</p>
-        <Button variant="outline" onClick={() => router.push("/")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
+        <DSButton
+          variant="secondary"
+          onClick={() => router.push("/")}
+          icon={<ArrowLeft className="h-4 w-4" />}
+        >
           Back to Home
-        </Button>
+        </DSButton>
       </div>
     );
   }

@@ -68,8 +68,7 @@ export function useVideoSync(
           setStreamStartTime(seekTime);
           setLocalSeekOffset(0);
         }
-      } catch (err) {
-        console.error(`[SYNC] Header fetch error:`, err);
+      } catch {
         setStreamStartTime(seekTime);
         setLocalSeekOffset(0);
       }

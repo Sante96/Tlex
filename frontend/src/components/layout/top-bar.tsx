@@ -1,38 +1,58 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search, LogOut, UserCircle, Users } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { useRouter, usePathname } from "next/navigation";
+import { LogOut, UserCircle, Users } from "lucide-react";
+import { DSAvatar, DSDropdownMenu, DSBreadcrumb } from "@/components/ds";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { SearchBar } from "@/components/layout/search-bar";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
 import { updateProfile } from "@/lib/api";
 
 const DEFAULT_AVATAR = "/avatars/avatar-01.png";
 
+function useBreadcrumbItems(): { label: string; href?: string }[] | null {
+  const pathname = usePathname();
+
+  // /series/[id]/season/[season] → Serie TV / Serie Name (handled by page context, use generic)
+  const seasonMatch = pathname.match(/^\/series\/(\d+)\/season\/(\d+)/);
+  if (seasonMatch) {
+    return [
+      { label: "Serie TV", href: "/series" },
+      { label: "Serie", href: `/series/${seasonMatch[1]}` },
+      { label: `Stagione ${seasonMatch[2]}` },
+    ];
+  }
+
+  // /series/[id] → Serie TV / Serie Name
+  const seriesMatch = pathname.match(/^\/series\/(\d+)$/);
+  if (seriesMatch) {
+    return [{ label: "Serie TV", href: "/series" }, { label: "Dettaglio" }];
+  }
+
+  // /media/[id] → Film / Movie Name
+  const mediaMatch = pathname.match(/^\/media\/(\d+)$/);
+  if (mediaMatch) {
+    return [{ label: "Film", href: "/movies" }, { label: "Dettaglio" }];
+  }
+
+  return null; // No breadcrumb on other pages
+}
+
 export function TopBar() {
   const router = useRouter();
   const { logout } = useAuth();
   const { profile, clearProfile, refreshProfiles } = useProfile();
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const breadcrumbItems = useBreadcrumbItems();
 
   const handleAvatarChange = async (newAvatarSrc: string) => {
     if (!profile) return;
     try {
       await updateProfile(profile.id, { avatar_url: newAvatarSrc });
       await refreshProfiles();
-    } catch (error) {
-      console.error("Failed to update avatar:", error);
-    }
+    } catch {}
   };
 
   const handleSwitchProfile = () => {
@@ -45,68 +65,51 @@ export function TopBar() {
     logout();
   };
 
+  const profileLetter = profile?.name?.charAt(0) || "U";
+
   return (
-    <header className="h-14 flex items-center justify-between px-6 bg-background/80 backdrop-blur-sm border-b border-border">
-      {/* Search */}
-      <div className="flex items-center gap-4 flex-1 max-w-md">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Cerca..."
-            className="pl-9 bg-muted/50 border-0 focus-visible:ring-1"
-          />
-        </div>
-      </div>
+    <header
+      className="h-14 flex items-center justify-between px-6"
+      style={{
+        backgroundColor: "#18181b",
+        borderBottom: "1px solid #27272a",
+      }}
+    >
+      {/* Left side: breadcrumb on detail pages, searchbar elsewhere */}
+      {breadcrumbItems ? (
+        <DSBreadcrumb items={breadcrumbItems} />
+      ) : (
+        <SearchBar />
+      )}
 
       {/* User menu */}
-      <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full p-0 h-9 w-9 hover:ring-2 hover:ring-plex-orange/50 transition-all"
-            >
-              <ProfileAvatar
-                src={profile?.avatar_url || DEFAULT_AVATAR}
-                name={profile?.name || "User"}
-                size="sm"
-                selected
-                className="pointer-events-none"
-              />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium text-white">
-                {profile?.name || "Profilo"}
-              </p>
-              {!profile?.has_worker && (
-                <p className="text-xs text-yellow-500">
-                  ⚠ Nessun worker assegnato
-                </p>
-              )}
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setShowAvatarPicker(true)}>
-              <UserCircle className="mr-2 h-4 w-4" />
-              Cambia Avatar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleSwitchProfile}>
-              <Users className="mr-2 h-4 w-4" />
-              Cambia Profilo
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="text-destructive"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Esci
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DSDropdownMenu
+        trigger={
+          <DSAvatar
+            letter={profileLetter}
+            src={profile?.avatar_url ?? undefined}
+          />
+        }
+        items={[
+          {
+            icon: <UserCircle className="h-4 w-4" />,
+            label: "Cambia Avatar",
+            onClick: () => setShowAvatarPicker(true),
+          },
+          {
+            icon: <Users className="h-4 w-4" />,
+            label: "Cambia Profilo",
+            onClick: handleSwitchProfile,
+          },
+          { label: "", separator: true },
+          {
+            icon: <LogOut className="h-4 w-4" />,
+            label: "Esci",
+            onClick: handleLogout,
+            destructive: true,
+          },
+        ]}
+      />
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (

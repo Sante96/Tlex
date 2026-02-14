@@ -3,7 +3,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -27,6 +27,7 @@ class Worker(Base):
     phone_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_concurrent_streams: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    extra_sessions: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     current_load: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[WorkerStatus] = mapped_column(
         Enum(WorkerStatus), default=WorkerStatus.OFFLINE, nullable=False

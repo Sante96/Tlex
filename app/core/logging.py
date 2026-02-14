@@ -62,15 +62,24 @@ def json_sink(message):
     print(json_serializer(record), file=sys.stderr)
 
 
+_logging_configured = False
+
+
 def setup_logging() -> None:
     """Configure loguru for the application."""
+    global _logging_configured
+    if _logging_configured:
+        return
+    _logging_configured = True
+
     settings = get_settings()
 
     # Remove default handler
     logger.remove()
 
-    # Install stderr filter to suppress noisy Pyrogram errors
-    sys.stderr = StderrFilter(sys.stderr)
+    # Install stderr filter to suppress noisy Pyrogram errors (only once)
+    if not isinstance(sys.stderr, StderrFilter):
+        sys.stderr = StderrFilter(sys.stderr)
 
     if settings.environment == "dev":
         # Development: colored console output

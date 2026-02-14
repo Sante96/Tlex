@@ -18,12 +18,15 @@ async def list_series(
     session: DBSession,
     page: int = 1,
     page_size: int = 20,
+    search: str | None = None,
 ) -> dict:
     """List all TV series with pagination."""
     offset = (page - 1) * page_size
 
     # Count total
     count_query = select(func.count()).select_from(Series)
+    if search:
+        count_query = count_query.where(Series.title.ilike(f"%{search}%"))
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -35,6 +38,8 @@ async def list_series(
         .limit(page_size)
         .order_by(Series.title)
     )
+    if search:
+        query = query.where(Series.title.ilike(f"%{search}%"))
     result = await session.execute(query)
     series_list = result.scalars().all()
 

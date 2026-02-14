@@ -29,6 +29,29 @@ def _get_cached_chunk(part_id: int, chunk_index: int) -> bytes | None:
     return None
 
 
+def invalidate_file_id_cache(part_id: int, client_id: int | None = None) -> None:
+    """
+    Invalidate cached file_id for a part (e.g., after FileReferenceExpired).
+
+    Args:
+        part_id: The part ID to invalidate
+        client_id: If provided, only invalidate for this specific client
+    """
+    if client_id is not None:
+        # Client-specific cache key
+        cache_key = (part_id, client_id)
+        if cache_key in _FILE_ID_CACHE:
+            del _FILE_ID_CACHE[cache_key]
+    else:
+        # Legacy: invalidate by part_id only
+        if part_id in _FILE_ID_CACHE:
+            del _FILE_ID_CACHE[part_id]
+        # Also invalidate any client-specific entries for this part
+        keys_to_delete = [k for k in _FILE_ID_CACHE.keys() if isinstance(k, tuple) and k[0] == part_id]
+        for k in keys_to_delete:
+            del _FILE_ID_CACHE[k]
+
+
 def _cache_chunk(part_id: int, chunk_index: int, data: bytes) -> None:
     """Cache a chunk, evicting old entries if needed."""
     now = time.time()

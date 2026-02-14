@@ -14,11 +14,12 @@ export function getStreamUrl(
   if (options?.t !== undefined) params.set("t", String(options.t));
 
   const query = params.toString();
+  // Use Next.js rewrite (/api/v1/* → backend) for proper disconnect handling
   return `${API_BASE_URL}/api/v1/stream/play/${mediaId}${query ? `?${query}` : ""}`;
 }
 
 export function getSubtitleUrl(mediaId: number, track = 0, format = "ass") {
-  return `${API_BASE_URL}/api/v1/subtitles/${mediaId}?track=${track}&format=${format}`;
+  return `/api/v1/subtitles/${mediaId}?track=${track}&format=${format}`;
 }
 
 export async function getSubtitleTracks(mediaId: number) {
@@ -45,10 +46,8 @@ export async function warmStream(mediaId: number) {
     const response = await api.post<{ status: string; elapsed_ms: number }>(
       `/api/v1/stream/warm/${mediaId}`,
     );
-    console.log(`[WARM] Pre-warmed stream in ${response.data.elapsed_ms}ms`);
     return response.data;
-  } catch (error) {
-    console.warn("[WARM] Failed to pre-warm stream:", error);
+  } catch {
     return null;
   }
 }

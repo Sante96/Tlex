@@ -35,9 +35,8 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
     try {
       await createNewProfile(name.trim(), selectedAvatar, isKids);
       router.push("/");
-    } catch (err) {
+    } catch {
       setError("Errore nella creazione del profilo");
-      console.error(err);
     } finally {
       setIsSubmitting(false);
     }

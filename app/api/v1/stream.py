@@ -11,7 +11,6 @@ from sqlalchemy import select
 
 from app.api.deps import DBSession
 from app.config import get_settings
-from app.database import async_session_maker
 from app.models.media import MediaItem
 from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
 from app.services.mkv_cues import extract_keyframes_from_url
@@ -65,7 +64,6 @@ async def warm_stream(
     """
     import time
 
-
     start = time.time()
 
     reader = await get_virtual_reader(session, media_id)
@@ -75,9 +73,11 @@ async def warm_stream(
     logger.debug(f"Warm: media={media_id}, parts={len(reader._parts)}")
 
     # Force refresh of all file_ids
-    await reader._refresh_all_file_ids()
-
-
+    try:
+        await reader._refresh_all_file_ids()
+    finally:
+        # Release workers after warming
+        await reader._release_workers()
 
     elapsed = time.time() - start
     logger.debug(f"Pre-warmed cache for media {media_id} in {elapsed:.2f}s")
@@ -101,7 +101,6 @@ async def stream_raw(
     - FFmpeg for remuxing (Phase 4)
     - Direct download
     """
-    # Get metadata using request session (will be closed after response starts)
     reader = await get_virtual_reader(session, media_id)
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
@@ -119,26 +118,27 @@ async def stream_raw(
         "Accept-Ranges": "bytes",
         "Content-Length": str(content_length),
         "Content-Type": "video/x-matroska",
+        # Anti-buffering headers for Cloudflare/nginx proxies
+        "X-Accel-Buffering": "no",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Connection": "keep-alive",
     }
 
     if is_partial:
         headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
 
     async def stream_generator():
-        """Generate stream chunks with own session."""
-        # Create a new session for the streaming duration
-        async with async_session_maker() as stream_session:
-            stream_reader = await get_virtual_reader(stream_session, media_id)
-            if stream_reader is None:
-                logger.error(f"Media {media_id} not found in stream generator")
-                return
-
-            try:
-                async for chunk in stream_reader.read_range(range_start, range_end + 1):
-                    yield chunk
-            except Exception as e:
-                logger.error(f"Stream error for media {media_id}: {e}")
-                raise
+        """Generate stream chunks using pre-loaded reader."""
+        # Use the reader from request session - no new DB session needed
+        # Workers are obtained directly from memory, not DB
+        try:
+            async for chunk in reader.read_range(range_start, range_end + 1):
+                yield chunk
+        finally:
+            # Safety net: release workers if read_range's finally didn't run
+            # (e.g. connection abort before generator cleanup propagates)
+            # This is idempotent - no-op if already released
+            await reader._release_workers()
 
     return StreamingResponse(
         stream_generator(),
@@ -307,8 +307,6 @@ async def stream_play(
     pre_seek_buffer = 5.0
     pre_seek_time = max(0.0, keyframe_time - pre_seek_buffer)
 
-    logger.debug(f"Keyframe seek: req={t}s, keyframe={keyframe_time}s, pre_seek={pre_seek_time}s")
-
     options = RemuxOptions(
         video_stream=video,
         audio_stream=audio,
@@ -316,15 +314,16 @@ async def stream_play(
         pre_seek_time=pre_seek_time if pre_seek_time > 0 else None,
     )
 
-    logger.debug(f"Starting playback: media={media_id}, audio={audio}, video={video}, t={keyframe_time}")
-
     return StreamingResponse(
         ffmpeg_remuxer.stream(input_url, options),
         media_type="video/mp4",
         headers={
             "Content-Type": "video/mp4",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "X-Content-Type-Options": "nosniff",
+            # Anti-buffering headers for Cloudflare/nginx proxies
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
             # Tell frontend where stream actually starts
             "X-Stream-Start-Time": str(keyframe_time),
             # Tell frontend the original requested time for local seek

@@ -78,7 +78,7 @@ services:
       dockerfile: Dockerfile
     container_name: tlex-backend
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 30 --limit-concurrency 100
     depends_on:
       postgres:
         condition: service_healthy

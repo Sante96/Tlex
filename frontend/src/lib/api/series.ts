@@ -45,6 +45,7 @@ export interface SeriesDetails extends SeriesItem {
 export async function getSeriesList(params?: {
   page?: number;
   page_size?: number;
+  search?: string;
 }) {
   const response = await api.get<{
     items: SeriesItem[];

@@ -14,6 +14,11 @@ from app.models.worker import Worker, WorkerStatus
 
 settings = get_settings()
 
+# Number of Pyrogram clients to create per worker account
+# Premium accounts can handle more concurrent streams due to higher bandwidth
+CLIENTS_PER_WORKER_PREMIUM = 4
+CLIENTS_PER_WORKER_STANDARD = 2
+
 
 class WorkerManager:
     """
@@ -24,10 +29,13 @@ class WorkerManager:
     - Select optimal worker for downloads (load balancing)
     - Handle FloodWait errors with automatic failover
     - Track worker load and status
+    - Create multiple clients per worker for concurrent streams
     """
 
     def __init__(self) -> None:
-        self._clients: dict[int, Client] = {}  # worker_id -> Client
+        self._clients: dict[int, Client] = {}  # worker_id -> primary Client
+        self._client_pool: list[tuple[int, Client]] = []  # [(worker_id, client), ...] all clients
+        self._client_in_use: dict[int, bool] = {}  # id(client) -> is_in_use
         self._worker_loads: dict[int, int] = {}  # worker_id -> current_load
         self._lock = asyncio.Lock()
 
@@ -45,22 +53,80 @@ class WorkerManager:
         loaded = 0
         for worker in workers:
             try:
-                client = Client(
+                # Create primary client
+                primary_client = Client(
                     name=f"worker_{worker.id}",
                     api_id=settings.api_id,
                     api_hash=settings.api_hash,
                     session_string=worker.session_string,
                     in_memory=True,
                 )
-                await client.start()
-                self._clients[worker.id] = client
+                await primary_client.start()
+                self._clients[worker.id] = primary_client
+                self._client_pool.append((worker.id, primary_client))
+                self._client_in_use[id(primary_client)] = False
 
                 # Export and save updated session string to preserve MTProto state
-                # This prevents BadMsgNotification errors after container restarts
-                updated_session = await client.export_session_string()
+                updated_session = await primary_client.export_session_string()
                 if updated_session != worker.session_string:
                     worker.session_string = updated_session
                     logger.debug(f"Updated session_string for worker {worker.id}")
+
+                # Create additional clients for concurrent streams
+                # Premium accounts get more clients due to higher bandwidth
+                max_extra = (CLIENTS_PER_WORKER_PREMIUM if worker.is_premium else CLIENTS_PER_WORKER_STANDARD) - 1
+
+                # Load existing extra sessions or create new ones
+                extra_sessions = worker.extra_sessions or []
+                sessions_updated = False
+
+                for i in range(max_extra):
+                    try:
+                        if i < len(extra_sessions):
+                            # Use existing saved session
+                            extra_session = extra_sessions[i]
+                            logger.debug(f"Loading saved session {i+1} for worker {worker.id}")
+                        else:
+                            # Create new session from primary (first time)
+                            extra_session = worker.session_string
+                            logger.debug(f"Creating new session {i+1} for worker {worker.id}")
+
+                        extra_client = Client(
+                            name=f"worker_{worker.id}_stream_{i+1}",
+                            api_id=settings.api_id,
+                            api_hash=settings.api_hash,
+                            session_string=extra_session,
+                            in_memory=True,
+                        )
+                        await extra_client.start()
+
+                        # Export and save the session (may have changed after start)
+                        new_session = await extra_client.export_session_string()
+                        if i < len(extra_sessions):
+                            if extra_sessions[i] != new_session:
+                                extra_sessions[i] = new_session
+                                sessions_updated = True
+                        else:
+                            extra_sessions.append(new_session)
+                            sessions_updated = True
+
+                        self._client_pool.append((worker.id, extra_client))
+                        self._client_in_use[id(extra_client)] = False
+                        logger.debug(f"Started extra client {i+1} for worker {worker.id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to create extra client {i+1} for worker {worker.id}: {e}")
+                        break  # Stop creating more if one fails
+
+                # Save updated sessions to DB
+                if sessions_updated:
+                    worker.extra_sessions = extra_sessions
+                    logger.info(f"Saved {len(extra_sessions)} extra sessions for worker {worker.id}")
+
+                total_clients = 1 + len([c for wid, c in self._client_pool if wid == worker.id]) - 1
+                logger.info(
+                    f"Worker {worker.id}: {total_clients + 1} clients "
+                    f"({'premium' if worker.is_premium else 'standard'})"
+                )
 
                 # Mark as active
                 worker.status = WorkerStatus.ACTIVE
@@ -73,7 +139,7 @@ class WorkerManager:
                 worker.status = WorkerStatus.OFFLINE
                 await session.commit()
 
-        logger.info(f"Loaded {loaded}/{len(workers)} workers")
+        logger.info(f"Loaded {loaded}/{len(workers)} workers ({len(self._client_pool)} total clients)")
         return loaded
 
     async def get_best_worker(self, session: AsyncSession) -> tuple[Worker, Client] | None:
@@ -112,11 +178,86 @@ class WorkerManager:
 
             return worker, self._clients[worker.id]
 
+    async def get_best_workers(self, session: AsyncSession, limit: int = 3) -> list[tuple[Worker, Client]]:
+        """
+        Get a pool of optimal workers for striping (parallel downloads).
+
+        Returns up to `limit` active workers, prioritizing premium ones.
+        """
+        async with self._lock:
+            await self._recover_flood_wait_workers(session)
+
+            # Get multiple workers
+            stmt = (
+                select(Worker)
+                .where(Worker.status == WorkerStatus.ACTIVE)
+                .order_by(Worker.is_premium.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            workers = result.scalars().all()
+
+            results = []
+            for worker in workers:
+                if worker.id in self._clients:
+                    results.append((worker, self._clients[worker.id]))
+
+            if not results:
+                logger.warning("No available workers for striping!")
+
+            return results
+
+    async def get_available_clients(self, limit: int = 1) -> list[Client]:
+        """
+        Get available worker clients without DB session (for streaming).
+
+        Returns up to `limit` initialized clients that are NOT currently in use.
+        Marks returned clients as "in use" to prevent concurrent operations.
+        Uses the expanded client pool (multiple clients per worker).
+
+        IMPORTANT: Uses async lock to prevent race conditions.
+        """
+        async with self._lock:
+            available = []
+            for worker_id, client in self._client_pool:
+                client_id = id(client)
+                if not self._client_in_use.get(client_id, False):
+                    available.append((worker_id, client))
+                    if len(available) >= limit:
+                        break
+
+            if not available:
+                total_clients = len(self._client_pool)
+                in_use = sum(1 for v in self._client_in_use.values() if v)
+                logger.warning(f"No available clients! {in_use}/{total_clients} in use.")
+                return []
+
+            # Mark as in use and return clients (inside lock to prevent race)
+            result = []
+            for worker_id, client in available:
+                self._client_in_use[id(client)] = True
+                result.append(client)
+                logger.debug(f"Acquired client {id(client)} (worker {worker_id})")
+
+            return result
+
+    def release_clients(self, clients: list[Client]) -> None:
+        """
+        Release clients back to the pool after streaming is done.
+
+        Must be called when streaming completes to allow reuse.
+        """
+        for client in clients:
+            client_id = id(client)
+            if client_id in self._client_in_use:
+                self._client_in_use[client_id] = False
+                logger.debug(f"Released client {client_id}")
+
     async def acquire_worker(self, session: AsyncSession, worker: Worker) -> None:
         """Increment worker load when starting a stream."""
         # Update in-memory load
         self._worker_loads[worker.id] = self._worker_loads.get(worker.id, 0) + 1
-        
+
         # We don't update DB for every stream to avoid write contention
         # But we update last_used_at
         stmt = (
@@ -201,6 +342,10 @@ class WorkerManager:
         workers_info = []
 
         for w in workers:
+            # Count clients for this worker
+            worker_clients = [(wid, c) for wid, c in self._client_pool if wid == w.id]
+            clients_in_use = sum(1 for wid, c in worker_clients if self._client_in_use.get(id(c), False))
+
             info = {
                 "id": w.id,
                 "phone": w.phone_number[-4:] if w.phone_number else "****",  # Last 4 digits only
@@ -208,6 +353,8 @@ class WorkerManager:
                 "status": w.status.value,
                 "current_load": self._worker_loads.get(w.id, 0),
                 "is_connected": w.id in self._clients,
+                "clients_total": len(worker_clients),
+                "clients_in_use": clients_in_use,
             }
 
             # Add FloodWait details if applicable
@@ -222,6 +369,10 @@ class WorkerManager:
         active_count = sum(1 for w in workers_info if w["status"] == "ACTIVE")
         flood_count = sum(1 for w in workers_info if w["status"] == "FLOOD_WAIT")
 
+        # Client pool stats
+        total_clients = len(self._client_pool)
+        clients_in_use = sum(1 for v in self._client_in_use.values() if v)
+
         return {
             "workers": workers_info,
             "summary": {
@@ -230,19 +381,25 @@ class WorkerManager:
                 "flood_wait": flood_count,
                 "offline": len(workers_info) - active_count - flood_count,
                 "connected_clients": len(self._clients),
+                "total_clients": total_clients,
+                "clients_in_use": clients_in_use,
+                "clients_available": total_clients - clients_in_use,
             },
         }
 
     async def shutdown(self) -> None:
         """Gracefully shutdown all worker clients."""
-        for worker_id, client in self._clients.items():
+        # Stop all clients in the pool
+        for worker_id, client in self._client_pool:
             try:
                 await client.stop()
-                logger.info(f"Stopped worker {worker_id}")
             except Exception as e:
-                logger.error(f"Error stopping worker {worker_id}: {e}")
+                logger.error(f"Error stopping client for worker {worker_id}: {e}")
 
+        logger.info(f"Stopped {len(self._client_pool)} clients")
         self._clients.clear()
+        self._client_pool.clear()
+        self._client_in_use.clear()
 
 
 # Global instance

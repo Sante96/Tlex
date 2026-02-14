@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import DBSession, get_admin_user
 from app.schemas import ScanRequest, ScanResponse, ScanStatusResponse
 from app.services.scanner import scanner_service
+from app.services.scheduler import auto_scan_scheduler
 
 router = APIRouter()
 
@@ -40,3 +41,24 @@ async def trigger_scan(
 async def get_scan_status() -> ScanStatusResponse:
     """Get current scan status."""
     return ScanStatusResponse(is_scanning=scanner_service.is_scanning)
+
+
+@router.get("/auto-scan/status")
+async def get_auto_scan_status(_admin=Depends(get_admin_user)):
+    """Get auto-scan scheduler status."""
+    return await auto_scan_scheduler.get_status()
+
+
+@router.post("/auto-scan/interval")
+async def set_auto_scan_interval(
+    hours: int,
+    _admin=Depends(get_admin_user),
+):
+    """Set auto-scan interval in hours. Set to 0 to disable."""
+    if hours < 0:
+        raise HTTPException(status_code=400, detail="Interval must be >= 0")
+    if hours > 168:  # Max 1 week
+        raise HTTPException(status_code=400, detail="Interval must be <= 168 hours")
+
+    await auto_scan_scheduler.set_interval_hours(hours)
+    return await auto_scan_scheduler.get_status()

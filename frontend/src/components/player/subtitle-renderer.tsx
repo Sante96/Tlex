@@ -237,24 +237,14 @@ export const SubtitleRenderer = forwardRef<
   const initOctopus = useCallback(async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    console.log("initOctopus called:", {
-      video: !!video,
-      canvas: !!canvas,
-      enabled,
-      subtitleTrack,
-      initializing: initializingRef.current,
-    });
     if (!video || !canvas || !enabled || subtitleTrack === null) {
-      console.log("initOctopus early return: missing requirements");
       return;
     }
     if (initializingRef.current) {
-      console.log("initOctopus early return: already initializing");
       return;
     }
 
     initializingRef.current = true;
-    console.log("initOctopus starting...");
 
     // Cleanup previous instance
     if (octopusRef.current) {
@@ -265,20 +255,14 @@ export const SubtitleRenderer = forwardRef<
 
     try {
       // Fetch available fonts
-      console.log("Fetching fonts...");
       const availableFonts: Record<string, string> = {
         default: "/lib/default.woff2",
       };
       try {
         const fontsCacheBuster = Date.now();
-        console.log(
-          "Fetching fonts from:",
-          `${API_BASE_URL}/api/v1/subtitles/${mediaId}/fonts?_=${fontsCacheBuster}`,
-        );
-        const fontsResponse = await fetch(
-          `${API_BASE_URL}/api/v1/subtitles/${mediaId}/fonts?_=${fontsCacheBuster}`,
-        );
-        console.log("Fonts response status:", fontsResponse.status);
+        // Fonts should be pre-cached by warm_stream
+        const fontsUrl = `${API_BASE_URL}/api/v1/subtitles/${mediaId}/fonts?_=${fontsCacheBuster}`;
+        const fontsResponse = await fetch(fontsUrl);
         if (fontsResponse.ok) {
           const fontsData = await fontsResponse.json();
           for (const font of fontsData.fonts || []) {
@@ -314,14 +298,12 @@ export const SubtitleRenderer = forwardRef<
               availableFonts[spacedName] = url;
             }
           }
-          console.log("Available fonts:", Object.keys(availableFonts));
         }
-      } catch (e) {
-        console.warn("Could not fetch fonts, using fallback:", e);
+      } catch {
+        // Could not fetch fonts, using fallback
       }
 
       if (!videoRef.current || !canvasRef.current) {
-        console.warn("Video or canvas element no longer available");
         return;
       }
 
@@ -329,20 +311,15 @@ export const SubtitleRenderer = forwardRef<
       let subContent: string | undefined;
       try {
         const subUrl = getSubtitleUrl(subtitleTrack);
-        console.log("Fetching subtitles from:", subUrl);
         const subResponse = await fetch(subUrl);
         if (subResponse.ok) {
           subContent = await subResponse.text();
-          console.log("Fetched subtitle content:", subContent.length, "bytes");
-        } else {
-          console.warn("Failed to fetch subtitles:", subResponse.status);
         }
-      } catch (e) {
-        console.warn("Error fetching subtitles:", e);
+      } catch {
+        // Error fetching subtitles
       }
 
       if (!subContent) {
-        console.warn("No subtitle content available");
         initializingRef.current = false;
         return;
       }
@@ -355,7 +332,6 @@ export const SubtitleRenderer = forwardRef<
       // Re-check canvas after async operations (component might have unmounted)
       const currentCanvas = canvasRef.current;
       if (!currentCanvas) {
-        console.warn("Canvas no longer available after async fetch");
         initializingRef.current = false;
         return;
       }
@@ -371,16 +347,14 @@ export const SubtitleRenderer = forwardRef<
         targetFps,
         debug: false,
         onReady: () => {
-          console.log("SubtitlesOctopus ready (Detached Mode)");
           // Initial render
           updateSubtitles();
         },
-        onError: (err: unknown) => {
-          console.error("SubtitlesOctopus error:", err);
+        onError: () => {
+          // SubtitlesOctopus error
         },
       };
 
-      console.log("Initializing SubtitlesOctopus (Detached Mode)");
       octopusRef.current = new SubtitlesOctopusLib(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         options as any,
@@ -421,8 +395,8 @@ export const SubtitleRenderer = forwardRef<
       if (!video.paused) {
         startRenderLoop();
       }
-    } catch (error) {
-      console.error("Failed to initialize SubtitlesOctopus:", error);
+    } catch {
+      // Failed to initialize SubtitlesOctopus
     } finally {
       initializingRef.current = false;
     }
@@ -441,13 +415,7 @@ export const SubtitleRenderer = forwardRef<
   // Initialize/cleanup on track change or enable/disable
   // canvasReady ensures we wait for the canvas to be mounted before init
   useEffect(() => {
-    console.log("SubtitleRenderer effect:", {
-      enabled,
-      subtitleTrack,
-      canvasReady,
-    });
     if (enabled && subtitleTrack !== null && canvasReady) {
-      console.log("Calling initOctopus for track:", subtitleTrack);
       initOctopus();
     } else if (octopusRef.current) {
       const instance = octopusRef.current as SubtitlesOctopus & {

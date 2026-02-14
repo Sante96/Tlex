@@ -4,16 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { DSButton, DSCard, DSInput } from "@/components/ds";
 import { register } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -64,113 +55,98 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
       <div className="absolute inset-0 bg-gradient-to-br from-plex-orange/10 via-zinc-950 to-zinc-950" />
 
-      <Card className="w-full max-w-md relative z-10 bg-zinc-900/90 border-zinc-800 backdrop-blur">
-        <CardHeader className="text-center pb-2">
+      <DSCard className="w-full max-w-md relative z-10 !bg-zinc-900/90 backdrop-blur">
+        <div className="text-center pb-2 mb-4">
           <Link href="/" className="inline-block mb-4">
             <span className="text-4xl font-bold text-plex-orange">TLEX</span>
           </Link>
-          <CardTitle className="text-2xl text-white">Crea account</CardTitle>
-          <CardDescription className="text-zinc-400">
+          <h1 className="text-2xl font-semibold text-white">Crea account</h1>
+          <p className="text-sm text-[#a1a1aa] mt-1">
             Registrati per iniziare lo streaming
-          </CardDescription>
-        </CardHeader>
+          </p>
+        </div>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-zinc-300">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@esempio.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-plex-orange focus:ring-plex-orange"
-              />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-zinc-300">
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className="bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 pr-10 focus:border-plex-orange focus:ring-plex-orange"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 text-zinc-400 hover:text-white"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
+          <DSInput
+            id="email"
+            label="Email"
+            type="email"
+            placeholder="tu@esempio.com"
+            value={email}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setEmail(e.target.value)
+            }
+            required
+          />
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-zinc-300">
-                Conferma Password
-              </Label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-plex-orange focus:ring-plex-orange"
-              />
-            </div>
+          <DSInput
+            id="password"
+            label="Password"
+            type={showPassword ? "text" : "password"}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setPassword(e.target.value)
+            }
+            required
+            minLength={8}
+            suffix={
+              <button
+                type="button"
+                className="text-[#71717a] hover:text-white transition-colors"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            }
+          />
 
-            <Button
-              type="submit"
-              className="w-full bg-plex-orange hover:bg-plex-orange/90 text-black font-semibold"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creazione account...
-                </>
-              ) : (
-                "Registrati"
-              )}
-            </Button>
-          </form>
+          <DSInput
+            id="confirmPassword"
+            label="Conferma Password"
+            type={showPassword ? "text" : "password"}
+            placeholder="••••••••"
+            value={confirmPassword}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setConfirmPassword(e.target.value)
+            }
+            required
+          />
 
-          <div className="mt-6 text-center text-sm text-zinc-500">
-            Hai già un account?{" "}
-            <Link
-              href="/login"
-              className="text-plex-orange hover:text-plex-orange/80"
-            >
-              Accedi
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+          <DSButton
+            type="submit"
+            className="w-full"
+            disabled={isLoading}
+            icon={
+              isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : undefined
+            }
+          >
+            {isLoading ? "Creazione account..." : "Registrati"}
+          </DSButton>
+        </form>
+
+        <div className="mt-6 text-center text-sm text-[#52525b]">
+          Hai già un account?{" "}
+          <Link
+            href="/login"
+            className="text-plex-orange hover:text-plex-orange/80"
+          >
+            Accedi
+          </Link>
+        </div>
+      </DSCard>
     </div>
   );
 }

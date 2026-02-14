@@ -56,11 +56,6 @@ async def get_subtitle(
         logger.debug(f"Serving cached subtitle: {cache_file.name}")
         content = cache_file.read_bytes()
     else:
-        # Need to extract - validate media exists
-        reader = await get_virtual_reader(session, media_id)
-        if reader is None:
-            raise HTTPException(status_code=404, detail="Media not found")
-
         # Get subtitle streams to convert absolute index to relative
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
@@ -95,21 +90,31 @@ async def get_subtitle(
 
         logger.debug(f"Extracting subtitle: media={media_id}, track={track}")
 
+        # Use direct MKV extraction (fast - reads only needed bytes)
         try:
-            content = await subtitle_extractor.extract_subtitle_from_reader(
-                reader=reader,
-                stream_index=relative_index,
+            from app.services.subtitles.mkv_extractor import extract_subtitle_direct
+
+            reader = await get_virtual_reader(session, media_id)
+            if not reader:
+                raise HTTPException(status_code=404, detail="Could not create stream reader")
+
+            content = await extract_subtitle_direct(
+                reader,
+                track_index=relative_index,
                 output_format=format,
             )
+
+            if not content:
+                raise HTTPException(status_code=500, detail="Subtitle extraction returned empty content")
+
             # Cache the result
             cache_file.write_bytes(content)
             logger.debug(f"Cached subtitle: {cache_file.name}")
-        except RuntimeError as e:
-            logger.error(f"Subtitle extraction failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e) or "Extraction failed") from None
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.exception(f"Unexpected error extracting subtitle: {e}")
-            raise HTTPException(status_code=500, detail=str(e) or "Unknown error") from None
+            logger.exception(f"Subtitle extraction failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e) or "Extraction failed") from None
 
     # Determine content type and filename
     if format == "ass":
@@ -302,3 +307,61 @@ async def get_font_file(
         )
 
     raise HTTPException(status_code=404, detail=f"Font '{filename}' not found")
+
+
+@router.post("/{media_id}/warm")
+async def warm_subtitle_assets(
+    media_id: int,
+    session: DBSession,
+) -> dict:
+    """
+    Pre-warm subtitle assets (fonts) in background.
+
+    Called during stream warm to cache fonts before user selects subtitles.
+    Returns immediately, extraction happens in background task.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models.media import MediaItem
+
+    # Check if fonts are already cached
+    cache_dir = FONT_CACHE_DIR / str(media_id)
+    if cache_dir.exists() and list(cache_dir.glob("*")):
+        logger.debug(f"Font cache exists for media {media_id}, skipping warm")
+        return {"status": "cached", "media_id": media_id}
+
+    # Check if media has subtitle streams
+    query = select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+    result = await session.execute(query)
+    media = result.scalar_one_or_none()
+
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    has_subtitles = any(s.codec_type == CodecType.SUBTITLE for s in media.streams)
+    if not has_subtitles:
+        logger.debug(f"No subtitles in media {media_id}, skipping warm")
+        return {"status": "no_subtitles", "media_id": media_id}
+
+    # Start background extraction (don't await)
+    async def extract_in_background():
+        try:
+            async with asyncio.timeout(120):  # 2 min max
+                reader = await get_virtual_reader(session, media_id)
+                if reader:
+                    fonts = await subtitle_extractor.extract_all_fonts_from_reader(reader)
+                    if fonts:
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        for f in fonts:
+                            (cache_dir / f.filename).write_bytes(f.data)
+                        logger.info(f"Background: cached {len(fonts)} fonts for media {media_id}")
+        except TimeoutError:
+            logger.warning(f"Background font extraction timed out for media {media_id}")
+        except Exception as e:
+            logger.warning(f"Background font extraction failed for media {media_id}: {e}")
+
+    # Fire and forget
+    asyncio.create_task(extract_in_background())
+
+    return {"status": "warming", "media_id": media_id}

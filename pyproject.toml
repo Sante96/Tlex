@@ -3,7 +3,7 @@ name = "tlex"
 version = "1.0.3"
 description = "Telegram Media Server - Self-hosted streaming platform using Telegram as storage backend"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13.9"
 license = { text = "MIT" }
 
 dependencies = [
@@ -17,8 +17,8 @@ dependencies = [
     # Redis
     "redis>=5.0.1",
     # Telegram
-    "pyrogram>=2.0.106",
-    "tgcrypto>=1.2.5",
+    "pyrotgfork>=2.0.106",
+    "tgcrypto-pyrofork>=1.2.6",
     # Authentication
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",

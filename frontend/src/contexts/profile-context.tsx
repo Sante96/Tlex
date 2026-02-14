@@ -63,8 +63,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           setProfile(savedProfile);
         }
       }
-    } catch (error) {
-      console.error("Failed to fetch profiles:", error);
+    } catch {
       setProfiles([]);
       setHasProfiles(false);
     } finally {

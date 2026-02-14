@@ -36,10 +36,12 @@ class FFmpegRemuxer:
     - Audio transcode to AAC (browser compatible)
     - Fragmented MP4 output for streaming
     - Pipe-based streaming (no temp files)
+    - Auto-kill previous process for same media (prevents zombie processes)
     """
 
     def __init__(self) -> None:
         self._ffmpeg_path = find_ffmpeg()
+        self._active_processes: dict[str, subprocess.Popen] = {}  # input_url -> process
 
     def build_command(
         self,
@@ -56,13 +58,18 @@ class FFmpegRemuxer:
         Returns:
             Command as list of arguments
         """
+        # Reduce probesize when seeking - format is already known, faster startup
+        is_seeking = options.start_time is not None and options.start_time > 0
+        probe_size = "2M" if is_seeking else "10M"
+        analyze_duration = "2M" if is_seeking else "10M"
+
         cmd = [
             self._ffmpeg_path,
             "-hide_banner",
             "-loglevel",
             "warning",
-            "-probesize", "10M",
-            "-analyzeduration", "10M",
+            "-probesize", probe_size,
+            "-analyzeduration", analyze_duration,
             "-seekable", "1",
         ]
 
@@ -159,41 +166,40 @@ class FFmpegRemuxer:
         if options is None:
             options = RemuxOptions()
 
-        import time
-        start_time = time.time()
-
         cmd = self.build_command(input_url, options)
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
         chunk_size = 64 * 1024  # 64KB chunks
         queue: Queue[bytes | None] = Queue(maxsize=100)
-        first_chunk_time = [None]  # Use list to allow mutation in nested function
 
         def reader_thread(proc: subprocess.Popen, q: Queue) -> None:
             """Read stdout in a separate thread."""
             try:
-                chunk_count = 0
                 while True:
                     chunk = proc.stdout.read(chunk_size)
                     if not chunk:
                         break
-                    chunk_count += 1
-                    if chunk_count == 1:
-                        first_chunk_time[0] = time.time()
-                        elapsed = first_chunk_time[0] - start_time
-                        logger.debug(f"FFmpeg first chunk after {elapsed:.2f}s")
                     q.put(chunk)
-                logger.debug(f"FFmpeg stream complete: {chunk_count} chunks")
             except Exception as e:
                 logger.error(f"Reader thread error: {e}")
             finally:
                 q.put(None)  # Signal end
+
+        # Kill previous process for same input URL (prevents zombie processes on browser refresh)
+        # Use kill() (SIGKILL) instead of terminate+wait to avoid blocking the event loop
+        if input_url in self._active_processes:
+            old_process = self._active_processes[input_url]
+            if old_process.poll() is None:  # Still running
+                logger.debug(f"[FFMPEG] Killing previous process PID={old_process.pid} for {input_url}")
+                old_process.kill()
+                # Reap in background thread to avoid blocking event loop
+                await asyncio.to_thread(old_process.wait)
 
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        self._active_processes[input_url] = process
 
         thread = Thread(target=reader_thread, args=(process, queue), daemon=True)
         thread.start()
@@ -212,29 +218,31 @@ class FFmpegRemuxer:
                         break
                     continue
 
-            process.wait()
+            await asyncio.to_thread(process.wait)
 
             if process.returncode != 0:
-                stderr = process.stderr.read()
+                stderr = await asyncio.to_thread(process.stderr.read)
                 if stderr:
                     logger.error(f"FFmpeg error (code {process.returncode}): {stderr.decode()}")
 
         except asyncio.CancelledError:
-            logger.info("Stream cancelled, terminating FFmpeg")
-            process.terminate()
-            process.wait()
+            process.kill()
+            await asyncio.to_thread(process.wait)
             raise
 
         except Exception as e:
-            logger.error(f"FFmpeg streaming error: {e}")
-            process.terminate()
-            process.wait()
+            logger.error(f"FFmpeg stream error: {type(e).__name__}: {e}")
+            process.kill()
+            await asyncio.to_thread(process.wait)
             raise
 
         finally:
+            # Remove from active processes
+            if input_url in self._active_processes:
+                del self._active_processes[input_url]
             if process.poll() is None:
-                process.terminate()
-                process.wait()
+                process.kill()
+                await asyncio.to_thread(process.wait)
 
 
 # Global instance

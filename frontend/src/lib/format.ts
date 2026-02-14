@@ -64,7 +64,7 @@ export function cleanEpisodeTitle(title: string): string {
  */
 export function getTmdbImageUrl(
   path: string | null,
-  size: "w300" | "w500" | "w780" | "original" = "w500",
+  size: "w300" | "w500" | "w780" | "w1280" | "original" = "w500",
 ): string | null {
   if (!path) return null;
   return `${TMDB_IMAGE_BASE}/${size}${path}`;

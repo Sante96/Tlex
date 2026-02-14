@@ -63,7 +63,17 @@ export function VideoPlayer({
     setSubtitleOffset,
   } = usePlayerPreferences(mediaId);
 
-  const { videoUrl, streamStartTime, isWarmed } = useVideoSync(
+  // Auto-select first subtitle track if none saved
+  useEffect(() => {
+    if (selectedSubtitle === null && subtitleTracks.length > 0) {
+      const defaultTrack = subtitleTracks.find((t) => t.is_default);
+      setSelectedSubtitle(
+        defaultTrack?.stream_index ?? subtitleTracks[0].stream_index,
+      );
+    }
+  }, [selectedSubtitle, subtitleTracks, setSelectedSubtitle]);
+
+  const { videoUrl, streamStartTime } = useVideoSync(
     mediaId,
     selectedAudio,
     seekTime,

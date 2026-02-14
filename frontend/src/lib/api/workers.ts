@@ -4,9 +4,11 @@ export interface WorkerInfo {
   id: number;
   phone: string;
   is_premium: boolean;
-  status: "active" | "flood_wait" | "offline";
+  status: "ACTIVE" | "FLOOD_WAIT" | "OFFLINE";
   current_load: number;
   is_connected: boolean;
+  clients_total: number;
+  clients_in_use: number;
   flood_wait_remaining_seconds?: number;
   flood_wait_until?: string;
 }
@@ -17,6 +19,9 @@ export interface WorkersSummary {
   flood_wait: number;
   offline: number;
   connected_clients: number;
+  total_clients: number;
+  clients_in_use: number;
+  clients_available: number;
 }
 
 export interface WorkersStatusResponse {
@@ -47,4 +52,35 @@ export interface SystemStats {
 export async function getSystemStats(): Promise<SystemStats> {
   const response = await api.get<SystemStats>("/api/v1/stats");
   return response.data;
+}
+
+export async function sendWorkerCode(
+  phoneNumber: string,
+): Promise<{ status: string; phone_code_hash: string }> {
+  const response = await api.post<{ status: string; phone_code_hash: string }>(
+    "/api/v1/workers/send-code",
+    { phone_number: phoneNumber },
+  );
+  return response.data;
+}
+
+export async function verifyWorkerCode(
+  phoneNumber: string,
+  code: string,
+  password?: string,
+): Promise<{ status: string; worker_id?: number; is_premium?: boolean }> {
+  const response = await api.post<{
+    status: string;
+    worker_id?: number;
+    is_premium?: boolean;
+  }>("/api/v1/workers/verify-code", {
+    phone_number: phoneNumber,
+    code,
+    password,
+  });
+  return response.data;
+}
+
+export async function deleteWorker(workerId: number): Promise<void> {
+  await api.delete(`/api/v1/workers/${workerId}`);
 }
