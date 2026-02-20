@@ -71,3 +71,27 @@ export async function setRegistrationStatus(
   );
   return response.data;
 }
+
+export interface UserInfo {
+  id: number;
+  email: string;
+  is_admin: boolean;
+  profiles_count: number;
+  profiles: { id: number; name: string }[];
+}
+
+export async function listUsers(): Promise<UserInfo[]> {
+  const response = await api.get<UserInfo[]>("/api/v1/auth/users");
+  return response.data;
+}
+
+export async function toggleUserAdmin(
+  userId: number,
+  isAdmin: boolean,
+): Promise<void> {
+  await api.patch(`/api/v1/auth/users/${userId}/admin`, { is_admin: isAdmin });
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  await api.delete(`/api/v1/auth/users/${userId}`);
+}

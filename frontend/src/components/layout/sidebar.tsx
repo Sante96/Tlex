@@ -56,7 +56,10 @@ export function Sidebar() {
       animate={{ width: sidebarWidth }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       style={{
-        background: "linear-gradient(180deg, #18181b 0%, #0f0f10 100%)",
+        background: "rgba(9, 9, 11, 0.80)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderRight: "1px solid rgba(39, 39, 42, 0.5)",
         padding: isCollapsed ? "20px 14px" : "20px 16px",
       }}
     >
@@ -67,7 +70,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={toggleCollapsed}
-          className="flex items-center justify-center w-10 h-10 rounded-[10px] hover:bg-white/5 transition-colors shrink-0"
+          className="flex items-center justify-center w-10 h-10 rounded-[10px] hover:bg-white/10 transition-colors shrink-0"
         >
           <Menu className="h-[22px] w-[22px] text-[#a1a1aa]" />
         </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { LogOut, UserCircle, Users } from "lucide-react";
 import { DSAvatar, DSDropdownMenu, DSBreadcrumb } from "@/components/ds";
@@ -8,36 +8,65 @@ import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { SearchBar } from "@/components/layout/search-bar";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
-import { updateProfile } from "@/lib/api";
+import { updateProfile, getSeriesDetails, getMediaDetails } from "@/lib/api";
 
 const DEFAULT_AVATAR = "/avatars/avatar-01.png";
 
 function useBreadcrumbItems(): { label: string; href?: string }[] | null {
   const pathname = usePathname();
+  const [titleCache, setTitleCache] = useState<Record<string, string>>({});
 
-  // /series/[id]/season/[season] → Serie TV / Serie Name (handled by page context, use generic)
+  // Extract IDs from pathname
   const seasonMatch = pathname.match(/^\/series\/(\d+)\/season\/(\d+)/);
+  const seriesMatch = pathname.match(/^\/series\/(\d+)$/);
+  const mediaMatch = pathname.match(/^\/media\/(\d+)$/);
+
+  const seriesId = seasonMatch?.[1] || seriesMatch?.[1];
+  const mediaId = mediaMatch?.[1];
+
+  useEffect(() => {
+    if (seriesId && !titleCache[`series-${seriesId}`]) {
+      getSeriesDetails(Number(seriesId))
+        .then((data) =>
+          setTitleCache((prev) => ({
+            ...prev,
+            [`series-${seriesId}`]: data.title,
+          })),
+        )
+        .catch(() => {});
+    }
+    if (mediaId && !titleCache[`media-${mediaId}`]) {
+      getMediaDetails(Number(mediaId))
+        .then((data) =>
+          setTitleCache((prev) => ({
+            ...prev,
+            [`media-${mediaId}`]: data.title,
+          })),
+        )
+        .catch(() => {});
+    }
+  }, [seriesId, mediaId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (seasonMatch) {
+    const name = titleCache[`series-${seasonMatch[1]}`] || "...";
     return [
       { label: "Serie TV", href: "/series" },
-      { label: "Serie", href: `/series/${seasonMatch[1]}` },
+      { label: name, href: `/series/${seasonMatch[1]}` },
       { label: `Stagione ${seasonMatch[2]}` },
     ];
   }
 
-  // /series/[id] → Serie TV / Serie Name
-  const seriesMatch = pathname.match(/^\/series\/(\d+)$/);
   if (seriesMatch) {
-    return [{ label: "Serie TV", href: "/series" }, { label: "Dettaglio" }];
+    const name = titleCache[`series-${seriesMatch[1]}`] || "...";
+    return [{ label: "Serie TV", href: "/series" }, { label: name }];
   }
 
-  // /media/[id] → Film / Movie Name
-  const mediaMatch = pathname.match(/^\/media\/(\d+)$/);
   if (mediaMatch) {
-    return [{ label: "Film", href: "/movies" }, { label: "Dettaglio" }];
+    const name = titleCache[`media-${mediaMatch[1]}`] || "...";
+    return [{ label: "Film", href: "/movies" }, { label: name }];
   }
 
-  return null; // No breadcrumb on other pages
+  return null;
 }
 
 export function TopBar() {
@@ -69,10 +98,12 @@ export function TopBar() {
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-6"
+      className="h-14 flex items-center justify-between px-6 sticky top-0 z-30"
       style={{
-        backgroundColor: "#18181b",
-        borderBottom: "1px solid #27272a",
+        background: "rgba(9, 9, 11, 0.80)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(39, 39, 42, 0.5)",
       }}
     >
       {/* Left side: breadcrumb on detail pages, searchbar elsewhere */}

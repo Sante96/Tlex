@@ -11,10 +11,12 @@ from sqlalchemy import select
 
 from app.api.deps import DBSession
 from app.config import get_settings
+from app.core.worker_manager import worker_manager
 from app.models.media import MediaItem
 from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
 from app.services.mkv_cues import extract_keyframes_from_url
-from app.services.streaming import get_virtual_reader
+from app.services.streaming import get_virtual_reader, release_reader
+from app.services.streaming.telegram import refresh_all_file_ids
 
 settings = get_settings()
 router = APIRouter()
@@ -70,17 +72,17 @@ async def warm_stream(
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
-    logger.debug(f"Warm: media={media_id}, parts={len(reader._parts)}")
+    logger.info(f"[WARM] media={media_id}, parts={len(reader._parts)}")
 
     # Force refresh of all file_ids
     try:
-        await reader._refresh_all_file_ids()
+        if await reader._ensure_workers():
+            await refresh_all_file_ids(reader._clients, reader._parts)
     finally:
-        # Release workers after warming
         await reader._release_workers()
 
     elapsed = time.time() - start
-    logger.debug(f"Pre-warmed cache for media {media_id} in {elapsed:.2f}s")
+    logger.info(f"[WARM] media={media_id} done in {elapsed:.2f}s")
 
     return {"status": "ok", "elapsed_ms": int(elapsed * 1000)}
 
@@ -101,44 +103,50 @@ async def stream_raw(
     - FFmpeg for remuxing (Phase 4)
     - Direct download
     """
-    reader = await get_virtual_reader(session, media_id)
+    # Persistent reader: cached across range requests for dynamic client scaling
+    # First request: 1 client. Subsequent requests: tries to acquire more.
+    reader = await get_virtual_reader(session, media_id, persistent=True)
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
     total_size = reader.total_size
     range_header = request.headers.get("range")
+    logger.info(f"[RAW] media={media_id}, range={range_header}, size={total_size}, clients={len(reader._clients)}")
 
     range_start, range_end = parse_range_header(range_header, total_size)
     is_partial = range_header is not None
 
-    content_length = range_end - range_start + 1
     status_code = 206 if is_partial else 200
+
+    # Pool status for frontend warnings
+    pool = worker_manager.pool_status()
 
     headers = {
         "Accept-Ranges": "bytes",
-        "Content-Length": str(content_length),
         "Content-Type": "video/x-matroska",
         # Anti-buffering headers for Cloudflare/nginx proxies
         "X-Accel-Buffering": "no",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Connection": "keep-alive",
+        # Pool status headers for frontend
+        "X-Pool-Total": str(pool["total_clients"]),
+        "X-Pool-In-Use": str(pool["clients_in_use"]),
+        "X-Pool-Available": str(pool["clients_available"]),
+        "X-Pool-Pressure": str(pool["pool_pressure"]),
+        "X-Stream-Clients": str(len(reader._clients)),
     }
 
     if is_partial:
         headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
 
     async def stream_generator():
-        """Generate stream chunks using pre-loaded reader."""
-        # Use the reader from request session - no new DB session needed
-        # Workers are obtained directly from memory, not DB
+        """Generate stream chunks using persistent reader."""
         try:
             async for chunk in reader.read_range(range_start, range_end + 1):
                 yield chunk
-        finally:
-            # Safety net: release workers if read_range's finally didn't run
-            # (e.g. connection abort before generator cleanup propagates)
-            # This is idempotent - no-op if already released
-            await reader._release_workers()
+        except Exception:
+            # Reader was force-released or connection dropped — end stream silently
+            return
 
     return StreamingResponse(
         stream_generator(),
@@ -146,6 +154,29 @@ async def stream_raw(
         headers=headers,
         media_type="video/x-matroska",
     )
+
+
+@router.get("/pool-status")
+async def pool_status() -> dict:
+    """
+    Lightweight pool status for frontend warnings.
+
+    No DB session required — reads in-memory pool state.
+    """
+    return worker_manager.pool_status()
+
+
+@router.post("/release/{media_id}")
+async def stream_release(media_id: int) -> dict:
+    """
+    Release a cached stream reader and its Telegram clients.
+
+    Called by the frontend when the player unmounts (user navigates away).
+    This immediately frees the Telegram worker clients back to the pool.
+    """
+    await release_reader(media_id)
+    logger.info(f"[RELEASE] Released stream reader for media {media_id}")
+    return {"status": "ok"}
 
 
 @router.head("/raw/{media_id}")
@@ -295,6 +326,8 @@ async def stream_play(
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
+    logger.info(f"[PLAY] media={media_id}, audio={audio}, video={video}, t={t}")
+
     # Build internal URL for FFmpeg to read from
     base_url = f"http://127.0.0.1:{settings.app_port}"
     input_url = f"{base_url}/api/v1/stream/raw/{media_id}"
@@ -306,6 +339,11 @@ async def stream_play(
     # This reduces initial freeze while maintaining accurate A/V sync
     pre_seek_buffer = 5.0
     pre_seek_time = max(0.0, keyframe_time - pre_seek_buffer)
+
+    logger.info(
+        f"[PLAY] media={media_id}, keyframe={keyframe_time:.2f}s, "
+        f"pre_seek={pre_seek_time:.2f}s (requested t={t})"
+    )
 
     options = RemuxOptions(
         video_stream=video,

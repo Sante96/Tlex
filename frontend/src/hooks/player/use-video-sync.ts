@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { getStreamUrl, warmStream } from "@/lib/api";
 
 interface VideoSyncState {
@@ -19,19 +19,24 @@ export function useVideoSync(
   const [isWarmed, setIsWarmed] = useState(false);
   const [streamStartTime, setStreamStartTime] = useState(initialPosition);
   const [localSeekOffset, setLocalSeekOffset] = useState(0);
+  const warmedIdRef = useRef<number | null>(null);
 
-  // Pre-warm Telegram file_id cache on mount
+  // Pre-warm Telegram file_id cache on mount.
+  // Guard by mediaId instead of boolean so StrictMode cleanup+remount doesn't double-fire.
   useEffect(() => {
-    const doWarm = async () => {
-      await warmStream(mediaId);
-      setIsWarmed(true);
-    };
-    doWarm();
+    if (warmedIdRef.current === mediaId) return;
+    warmedIdRef.current = mediaId;
+    warmStream(mediaId).then(() => setIsWarmed(true));
   }, [mediaId]);
 
-  const videoUrl = isWarmed
-    ? getStreamUrl(mediaId, { audio: selectedAudio, t: seekTime })
-    : undefined;
+  // Memoize URL string to avoid spurious effect re-triggers
+  const videoUrl = useMemo(
+    () =>
+      isWarmed
+        ? getStreamUrl(mediaId, { audio: selectedAudio, t: seekTime })
+        : undefined,
+    [isWarmed, mediaId, selectedAudio, seekTime],
+  );
 
   // Fetch stream headers for subtitle sync and local seek calculation
   useEffect(() => {

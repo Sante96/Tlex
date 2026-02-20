@@ -84,3 +84,26 @@ export async function verifyWorkerCode(
 export async function deleteWorker(workerId: number): Promise<void> {
   await api.delete(`/api/v1/workers/${workerId}`);
 }
+
+export interface BenchmarkResult {
+  clients: number;
+  speed_mbps: number;
+  elapsed_seconds: number;
+  bytes_downloaded: number;
+  improvement_pct?: number;
+}
+
+export interface BenchmarkResponse {
+  test_file_mb: number;
+  total_clients_in_pool: number;
+  clients_tested: number;
+  results: BenchmarkResult[];
+  optimal_clients_per_stream: number;
+}
+
+export async function runBenchmark(): Promise<BenchmarkResponse> {
+  const response = await api.post<BenchmarkResponse>(
+    "/api/v1/workers/benchmark",
+  );
+  return response.data;
+}

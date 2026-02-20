@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Settings,
   Volume2,
@@ -10,19 +10,6 @@ import {
   Save,
 } from "lucide-react";
 import {
-  getWorkersStatus,
-  getSystemStats,
-  getAutoScanStatus,
-  getScannerStatus,
-  triggerManualScan,
-  getRegistrationStatus,
-  setRegistrationStatus,
-  type WorkersStatusResponse,
-  type SystemStats,
-  type AutoScanStatus,
-  type ScanStatus,
-} from "@/lib/api";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -31,10 +18,16 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/auth-context";
-import { WorkersCard, StatsCard, ScannerCard } from "@/components/settings";
+import {
+  WorkersCard,
+  StatsCard,
+  ScannerCard,
+  UsersCard,
+} from "@/components/settings";
 import { ChangePasswordModal } from "@/components/settings/change-password-modal";
 import { AddWorkerCard } from "@/components/settings/add-worker-card";
 import { DSCard, DSButton } from "@/components/ds";
+import { useSettingsData } from "@/hooks/use-settings-data";
 
 interface UserPreferences {
   default_audio: string;
@@ -53,94 +46,28 @@ export default function SettingsPage() {
     subtitles_enabled: true,
     autoplay_next: true,
   });
-  const [workersData, setWorkersData] = useState<WorkersStatusResponse | null>(
-    null,
-  );
-  const [statsData, setStatsData] = useState<SystemStats | null>(null);
-  const [autoScanData, setAutoScanData] = useState<AutoScanStatus | null>(null);
-  const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
-  const [loadingWorkers, setLoadingWorkers] = useState(false);
-  const [loadingStats, setLoadingStats] = useState(false);
-  const [loadingScan, setLoadingScan] = useState(false);
-  const [triggeringScan, setTriggeringScan] = useState(false);
-  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(
-    null,
-  );
-  const [togglingRegistration, setTogglingRegistration] = useState(false);
 
-  const loadWorkersStatus = async () => {
-    try {
-      setLoadingWorkers(true);
-      const data = await getWorkersStatus();
-      setWorkersData(data);
-    } catch {
-    } finally {
-      setLoadingWorkers(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      setLoadingStats(true);
-      const data = await getSystemStats();
-      setStatsData(data);
-    } catch {
-    } finally {
-      setLoadingStats(false);
-    }
-  };
-
-  const loadScanStatus = async () => {
-    try {
-      setLoadingScan(true);
-      const [autoScan, status] = await Promise.all([
-        getAutoScanStatus(),
-        getScannerStatus(),
-      ]);
-      setAutoScanData(autoScan);
-      setScanStatus(status);
-    } catch {
-    } finally {
-      setLoadingScan(false);
-    }
-  };
-
-  const handleTriggerScan = async () => {
-    try {
-      setTriggeringScan(true);
-      await triggerManualScan();
-      await loadScanStatus();
-    } catch {
-    } finally {
-      setTriggeringScan(false);
-    }
-  };
-
-  const loadRegistrationStatus = async () => {
-    try {
-      const data = await getRegistrationStatus();
-      setRegistrationOpen(data.enabled);
-    } catch {}
-  };
-
-  const handleToggleRegistration = async () => {
-    if (registrationOpen === null) return;
-    setTogglingRegistration(true);
-    try {
-      const data = await setRegistrationStatus(!registrationOpen);
-      setRegistrationOpen(data.enabled);
-    } catch {}
-    setTogglingRegistration(false);
-  };
-
-  useEffect(() => {
-    if (user?.is_admin) {
-      loadWorkersStatus();
-      loadStats();
-      loadScanStatus();
-      loadRegistrationStatus();
-    }
-  }, [user?.is_admin]);
+  const {
+    workersData,
+    statsData,
+    autoScanData,
+    setAutoScanData,
+    scanStatus,
+    loadingWorkers,
+    loadingStats,
+    loadingScan,
+    triggeringScan,
+    registrationOpen,
+    togglingRegistration,
+    usersData,
+    loadingUsers,
+    loadWorkersStatus,
+    loadStats,
+    loadScanStatus,
+    handleTriggerScan,
+    handleToggleRegistration,
+    loadUsers,
+  } = useSettingsData(!!user?.is_admin);
 
   const handleSave = async () => {
     setSaving(true);
@@ -318,6 +245,16 @@ export default function SettingsPage() {
               )}
             </div>
           </DSCard>
+
+          {/* Gestione Utenti (admin only) */}
+          {user?.is_admin && (
+            <UsersCard
+              users={usersData}
+              currentUserId={user?.id ?? 0}
+              loading={loadingUsers}
+              onRefresh={loadUsers}
+            />
+          )}
         </div>
 
         {/* Right Column (admin only) */}

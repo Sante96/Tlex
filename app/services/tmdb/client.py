@@ -6,13 +6,12 @@ import httpx
 from loguru import logger
 
 from app.config import get_settings
-from app.services.tmdb.models import CastMember, EpisodeInfo, TMDBResult, TVDetails
+from app.services.tmdb.models import CastMember, EpisodeInfo, MovieDetails, TMDBResult, TVDetails
 
 settings = get_settings()
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
-# Patterns to clean from TV show titles (e.g., "Season 1", "Stagione 1")
 SEASON_PATTERNS = [
     re.compile(r"\s*[-–—]\s*[Ss]tagione\s*\d+", re.IGNORECASE),
     re.compile(r"\s*[-–—]\s*[Ss]eason\s*\d+", re.IGNORECASE),
@@ -22,447 +21,306 @@ SEASON_PATTERNS = [
 ]
 
 
-
 def clean_tv_title(title: str) -> str:
-    """
-    Remove season indicators from TV show title for TMDB search.
-
-    Args:
-        title: The original TV show title.
-
-    Returns:
-        The cleaned title used for searching.
-    """
+    """Remove season indicators from TV show title for TMDB search."""
     cleaned = title.strip()
     for pattern in SEASON_PATTERNS:
         cleaned = pattern.sub("", cleaned)
     return cleaned.strip()
 
 
-class TMDBClient:
-    """
-    Client for interacting with The Movie Database (TMDB) API.
+def _image_list(data: list[dict]) -> list[dict]:
+    """Extract file_path/width/height from a TMDB image list."""
+    return [
+        {"file_path": img["file_path"], "width": img.get("width"), "height": img.get("height")}
+        for img in data
+    ]
 
-    Handles searching for movies and TV shows, retrieving details,
-    credits, and episode information.
-    """
+
+class TMDBClient:
+    """Client for The Movie Database (TMDB) API."""
 
     def __init__(self) -> None:
         self._api_key = settings.tmdb_api_key
         self._language = settings.tmdb_language
 
-    async def search_movie(self, title: str, year: int | None = None) -> TMDBResult | None:
-        """
-        Search for a movie by title.
-
-        Args:
-            title: Movie title to search.
-            year: Optional release year to narrow results.
-
-        Returns:
-            TMDBResult object if found, otherwise None.
-        """
-        params = {
-            "api_key": self._api_key,
-            "query": title,
-            "language": self._language,
-        }
-        if year:
-            params["year"] = str(year)
-
+    async def _get(
+        self, path: str, *, use_language: bool = True, **extra
+    ) -> dict | None:
+        """Shared HTTP GET with error handling."""
+        params: dict = {"api_key": self._api_key}
+        if use_language:
+            params["language"] = self._language
+        params.update(extra)
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/search/movie",
-                    params=params,
-                    timeout=10.0,
+                resp = await client.get(
+                    f"{TMDB_BASE_URL}{path}", params=params, timeout=10.0
                 )
-                response.raise_for_status()
-                data = response.json()
-
-                if not data.get("results"):
-                    logger.warning(f"No TMDB results for movie: {title}")
-                    return None
-
-                result = data["results"][0]
-                return TMDBResult(
-                    tmdb_id=result["id"],
-                    title=result.get("title", title),
-                    overview=result.get("overview"),
-                    poster_path=result.get("poster_path"),
-                    backdrop_path=result.get("backdrop_path"),
-                    release_date=result.get("release_date"),
-                    media_type="movie",
-                )
+                resp.raise_for_status()
+                return resp.json()
             except httpx.HTTPError as e:
-                logger.error(f"TMDB API error: {e}")
+                logger.error(f"TMDB API error ({path}): {e}")
                 return None
+
+    # --- Movie ---
+
+    async def search_movie(
+        self, title: str, year: int | None = None
+    ) -> TMDBResult | None:
+        """Search for a movie by title."""
+        extra: dict = {"query": title}
+        if year:
+            extra["year"] = str(year)
+        data = await self._get("/search/movie", **extra)
+        if not data or not data.get("results"):
+            logger.warning(f"No TMDB results for movie: {title}")
+            return None
+        r = data["results"][0]
+        return TMDBResult(
+            tmdb_id=r["id"], title=r.get("title", title),
+            overview=r.get("overview"), poster_path=r.get("poster_path"),
+            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
+            media_type="movie",
+        )
+
+    async def get_movie_details(self, tmdb_id: int) -> TMDBResult | None:
+        """Get detailed movie info by TMDB ID."""
+        r = await self._get(f"/movie/{tmdb_id}")
+        if not r:
+            return None
+        return TMDBResult(
+            tmdb_id=r["id"], title=r.get("title", ""),
+            overview=r.get("overview"), poster_path=r.get("poster_path"),
+            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
+            media_type="movie",
+        )
+
+    async def get_movie_full_details(self, tmdb_id: int) -> MovieDetails | None:
+        """Get full movie details including genres, vote_average, content_rating."""
+        r = await self._get(f"/movie/{tmdb_id}", append_to_response="release_dates")
+        if not r:
+            return None
+
+        genres = [g["name"] for g in r.get("genres", [])]
+
+        # Content rating: prefer IT → US → first available
+        content_rating = None
+        for entry in r.get("release_dates", {}).get("results", []):
+            if entry.get("iso_3166_1") in ("IT", "US"):
+                for rd in entry.get("release_dates", []):
+                    cert = rd.get("certification", "").strip()
+                    if cert:
+                        content_rating = cert
+                        break
+                if content_rating:
+                    break
+        if not content_rating:
+            for entry in r.get("release_dates", {}).get("results", []):
+                for rd in entry.get("release_dates", []):
+                    cert = rd.get("certification", "").strip()
+                    if cert:
+                        content_rating = cert
+                        break
+                if content_rating:
+                    break
+
+        return MovieDetails(
+            tmdb_id=r["id"], title=r.get("title", ""),
+            overview=r.get("overview"), poster_path=r.get("poster_path"),
+            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
+            genres=genres, vote_average=r.get("vote_average"),
+            content_rating=content_rating,
+        )
+
+    async def get_movie_credits(self, tmdb_id: int) -> list[CastMember]:
+        """Get cast and crew for a movie."""
+        data = await self._get(f"/movie/{tmdb_id}/credits")
+        if not data:
+            return []
+
+        members: list[CastMember] = []
+        for p in data.get("cast", [])[:15]:
+            members.append(CastMember(
+                id=p["id"], name=p.get("name", ""), character=p.get("character"),
+                job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
+            ))
+        for p in data.get("crew", []):
+            if p.get("job") in ("Director", "Writer", "Screenplay"):
+                members.append(CastMember(
+                    id=p["id"], name=p.get("name", ""), character=None,
+                    job=p.get("job"), profile_path=p.get("profile_path"),
+                    order=100 + len(members),
+                ))
+                if len([m for m in members if m.job]) >= 5:
+                    break
+        return members
+
+    # --- TV ---
 
     async def search_tv(
         self, title: str, season: int | None = None, episode: int | None = None
     ) -> TMDBResult | None:
-        """
-        Search for a TV show by title.
-
-        Args:
-            title: TV show title.
-            season: Optional season number to fetch specific details.
-            episode: Optional episode number (currently unused but reserved).
-
-        Returns:
-            TMDBResult object if found, otherwise None.
-        """
+        """Search for a TV show by title."""
         clean_title = clean_tv_title(title)
         if clean_title != title:
             logger.debug(f"Cleaned TV title: '{title}' -> '{clean_title}'")
 
-        params = {
-            "api_key": self._api_key,
-            "query": clean_title,
-            "language": self._language,
-        }
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/search/tv",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                if not data.get("results"):
-                    logger.warning(f"No TMDB results for TV: {title}")
-                    return None
-
-                result = data["results"][0]
-                tv_id = result["id"]
-                poster_path = result.get("poster_path")
-                overview = result.get("overview")
-
-                if season is not None:
-                    season_data = await self._get_season_details(client, tv_id, season)
-                    if season_data:
-                        if season_data.get("poster_path"):
-                            poster_path = season_data["poster_path"]
-                            logger.debug(f"Using season {season} poster for {result.get('name')}")
-
-                        if season_data.get("overview"):
-                            overview = season_data["overview"]
-
-                return TMDBResult(
-                    tmdb_id=tv_id,
-                    title=result.get("name", title),
-                    overview=overview,
-                    poster_path=poster_path,
-                    backdrop_path=result.get("backdrop_path"),
-                    release_date=result.get("first_air_date"),
-                    media_type="tv",
-                )
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB API error: {e}")
-                return None
-
-    async def _get_season_details(
-        self, client: httpx.AsyncClient, tv_id: int, season_number: int
-    ) -> dict | None:
-        """Get season-specific details including poster (with existing client)."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
-        try:
-            response = await client.get(
-                f"{TMDB_BASE_URL}/tv/{tv_id}/season/{season_number}",
-                params=params,
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            logger.warning(f"Could not get season {season_number} details: {e}")
+        data = await self._get("/search/tv", query=clean_title)
+        if not data or not data.get("results"):
+            logger.warning(f"No TMDB results for TV: {title}")
             return None
 
-    async def get_season_details(self, tv_id: int, season_number: int) -> dict | None:
-        """Get season-specific details including poster."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/tv/{tv_id}/season/{season_number}",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPError as e:
-                logger.warning(f"Could not get season {season_number} details: {e}")
-                return None
+        r = data["results"][0]
+        poster_path = r.get("poster_path")
+        overview = r.get("overview")
 
-    async def get_movie_details(self, tmdb_id: int) -> TMDBResult | None:
-        """Get detailed movie info by TMDB ID."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
+        if season is not None:
+            sd = await self.get_season_details(r["id"], season)
+            if sd:
+                if sd.get("poster_path"):
+                    poster_path = sd["poster_path"]
+                    logger.debug(f"Using season {season} poster for {r.get('name')}")
+                if sd.get("overview"):
+                    overview = sd["overview"]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/movie/{tmdb_id}",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                result = response.json()
+        return TMDBResult(
+            tmdb_id=r["id"], title=r.get("name", title),
+            overview=overview, poster_path=poster_path,
+            backdrop_path=r.get("backdrop_path"), release_date=r.get("first_air_date"),
+            media_type="tv",
+        )
 
-                return TMDBResult(
-                    tmdb_id=result["id"],
-                    title=result.get("title", ""),
-                    overview=result.get("overview"),
-                    poster_path=result.get("poster_path"),
-                    backdrop_path=result.get("backdrop_path"),
-                    release_date=result.get("release_date"),
-                    media_type="movie",
-                )
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB API error: {e}")
-                return None
+    async def get_tv_details(self, tmdb_id: int) -> TVDetails | None:
+        """Get detailed TV show info including genres, rating, content rating."""
+        data = await self._get(
+            f"/tv/{tmdb_id}", append_to_response="content_ratings"
+        )
+        if not data:
+            return None
 
-    async def get_movie_credits(self, tmdb_id: int) -> list[CastMember]:
-        """Get cast and crew for a movie."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
+        genres = [g["name"] for g in data.get("genres", [])]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/movie/{tmdb_id}/credits",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+        # Content rating priority: IT → US → first available
+        content_rating = None
+        ratings = data.get("content_ratings", {}).get("results", [])
+        for country in ("IT", "US"):
+            for cr in ratings:
+                if cr.get("iso_3166_1") == country:
+                    content_rating = cr.get("rating")
+                    break
+            if content_rating:
+                break
+        if not content_rating and ratings:
+            content_rating = ratings[0].get("rating")
 
-                members: list[CastMember] = []
-
-                # Add cast (actors)
-                for person in data.get("cast", [])[:15]:
-                    members.append(CastMember(
-                        id=person["id"],
-                        name=person.get("name", ""),
-                        character=person.get("character"),
-                        job=None,
-                        profile_path=person.get("profile_path"),
-                        order=person.get("order", 99),
-                    ))
-
-                # Add key crew (directors, writers)
-                for person in data.get("crew", []):
-                    if person.get("job") in ("Director", "Writer", "Screenplay"):
-                        members.append(CastMember(
-                            id=person["id"],
-                            name=person.get("name", ""),
-                            character=None,
-                            job=person.get("job"),
-                            profile_path=person.get("profile_path"),
-                            order=100 + len(members),
-                        ))
-                        if len([m for m in members if m.job]) >= 5:
-                            break
-
-                return members
-
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB movie credits error: {e}")
-                return []
+        return TVDetails(
+            tmdb_id=data["id"], title=data.get("name", ""),
+            overview=data.get("overview"), poster_path=data.get("poster_path"),
+            backdrop_path=data.get("backdrop_path"),
+            first_air_date=data.get("first_air_date"),
+            genres=genres, vote_average=data.get("vote_average"),
+            content_rating=content_rating,
+        )
 
     async def get_tv_credits(self, tmdb_id: int) -> list[CastMember]:
         """Get cast and crew for a TV show."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
+        data = await self._get(f"/tv/{tmdb_id}/aggregate_credits")
+        if not data:
+            return []
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/tv/{tmdb_id}/aggregate_credits",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+        members: list[CastMember] = []
+        for p in data.get("cast", [])[:15]:
+            roles = p.get("roles", [])
+            members.append(CastMember(
+                id=p["id"], name=p.get("name", ""),
+                character=roles[0].get("character") if roles else None,
+                job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
+            ))
+        for p in data.get("crew", [])[:5]:
+            jobs = p.get("jobs", [])
+            job = jobs[0].get("job") if jobs else None
+            if job in ("Director", "Writer", "Executive Producer", "Creator"):
+                members.append(CastMember(
+                    id=p["id"], name=p.get("name", ""), character=None,
+                    job=job, profile_path=p.get("profile_path"),
+                    order=100 + len(members),
+                ))
+        return members
 
-                members: list[CastMember] = []
+    # --- Season / Episode ---
 
-                # Add cast (actors)
-                for person in data.get("cast", [])[:15]:  # Limit to 15
-                    roles = person.get("roles", [])
-                    character = roles[0].get("character") if roles else None
-                    members.append(CastMember(
-                        id=person["id"],
-                        name=person.get("name", ""),
-                        character=character,
-                        job=None,
-                        profile_path=person.get("profile_path"),
-                        order=person.get("order", 99),
-                    ))
-
-                # Add key crew (directors, writers, producers) - limit to 5
-                for person in data.get("crew", [])[:5]:
-                    jobs = person.get("jobs", [])
-                    job = jobs[0].get("job") if jobs else None
-                    if job in ("Director", "Writer", "Executive Producer", "Creator"):
-                        members.append(CastMember(
-                            id=person["id"],
-                            name=person.get("name", ""),
-                            character=None,
-                            job=job,
-                            profile_path=person.get("profile_path"),
-                            order=100 + len(members),
-                        ))
-
-                return members
-
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB credits error: {e}")
-                return []
+    async def get_season_details(
+        self, tv_id: int, season_number: int
+    ) -> dict | None:
+        """Get season-specific details including poster."""
+        return await self._get(f"/tv/{tv_id}/season/{season_number}")
 
     async def get_season_episodes(
         self, tmdb_id: int, season_number: int
     ) -> list[EpisodeInfo]:
         """Get all episodes for a season with thumbnails."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-        }
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                episodes: list[EpisodeInfo] = []
-                for ep in data.get("episodes", []):
-                    episodes.append(EpisodeInfo(
-                        episode_number=ep.get("episode_number", 0),
-                        name=ep.get("name", f"Episode {ep.get('episode_number', '?')}"),
-                        overview=ep.get("overview"),
-                        still_path=ep.get("still_path"),
-                        air_date=ep.get("air_date"),
-                        runtime=ep.get("runtime"),
-                    ))
-
-                return episodes
-
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB episodes error: {e}")
-                return []
+        data = await self._get(f"/tv/{tmdb_id}/season/{season_number}")
+        if not data:
+            return []
+        return [
+            EpisodeInfo(
+                episode_number=ep.get("episode_number", 0),
+                name=ep.get("name", f"Episode {ep.get('episode_number', '?')}"),
+                overview=ep.get("overview"), still_path=ep.get("still_path"),
+                air_date=ep.get("air_date"), runtime=ep.get("runtime"),
+            )
+            for ep in data.get("episodes", [])
+        ]
 
     async def get_episode_details(
         self, tmdb_id: int, season_number: int, episode_number: int
     ) -> EpisodeInfo | None:
         """Get specific episode details from TMDB."""
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
+        ep = await self._get(
+            f"/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}"
+        )
+        if not ep:
+            return None
+        return EpisodeInfo(
+            episode_number=ep.get("episode_number", episode_number),
+            name=ep.get("name", f"Episode {episode_number}"),
+            overview=ep.get("overview"), still_path=ep.get("still_path"),
+            air_date=ep.get("air_date"), runtime=ep.get("runtime"),
+        )
+
+    # --- Images (no language filter to get all results) ---
+
+    async def get_episode_images(
+        self, tmdb_id: int, season_number: int, episode_number: int
+    ) -> list[dict]:
+        """Get available still images for a specific episode."""
+        data = await self._get(
+            f"/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}/images",
+            use_language=False,
+        )
+        return _image_list(data.get("stills", [])) if data else []
+
+    async def get_tv_images(self, tmdb_id: int) -> dict:
+        """Get available poster and backdrop images for a TV show."""
+        data = await self._get(f"/tv/{tmdb_id}/images", use_language=False)
+        if not data:
+            return {"posters": [], "backdrops": []}
+        return {
+            "posters": _image_list(data.get("posters", [])),
+            "backdrops": _image_list(data.get("backdrops", [])),
         }
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                ep = response.json()
-
-                return EpisodeInfo(
-                    episode_number=ep.get("episode_number", episode_number),
-                    name=ep.get("name", f"Episode {episode_number}"),
-                    overview=ep.get("overview"),
-                    still_path=ep.get("still_path"),
-                    air_date=ep.get("air_date"),
-                    runtime=ep.get("runtime"),
-                )
-
-            except httpx.HTTPError as e:
-                logger.warning(f"Could not get episode S{season_number}E{episode_number}: {e}")
-                return None
-
-
-    async def get_tv_details(self, tmdb_id: int) -> TVDetails | None:
-        """
-        Get detailed TV show info including genres, rating, and content rating.
-
-        Args:
-            tmdb_id: The TMDB ID of the TV show.
-
-        Returns:
-            TVDetails object containing extracted information, or None if failed.
-        """
-        params = {
-            "api_key": self._api_key,
-            "language": self._language,
-            "append_to_response": "content_ratings",
-        }
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{TMDB_BASE_URL}/tv/{tmdb_id}",
-                    params=params,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                genres = [g["name"] for g in data.get("genres", [])]
-
-                content_rating = None
-                content_ratings = data.get("content_ratings", {}).get("results", [])
-
-                # Priority: IT, then US, then first available
-                for cr in content_ratings:
-                    if cr.get("iso_3166_1") == "IT":
-                        content_rating = cr.get("rating")
-                        break
-                if not content_rating:
-                    for cr in content_ratings:
-                        if cr.get("iso_3166_1") == "US":
-                            content_rating = cr.get("rating")
-                            break
-                if not content_rating and content_ratings:
-                    content_rating = content_ratings[0].get("rating")
-
-                return TVDetails(
-                    tmdb_id=data["id"],
-                    title=data.get("name", ""),
-                    overview=data.get("overview"),
-                    poster_path=data.get("poster_path"),
-                    backdrop_path=data.get("backdrop_path"),
-                    first_air_date=data.get("first_air_date"),
-                    genres=genres,
-                    vote_average=data.get("vote_average"),
-                    content_rating=content_rating,
-                )
-
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB TV details error: {e}")
-                return None
+    async def get_season_images(
+        self, tmdb_id: int, season_number: int
+    ) -> dict:
+        """Get available poster images for a specific season."""
+        data = await self._get(
+            f"/tv/{tmdb_id}/season/{season_number}/images", use_language=False
+        )
+        if not data:
+            return {"posters": []}
+        return {"posters": _image_list(data.get("posters", []))}
 
 
 tmdb_client = TMDBClient()

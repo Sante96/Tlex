@@ -10,10 +10,12 @@ export interface MediaItem {
   release_date: string | null;
   media_type: "MOVIE" | "EPISODE";
   duration_seconds: number | null;
+  series_id?: number | null;
   season_number?: number | null;
   episode_number?: number | null;
   vote_average?: number | null;
   genres?: string[] | null;
+  content_rating?: string | null;
   watch_progress?: number;
   unwatched_count?: number;
 }
@@ -97,6 +99,67 @@ export async function getMediaCast(id: number): Promise<CastMember[]> {
 
 export async function getMediaEpisodes(id: number): Promise<EpisodeInfo[]> {
   const response = await api.get<EpisodeInfo[]>(`/api/v1/media/${id}/episodes`);
+  return response.data;
+}
+
+export interface NextEpisode {
+  id: number;
+  title: string;
+  season_number: number | null;
+  episode_number: number | null;
+  duration_seconds: number | null;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  still_path: string | null;
+}
+
+export async function getNextEpisode(
+  mediaId: number,
+): Promise<NextEpisode | null> {
+  try {
+    const response = await api.get<NextEpisode | null>(
+      `/api/v1/media/${mediaId}/next`,
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export interface TMDBImage {
+  file_path: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface TMDBImagesResponse {
+  stills: TMDBImage[];
+  posters: TMDBImage[];
+  backdrops: TMDBImage[];
+}
+
+export interface MediaUpdateBody {
+  title?: string;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  release_date?: string;
+}
+
+export async function updateMediaItem(
+  id: number,
+  body: MediaUpdateBody,
+): Promise<MediaItem> {
+  const response = await api.patch<MediaItem>(`/api/v1/media/${id}`, body);
+  return response.data;
+}
+
+export async function getMediaTmdbImages(
+  id: number,
+): Promise<TMDBImagesResponse> {
+  const response = await api.get<TMDBImagesResponse>(
+    `/api/v1/media/${id}/tmdb-images`,
+  );
   return response.data;
 }
 

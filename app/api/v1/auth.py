@@ -209,3 +209,81 @@ async def set_registration_status(
 async def get_me(current_user: User = Depends(get_current_user)) -> User:
     """Get current user info."""
     return current_user
+
+
+@router.get("/users")
+async def list_users(
+    session: DBSession,
+    _admin=Depends(get_admin_user),
+) -> list[dict]:
+    """List all registered users (admin only)."""
+    from sqlalchemy.orm import selectinload
+
+    query = select(User).options(selectinload(User.profiles)).order_by(User.id)
+    result = await session.execute(query)
+    users = result.scalars().all()
+
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "is_admin": u.is_admin,
+            "profiles_count": len(u.profiles),
+            "profiles": [{"id": p.id, "name": p.name} for p in u.profiles],
+        }
+        for u in users
+    ]
+
+
+@router.patch("/users/{user_id}/admin")
+async def toggle_user_admin(
+    user_id: int,
+    body: dict,
+    session: DBSession,
+    current_user: User = Depends(get_admin_user),
+) -> dict:
+    """Toggle admin status for a user (admin only)."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot change your own admin status")
+
+    target_query = select(User).where(User.id == user_id)
+    target_result = await session.execute(target_query)
+    target = target_result.scalar_one_or_none()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_admin = body.get("is_admin")
+    if not isinstance(is_admin, bool):
+        raise HTTPException(status_code=400, detail="'is_admin' must be a boolean")
+
+    target.is_admin = is_admin
+    await session.commit()
+
+    logger.info(f"User {target.email} admin status set to {is_admin} by {current_user.email}")
+    return {"id": target.id, "email": target.email, "is_admin": target.is_admin}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    session: DBSession,
+    current_user: User = Depends(get_admin_user),
+) -> dict:
+    """Delete a user account (admin only)."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    target_query = select(User).where(User.id == user_id)
+    target_result = await session.execute(target_query)
+    target = target_result.scalar_one_or_none()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    email = target.email
+    await session.delete(target)
+    await session.commit()
+
+    logger.info(f"User {email} deleted by {current_user.email}")
+    return {"message": f"User {email} deleted"}

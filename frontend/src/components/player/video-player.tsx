@@ -1,18 +1,25 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { PlayerControls } from "./player-controls";
 import {
   SubtitleRenderer,
   type SubtitleRendererHandle,
 } from "./subtitle-renderer";
-import { updateWatchProgress, type MediaStream } from "@/lib/api";
+import { releaseStream, type MediaStream } from "@/lib/api";
 
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
+import { usePoolStatus } from "@/hooks/player/use-pool-status";
 import { useVideoSync } from "@/hooks/player/use-video-sync";
 import { useVideoEvents } from "@/hooks/player/use-video-events";
 import { useVideoHotkeys } from "@/hooks/player/use-video-hotkeys";
+import { useProgressSaving } from "@/hooks/player/use-progress-saving";
+import { PoolWarningOverlay } from "./pool-warning";
+import { EpisodePicker } from "./episode-picker";
+import { NextEpisodeOverlay } from "./next-episode-overlay";
+import { useNextEpisode } from "@/hooks/player/use-next-episode";
 
 interface VideoPlayerProps {
   mediaId: number;
@@ -22,6 +29,9 @@ interface VideoPlayerProps {
   subtitleTracks: MediaStream[];
   initialDuration?: number;
   initialPosition?: number;
+  seriesId?: number | null;
+  currentSeason?: number;
+  onEpisodeSelect?: (mediaId: number) => void;
 }
 
 export function VideoPlayer({
@@ -32,6 +42,9 @@ export function VideoPlayer({
   subtitleTracks,
   initialDuration,
   initialPosition = 0,
+  seriesId,
+  currentSeason = 1,
+  onEpisodeSelect,
 }: VideoPlayerProps) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -40,6 +53,7 @@ export function VideoPlayer({
     null,
   );
   const subtitleRendererRef = useRef<SubtitleRendererHandle>(null);
+  const episodesButtonRef = useRef<HTMLButtonElement>(null);
 
   // Core Playback State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -52,6 +66,14 @@ export function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [seekTime, setSeekTime] = useState(initialPosition);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [episodePickerOpen, setEpisodePickerOpen] = useState(false);
+
+  // Pool status monitoring
+  const { warning: poolWarning, poolStatus } = usePoolStatus({
+    enabled: isPlaying,
+    pollInterval: 15000,
+  });
 
   // Custom Hooks
   const {
@@ -73,7 +95,7 @@ export function VideoPlayer({
     }
   }, [selectedSubtitle, subtitleTracks, setSelectedSubtitle]);
 
-  const { videoUrl, streamStartTime } = useVideoSync(
+  const { videoUrl, streamStartTime, localSeekOffset } = useVideoSync(
     mediaId,
     selectedAudio,
     seekTime,
@@ -83,6 +105,7 @@ export function VideoPlayer({
   useVideoEvents({
     videoRef,
     streamStartTime,
+    localSeekOffset,
     initialDuration,
     isSeeking,
     isMuted,
@@ -155,8 +178,9 @@ export function VideoPlayer({
   }, []);
 
   const handleBack = useCallback(() => {
+    releaseStream(mediaId);
     router.back();
-  }, [router]);
+  }, [router, mediaId]);
 
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
@@ -164,11 +188,11 @@ export function VideoPlayer({
       clearTimeout(hideControlsTimeout.current);
     }
     hideControlsTimeout.current = setTimeout(() => {
-      if (isPlaying) {
+      if (isPlaying && !settingsOpen) {
         setShowControls(false);
       }
     }, 3000);
-  }, [isPlaying]);
+  }, [isPlaying, settingsOpen]);
 
   const handleAudioChange = useCallback(
     (index: number) => {
@@ -189,55 +213,16 @@ export function VideoPlayer({
   }, []);
 
   // Watch Progress Saving
-  const lastSavedRef = useRef(0);
-  const currentTimeRef = useRef(currentTime);
-  const durationRef = useRef(duration);
+  useProgressSaving({ mediaId, currentTime, duration, isPlaying });
 
+  // Release Telegram stream clients on tab/browser close (pagehide)
+  // Note: don't use useEffect cleanup — React StrictMode in dev triggers spurious unmounts
+  // For SPA navigation, releaseStream is called in handleBack instead
   useEffect(() => {
-    currentTimeRef.current = currentTime;
-    durationRef.current = duration;
-  });
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (
-        isPlaying &&
-        currentTime > 0 &&
-        duration > 0 &&
-        currentTime - lastSavedRef.current >= 10
-      ) {
-        lastSavedRef.current = currentTime;
-        updateWatchProgress(
-          mediaId,
-          Math.floor(currentTime),
-          Math.floor(duration),
-        ).catch(() => {});
-      }
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [isPlaying, currentTime, duration, mediaId]);
-
-  useEffect(() => {
-    const saveProgress = () => {
-      const time = currentTimeRef.current;
-      const dur = durationRef.current;
-      if (time > 0 && dur > 0) {
-        updateWatchProgress(mediaId, Math.floor(time), Math.floor(dur)).catch(
-          () => {},
-        );
-      }
-    };
-
-    if (!isPlaying) saveProgress();
-
-    const handleBeforeUnload = () => saveProgress();
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      saveProgress();
-    };
-  }, [isPlaying, mediaId]);
+    const handlePageHide = () => releaseStream(mediaId);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, [mediaId]);
 
   useVideoHotkeys({
     togglePlay,
@@ -246,35 +231,91 @@ export function VideoPlayer({
     skip,
   });
 
+  // Next episode auto-play
+  const { nextEpisode, showNextOverlay, cancelNextOverlay } = useNextEpisode({
+    mediaId,
+    isEpisode: !!seriesId && !!onEpisodeSelect,
+    currentTime,
+    duration,
+  });
+
+  const playNextEpisode = useCallback(() => {
+    if (nextEpisode && onEpisodeSelect) {
+      onEpisodeSelect(nextEpisode.id);
+    }
+  }, [nextEpisode, onEpisodeSelect]);
+
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black"
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => isPlaying && setShowControls(false)}
+      onMouseLeave={() => isPlaying && !settingsOpen && setShowControls(false)}
       style={{ cursor: showControls ? "default" : "none" }}
     >
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        className="w-full h-full"
-        onClick={togglePlay}
-        playsInline
-        autoPlay
+      {seriesId && onEpisodeSelect && (
+        <EpisodePicker
+          open={episodePickerOpen}
+          seriesId={seriesId}
+          currentMediaId={mediaId}
+          currentSeason={currentSeason}
+          onClose={() => setEpisodePickerOpen(false)}
+          onEpisodeSelect={onEpisodeSelect}
+          toggleButtonRef={episodesButtonRef}
+        />
+      )}
+
+      <PoolWarningOverlay
+        warning={poolWarning}
+        poolPressure={poolStatus?.pool_pressure}
       />
 
-      <SubtitleRenderer
-        ref={subtitleRendererRef}
-        videoRef={videoRef}
-        mediaId={mediaId}
-        subtitleTrack={selectedSubtitle}
-        enabled={selectedSubtitle !== null && !isLoading}
-        timeOffset={streamStartTime}
-        initialManualOffset={subtitleOffset}
+      {/* Video + subtitles — shrinks left when next episode panel slides in */}
+      <motion.div
+        className="absolute top-0 left-0 bottom-0 flex items-center overflow-hidden"
+        initial={false}
+        animate={{
+          width: showNextOverlay ? "62%" : "100%",
+          borderRadius: showNextOverlay ? "8px" : "0px",
+        }}
+        transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+      >
+        <div
+          className={`relative w-full overflow-hidden ${showNextOverlay ? "aspect-video" : "h-full"}`}
+        >
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="absolute inset-0 w-full h-full"
+            onClick={togglePlay}
+            playsInline
+            autoPlay
+          />
+
+          <SubtitleRenderer
+            ref={subtitleRendererRef}
+            videoRef={videoRef}
+            mediaId={mediaId}
+            subtitleTrack={selectedSubtitle}
+            enabled={selectedSubtitle !== null}
+            visible={!isLoading && !isSeeking}
+            timeOffset={streamStartTime}
+            initialManualOffset={subtitleOffset}
+          />
+        </div>
+      </motion.div>
+
+      <NextEpisodeOverlay
+        nextEpisode={nextEpisode}
+        visible={showNextOverlay}
+        isPlaying={isPlaying}
+        isEnded={!isPlaying && duration > 0 && currentTime >= duration - 1}
+        onPlay={playNextEpisode}
+        onCancel={cancelNextOverlay}
       />
 
       <PlayerControls
-        visible={showControls || isLoading || isSeeking}
+        visible={showControls || isLoading || isSeeking || settingsOpen}
         isPlaying={isPlaying}
         isLoading={isLoading || isSeeking}
         currentTime={currentTime}
@@ -299,6 +340,11 @@ export function VideoPlayer({
         onSubtitleChange={setSelectedSubtitle}
         onSubtitleOffsetChange={setSubtitleOffset}
         onSkip={skip}
+        onSettingsOpenChange={setSettingsOpen}
+        hasEpisodes={!!seriesId && !!onEpisodeSelect}
+        episodePickerOpen={episodePickerOpen}
+        onToggleEpisodes={() => setEpisodePickerOpen((v) => !v)}
+        episodesButtonRef={episodesButtonRef}
       />
     </div>
   );

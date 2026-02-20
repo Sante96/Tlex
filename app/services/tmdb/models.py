@@ -29,6 +29,21 @@ class CastMember:
 
 
 @dataclass
+class MovieDetails:
+    """Detailed movie information from TMDB."""
+
+    tmdb_id: int
+    title: str
+    overview: str | None
+    poster_path: str | None
+    backdrop_path: str | None
+    release_date: str | None
+    genres: list[str]
+    vote_average: float | None
+    content_rating: str | None  # e.g. "PG-13", "R", "VM18"
+
+
+@dataclass
 class EpisodeInfo:
     """Episode information from TMDB."""
 

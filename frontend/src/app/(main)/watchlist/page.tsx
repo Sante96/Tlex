@@ -3,15 +3,8 @@
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 import { PosterCard } from "@/components/ds";
-import { getWatchlist } from "@/lib/api";
+import { getWatchlist, type WatchlistItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
-
-interface WatchlistItem {
-  media_item_id: number;
-  title: string;
-  poster_path: string | null;
-  media_type: string;
-}
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
@@ -61,14 +54,24 @@ export default function WatchlistPage() {
         </div>
       ) : (
         <div className="flex flex-wrap gap-5">
-          {items.map((item) => (
-            <PosterCard
-              key={item.media_item_id}
-              href={`/media/${item.media_item_id}`}
-              imageUrl={getTmdbImageUrl(item.poster_path, "w300")}
-              title={item.title}
-            />
-          ))}
+          {items.map((item) => {
+            const href =
+              item.item_type === "series"
+                ? `/series/${item.series_id}`
+                : `/media/${item.media_item_id}`;
+            const key = item.series_id
+              ? `series-${item.series_id}`
+              : `media-${item.media_item_id}`;
+            return (
+              <PosterCard
+                key={key}
+                href={href}
+                imageUrl={getTmdbImageUrl(item.poster_path, "w300")}
+                title={item.title}
+                subtitle={item.item_type === "series" ? "Serie TV" : undefined}
+              />
+            );
+          })}
         </div>
       )}
     </div>

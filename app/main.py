@@ -16,7 +16,7 @@ from app.core.logging import setup_logging
 from app.core.metrics import get_metrics_response
 from app.core.rate_limit import limiter
 from app.core.worker_manager import worker_manager
-from app.database import async_session_maker, engine
+from app.database import async_session_maker, create_all_tables, engine
 
 settings = get_settings()
 
@@ -31,6 +31,9 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting TLEX...")
+
+    # Ensure all tables exist (creates new ones without touching existing)
+    await create_all_tables()
 
     # Load workers
     async with async_session_maker() as session:
@@ -57,7 +60,52 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(auto_scan_scheduler.start())
         logger.info(f"Auto-scan scheduler started (interval: {settings.scanner_auto_interval_hours}h)")
 
+    # Background cleanup for stale stream readers (safety net)
+    async def stream_reader_cleanup_loop():
+        from app.services.streaming.manager import cleanup_stale_readers
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await cleanup_stale_readers()
+            except Exception as e:
+                logger.warning(f"Stream reader cleanup error: {e}")
+
+    cleanup_task = asyncio.create_task(stream_reader_cleanup_loop())
+
+    # Keepalive: send MTProto Ping to all Pyrogram clients every 60s to prevent TCP idle timeout
+    # Pyrogram closes connections after ~2min of inactivity → OSError on next stream_media call
+    # Use raw Ping (not get_me) to avoid FLOOD_WAIT on high-session accounts
+    async def client_keepalive_loop():
+        from pyrogram import raw
+
+        while True:
+            await asyncio.sleep(30)
+            for _worker_id, client in worker_manager._client_pool:
+                # Ping main session
+                try:
+                    await client.invoke(raw.functions.Ping(ping_id=0))
+                except Exception as e:
+                    logger.debug(f"Keepalive main ping failed for client {id(client)}: {e}")
+                # Ping all media sessions (used by stream_media/get_file — separate DC connections)
+                # If ping fails, drop the session so it gets recreated fresh on next get_file call
+                media_sessions = getattr(client, "media_sessions", {})
+                for dc_id, media_session in list(media_sessions.items()):
+                    try:
+                        await media_session.invoke(raw.functions.Ping(ping_id=0))
+                    except Exception as e:
+                        logger.debug(f"Keepalive: dropping stale media session DC{dc_id} for client {id(client)}: {e}")
+                        try:
+                            await media_session.stop()
+                        except Exception:
+                            pass
+                        media_sessions.pop(dc_id, None)
+
+    keepalive_task = asyncio.create_task(client_keepalive_loop())
+
     yield
+
+    cleanup_task.cancel()
+    keepalive_task.cancel()
 
     # Shutdown
     logger.info("Shutting down TLEX...")
@@ -69,7 +117,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TLEX - Telegram Media Server",
     description="Self-hosted streaming platform using Telegram as storage backend",
-    version="1.0.3",
+    version="1.2.0",
     lifespan=lifespan,
 )
 

@@ -110,9 +110,9 @@ export function SearchBar() {
   return (
     <div ref={containerRef} className="relative" style={{ width: 320 }}>
       <div
-        className="group flex items-center gap-2 h-9 px-3 rounded-lg border border-transparent transition-all duration-150
-          hover:border-[#3f3f46] focus-within:border-[#e5a00d] focus-within:border-2 focus-within:px-[11px]"
-        style={{ backgroundColor: "rgba(39,39,42,0.31)" }}
+        className="group flex items-center gap-2 h-9 px-3 rounded-lg border border-white/5 transition-all duration-150
+          hover:border-white/15 focus-within:border-[#e5a00d] focus-within:border-2 focus-within:px-[11px]"
+        style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
       >
         {loading ? (
           <Loader2 className="h-4 w-4 shrink-0 text-[#e5a00d] animate-spin" />

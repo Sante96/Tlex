@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Play, Plus, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, Pencil, Plus, Check } from "lucide-react";
 import {
   HeroBanner,
   ActionButton,
@@ -10,11 +10,15 @@ import {
   PosterCard,
   CastSection,
   DetailPageLayout,
+  EditMediaModal,
 } from "@/components/ds";
 import {
   getSeriesDetails,
   getSeriesCast,
   refreshSeriesMetadata,
+  addSeriesToWatchlist,
+  removeSeriesFromWatchlist,
+  checkSeriesWatchlistStatus,
   type SeriesDetails,
   type CastMember,
 } from "@/lib/api";
@@ -29,6 +33,21 @@ export default function SeriesDetailPage() {
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [inWatchlist, setInWatchlist] = useState(false);
+
+  const handleToggleWatchlist = async () => {
+    if (!series) return;
+    try {
+      if (inWatchlist) {
+        await removeSeriesFromWatchlist(series.id);
+        setInWatchlist(false);
+      } else {
+        await addSeriesToWatchlist(series.id);
+        setInWatchlist(true);
+      }
+    } catch {}
+  };
 
   const handleRefreshMetadata = async () => {
     if (!series || refreshing) return;
@@ -49,6 +68,10 @@ export default function SeriesDetailPage() {
         setLoading(true);
         const data = await getSeriesDetails(seriesId);
         setSeries(data);
+        try {
+          const status = await checkSeriesWatchlistStatus(seriesId);
+          setInWatchlist(status);
+        } catch {}
         try {
           const castData = await getSeriesCast(seriesId);
           setCast(castData.slice(0, 20));
@@ -79,20 +102,38 @@ export default function SeriesDetailPage() {
   }
 
   const posterUrl = getTmdbImageUrl(series.poster_path, "w500");
-  const backdropUrl = getTmdbImageUrl(series.backdrop_path, "w1280");
+  const backdropUrl = getTmdbImageUrl(series.backdrop_path, "original");
   const year = series.first_air_date
     ? new Date(series.first_air_date).getFullYear()
     : null;
   const genresText = series.genres?.join(", ") || "";
-  const firstEpisodeId = series.seasons[0]?.episodes[0]?.id;
 
-  const metaItems = [
-    ...(year ? [{ text: String(year) }] : []),
-    {
-      text: `${series.seasons_count} ${series.seasons_count === 1 ? "Stagione" : "Stagioni"}`,
-    },
-    ...(genresText ? [{ text: genresText }] : []),
-  ];
+  // Find next episode to watch: skip Specials (S0), find first non-completed episode
+  const nextEpisode = (() => {
+    const regularSeasons = series.seasons.filter((s) => s.season_number > 0);
+    for (const s of regularSeasons) {
+      for (const ep of s.episodes) {
+        if (!ep.watch_progress?.is_completed) {
+          return {
+            id: ep.id,
+            season: s.season_number,
+            episode: ep.episode_number ?? 1,
+          };
+        }
+      }
+    }
+    // All watched — fallback to first regular episode
+    const firstSeason = regularSeasons[0] || series.seasons[0];
+    const firstEp = firstSeason?.episodes[0];
+    if (firstSeason && firstEp) {
+      return {
+        id: firstEp.id,
+        season: firstSeason.season_number,
+        episode: firstEp.episode_number ?? 1,
+      };
+    }
+    return null;
+  })();
 
   return (
     <DetailPageLayout backdropUrl={backdropUrl}>
@@ -104,24 +145,50 @@ export default function SeriesDetailPage() {
         posterHeight={300}
       >
         <h1 className="text-4xl font-bold text-[#fafafa]">{series.title}</h1>
-        <MetaRow voteAverage={series.vote_average} items={metaItems} />
-        {series.overview && (
-          <p className="text-sm text-[#e4e4e7] leading-relaxed max-w-3xl">
-            {series.overview}
-          </p>
-        )}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col gap-1.5">
+          {year && <span className="text-sm text-[#d4d4d8]">{year}</span>}
+          {genresText && (
+            <span className="text-sm text-[#d4d4d8]">{genresText}</span>
+          )}
+          <MetaRow
+            voteAverage={series.vote_average}
+            contentRating={series.content_rating}
+            items={[
+              {
+                text: `${series.seasons_count} ${series.seasons_count === 1 ? "Stagione" : "Stagioni"}`,
+              },
+            ]}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          {nextEpisode && (
+            <ActionButton
+              variant="primary"
+              icon={<Play className="h-5 w-5 fill-black" />}
+              onClick={() => router.push(`/watch/${nextEpisode.id}`)}
+            >
+              Riproduci S{nextEpisode.season} E{nextEpisode.episode}
+            </ActionButton>
+          )}
           <ActionButton
-            variant="primary"
-            icon={<Play className="h-5 w-5 fill-black" />}
-            onClick={() =>
-              firstEpisodeId && router.push(`/watch/${firstEpisodeId}`)
+            variant="secondary"
+            icon={
+              inWatchlist ? (
+                <Check className="h-5 w-5" />
+              ) : (
+                <Plus className="h-5 w-5" />
+              )
             }
+            onClick={handleToggleWatchlist}
           >
-            Riproduci S1 E1
+            {inWatchlist ? "In Watchlist" : "Watchlist"}
           </ActionButton>
-          <ActionButton variant="secondary" icon={<Plus className="h-5 w-5" />}>
-            Watchlist
+          <ActionButton
+            variant="secondary"
+            icon={<Pencil className="h-4 w-4" />}
+            onClick={() => setEditing(true)}
+          >
+            Modifica
           </ActionButton>
           <ActionButton
             variant="secondary"
@@ -135,6 +202,11 @@ export default function SeriesDetailPage() {
             {refreshing ? "Aggiornamento..." : "Aggiorna Metadati"}
           </ActionButton>
         </div>
+        {series.overview && (
+          <p className="text-sm text-[#d4d4d8] leading-relaxed max-w-3xl">
+            {series.overview}
+          </p>
+        )}
       </HeroBanner>
 
       {/* Seasons */}
@@ -158,7 +230,11 @@ export default function SeriesDetailPage() {
                 subtitle={`${season.episodes_count} Episodi`}
                 width={160}
                 height={240}
-              />
+              >
+                <span className="absolute top-2 right-2 flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-black/70 text-white text-xs font-bold">
+                  {season.episodes_count}
+                </span>
+              </PosterCard>
             );
           })}
         </div>
@@ -169,6 +245,22 @@ export default function SeriesDetailPage() {
         <div className="px-12 pb-8">
           <CastSection cast={cast} />
         </div>
+      )}
+      {/* Edit Modal */}
+      {editing && series && (
+        <EditMediaModal
+          mediaId={series.id}
+          title={series.title}
+          overview={series.overview}
+          posterPath={series.poster_path}
+          releaseDate={series.first_air_date}
+          entityType="series"
+          onClose={() => setEditing(false)}
+          onSaved={async () => {
+            const data = await getSeriesDetails(seriesId);
+            setSeries(data);
+          }}
+        />
       )}
     </DetailPageLayout>
   );

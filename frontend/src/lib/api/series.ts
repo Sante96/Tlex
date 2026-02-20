@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { CastMember } from "./media";
+import type { CastMember, TMDBImagesResponse } from "./media";
 
 export interface SeriesItem {
   id: number;
@@ -33,6 +33,7 @@ export interface SeasonInfo {
     title: string;
     overview: string | null;
     still_path: string | null;
+    release_date: string | null;
     duration_seconds: number | null;
     watch_progress: EpisodeWatchProgress | null;
   }>;
@@ -72,5 +73,51 @@ export async function refreshSeriesMetadata(id: number) {
 
 export async function getSeriesCast(id: number): Promise<CastMember[]> {
   const response = await api.get<CastMember[]>(`/api/v1/series/${id}/cast`);
+  return response.data;
+}
+
+export interface SeriesUpdateBody {
+  title?: string;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  first_air_date?: string;
+}
+
+export async function updateSeries(id: number, body: SeriesUpdateBody) {
+  const response = await api.patch(`/api/v1/series/${id}`, body);
+  return response.data;
+}
+
+export async function getSeriesTmdbImages(
+  id: number,
+): Promise<TMDBImagesResponse> {
+  const response = await api.get<TMDBImagesResponse>(
+    `/api/v1/series/${id}/tmdb-images`,
+  );
+  return response.data;
+}
+
+export async function updateSeasonPoster(
+  seriesId: number,
+  seasonNumber: number,
+  posterPath: string,
+) {
+  const response = await api.patch(
+    `/api/v1/series/${seriesId}/season/${seasonNumber}`,
+    {
+      poster_path: posterPath,
+    },
+  );
+  return response.data;
+}
+
+export async function getSeasonTmdbImages(
+  seriesId: number,
+  seasonNumber: number,
+): Promise<TMDBImagesResponse> {
+  const response = await api.get<TMDBImagesResponse>(
+    `/api/v1/series/${seriesId}/season/${seasonNumber}/tmdb-images`,
+  );
   return response.data;
 }

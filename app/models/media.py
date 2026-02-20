@@ -3,7 +3,7 @@
 import enum
 from datetime import date
 
-from sqlalchemy import BigInteger, Boolean, Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, Date, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -40,6 +40,7 @@ class Series(Base):
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
     vote_average: Mapped[float | None] = mapped_column(nullable=True)  # TMDB rating 0-10
     content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)  # e.g. "TV-MA"
+    season_posters: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {season_num: poster_path}
 
     # Relationships
     episodes: Mapped[list["MediaItem"]] = relationship(
@@ -84,6 +85,9 @@ class MediaItem(Base):
 
     # Keyframe index for precise seeking (JSON array of timestamps in seconds)
     keyframes_index: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vote_average: Mapped[float | None] = mapped_column(nullable=True)
+    genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma-separated
 
     # For episodes - link to series
     series_id: Mapped[int | None] = mapped_column(

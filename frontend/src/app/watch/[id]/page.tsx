@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { DSButton } from "@/components/ds";
@@ -8,6 +8,7 @@ import { VideoPlayer } from "@/components/player";
 import {
   getMediaDetails,
   getWatchProgress,
+  releaseStream,
   type MediaDetails,
 } from "@/lib/api";
 
@@ -36,7 +37,6 @@ export default function WatchPage() {
           getWatchProgress(mediaId),
         ]);
         setMedia(data);
-        // Resume from saved position if available and not completed
         if (progress && !progress.completed && progress.position_seconds > 0) {
           setInitialPosition(progress.position_seconds);
         }
@@ -49,6 +49,14 @@ export default function WatchPage() {
 
     loadMedia();
   }, [mediaId]);
+
+  const handleEpisodeSelect = useCallback(
+    (newMediaId: number) => {
+      releaseStream(mediaId);
+      router.replace(`/watch/${newMediaId}`);
+    },
+    [mediaId, router],
+  );
 
   const audioTracks =
     media?.streams.filter((s) => s.codec_type === "AUDIO") || [];
@@ -79,10 +87,11 @@ export default function WatchPage() {
     );
   }
 
-  const episodeSubtitle =
-    media.media_type === "EPISODE"
-      ? `S${media.season_number || 1} · E${media.episode_number || 1}`
-      : undefined;
+  const isEpisode = media.media_type === "EPISODE";
+
+  const episodeSubtitle = isEpisode
+    ? `S${media.season_number || 1} · E${media.episode_number || 1}`
+    : undefined;
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -94,6 +103,9 @@ export default function WatchPage() {
         subtitleTracks={subtitleTracks}
         initialDuration={media.duration_seconds || undefined}
         initialPosition={initialPosition}
+        seriesId={isEpisode ? media.series_id : undefined}
+        currentSeason={media.season_number || 1}
+        onEpisodeSelect={isEpisode ? handleEpisodeSelect : undefined}
       />
     </div>
   );

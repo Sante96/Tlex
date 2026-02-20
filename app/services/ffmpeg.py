@@ -194,12 +194,15 @@ class FFmpegRemuxer:
                 # Reap in background thread to avoid blocking event loop
                 await asyncio.to_thread(old_process.wait)
 
+        logger.info(f"[FFMPEG] Starting remux for {input_url} (seek={options.start_time}, audio={options.audio_stream})")
+
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
         self._active_processes[input_url] = process
+        logger.info(f"[FFMPEG] PID={process.pid} started")
 
         thread = Thread(target=reader_thread, args=(process, queue), daemon=True)
         thread.start()
@@ -223,9 +226,12 @@ class FFmpegRemuxer:
             if process.returncode != 0:
                 stderr = await asyncio.to_thread(process.stderr.read)
                 if stderr:
-                    logger.error(f"FFmpeg error (code {process.returncode}): {stderr.decode()}")
+                    logger.error(f"[FFMPEG] PID={process.pid} error (code {process.returncode}): {stderr.decode()}")
+            else:
+                logger.info(f"[FFMPEG] PID={process.pid} finished OK")
 
         except asyncio.CancelledError:
+            logger.info(f"[FFMPEG] PID={process.pid} cancelled (client disconnected)")
             process.kill()
             await asyncio.to_thread(process.wait)
             raise

@@ -28,7 +28,7 @@ export function DSNavItem({
         collapsed ? "justify-center w-11 px-0" : "gap-3.5 px-3.5",
         active
           ? "bg-[#e5a00d1a] text-[#e5a00d]"
-          : "text-[#a1a1aa] hover:bg-[#27272a80] hover:text-[#fafafa]",
+          : "text-[#a1a1aa] hover:bg-white/10 hover:text-[#fafafa]",
       )}
     >
       <span

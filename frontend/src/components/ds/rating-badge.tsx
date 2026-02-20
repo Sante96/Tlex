@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import Image from "next/image";
 
 interface RatingBadgeProps {
   /** TMDB vote_average (0-10), will be displayed as percentage */
@@ -10,9 +10,16 @@ export function RatingBadge({ voteAverage }: RatingBadgeProps) {
   if (percent <= 0) return null;
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 h-6 rounded bg-[#16a34a] text-white text-xs font-semibold">
-      <Star className="h-3 w-3" />
-      {percent}%
+    <span className="inline-flex items-center gap-2">
+      <Image
+        src="/tmdb-logo.svg"
+        alt="TMDB"
+        width={60}
+        height={8}
+        className="opacity-80"
+        unoptimized
+      />
+      <span className="text-sm font-semibold text-[#e4e4e7]">{percent}%</span>
     </span>
   );
 }

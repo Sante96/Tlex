@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Play, Plus } from "lucide-react";
+import { Play, Plus, Check, Pencil, RefreshCw } from "lucide-react";
 import {
   HeroBanner,
   ActionButton,
@@ -10,11 +10,16 @@ import {
   PosterCard,
   CastSection,
   DetailPageLayout,
+  EditMediaModal,
 } from "@/components/ds";
 import {
   getMediaDetails,
   getMediaList,
   getMediaCast,
+  refreshMetadata,
+  addToWatchlist,
+  removeFromWatchlist,
+  checkWatchlistStatus,
   type MediaDetails,
   type MediaItem,
   type CastMember,
@@ -30,6 +35,35 @@ export default function MediaDetailPage() {
   const [similar, setSimilar] = useState<MediaItem[]>([]);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshMetadata = async () => {
+    if (!media || refreshing) return;
+    setRefreshing(true);
+    try {
+      await refreshMetadata(media.id);
+      const data = await getMediaDetails(mediaId);
+      setMedia(data);
+    } catch {
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleToggleWatchlist = async () => {
+    if (!media) return;
+    try {
+      if (inWatchlist) {
+        await removeFromWatchlist(media.id);
+        setInWatchlist(false);
+      } else {
+        await addToWatchlist(media.id);
+        setInWatchlist(true);
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     const loadMedia = async () => {
@@ -37,6 +71,11 @@ export default function MediaDetailPage() {
         setLoading(true);
         const data = await getMediaDetails(mediaId);
         setMedia(data);
+
+        try {
+          const status = await checkWatchlistStatus(mediaId);
+          setInWatchlist(status);
+        } catch {}
 
         try {
           const allMovies = await getMediaList({
@@ -81,7 +120,7 @@ export default function MediaDetailPage() {
   }
 
   const posterUrl = getTmdbImageUrl(media.poster_path, "w500");
-  const backdropUrl = getTmdbImageUrl(media.backdrop_path, "w1280");
+  const backdropUrl = getTmdbImageUrl(media.backdrop_path, "original");
   const year = media.release_date
     ? new Date(media.release_date).getFullYear()
     : null;
@@ -89,12 +128,6 @@ export default function MediaDetailPage() {
     ? formatDuration(media.duration_seconds)
     : null;
   const genresText = media.genres?.join(", ") || "";
-
-  const metaItems = [
-    ...(year ? [{ text: String(year) }] : []),
-    ...(duration ? [{ text: duration }] : []),
-    ...(genresText ? [{ text: genresText }] : []),
-  ];
 
   return (
     <DetailPageLayout backdropUrl={backdropUrl}>
@@ -106,13 +139,20 @@ export default function MediaDetailPage() {
         posterHeight={270}
       >
         <h1 className="text-4xl font-bold text-[#fafafa]">{media.title}</h1>
-        <MetaRow voteAverage={media.vote_average} items={metaItems} />
-        {media.overview && (
-          <p className="text-sm text-[#e4e4e7] leading-relaxed max-w-3xl">
-            {media.overview}
-          </p>
-        )}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm text-[#d4d4d8]">
+            {[year, duration].filter(Boolean).join(" · ")}
+          </span>
+          {genresText && (
+            <span className="text-sm text-[#d4d4d8]">{genresText}</span>
+          )}
+          <MetaRow
+            voteAverage={media.vote_average}
+            contentRating={media.content_rating}
+            items={[]}
+          />
+        </div>
+        <div className="flex items-center gap-3">
           <ActionButton
             variant="primary"
             icon={<Play className="h-5 w-5 fill-black" />}
@@ -120,10 +160,43 @@ export default function MediaDetailPage() {
           >
             Riproduci
           </ActionButton>
-          <ActionButton variant="secondary" icon={<Plus className="h-5 w-5" />}>
-            Watchlist
+          <ActionButton
+            variant="secondary"
+            icon={
+              inWatchlist ? (
+                <Check className="h-5 w-5" />
+              ) : (
+                <Plus className="h-5 w-5" />
+              )
+            }
+            onClick={handleToggleWatchlist}
+          >
+            {inWatchlist ? "In Watchlist" : "Watchlist"}
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            icon={<Pencil className="h-4 w-4" />}
+            onClick={() => setEditing(true)}
+          >
+            Modifica
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            icon={
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+            }
+            onClick={handleRefreshMetadata}
+          >
+            {refreshing ? "Aggiornamento..." : "Aggiorna Metadati"}
           </ActionButton>
         </div>
+        {media.overview && (
+          <p className="text-sm text-[#d4d4d8] leading-relaxed max-w-3xl">
+            {media.overview}
+          </p>
+        )}
       </HeroBanner>
 
       {/* Similar Movies */}
@@ -155,6 +228,21 @@ export default function MediaDetailPage() {
         <div className="px-12 pb-8">
           <CastSection cast={cast} />
         </div>
+      )}
+      {/* Edit Modal */}
+      {editing && (
+        <EditMediaModal
+          mediaId={media.id}
+          title={media.title}
+          overview={media.overview}
+          posterPath={media.poster_path}
+          releaseDate={media.release_date}
+          onClose={() => setEditing(false)}
+          onSaved={async () => {
+            const data = await getMediaDetails(mediaId);
+            setMedia(data);
+          }}
+        />
       )}
     </DetailPageLayout>
   );

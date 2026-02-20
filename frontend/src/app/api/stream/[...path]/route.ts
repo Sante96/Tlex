@@ -1,26 +1,25 @@
 import { NextRequest } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+
+// Headers to forward from the client request to the backend
+const FORWARD_HEADERS = ["range", "authorization"] as const;
 
 async function proxyStream(request: NextRequest, path: string) {
-  const url = new URL(request.url);
-  const params = new URLSearchParams(url.search);
-  params.delete("path");
-  const queryString = params.toString();
-  const backendUrl = `${BACKEND_URL}/api/v1/stream/${path}${queryString ? `?${queryString}` : ""}`;
+  const query = new URL(request.url).search;
+  const backendUrl = `${BACKEND_URL}/api/v1/stream/${path}${query}`;
 
+  // Forward relevant headers
   const headers = new Headers();
-  const rangeHeader = request.headers.get("range");
-  if (rangeHeader) {
-    headers.set("Range", rangeHeader);
+  for (const key of FORWARD_HEADERS) {
+    const value = request.headers.get(key);
+    if (value) headers.set(key, value);
   }
 
-  // Combined abort: timeout (30s) + client disconnect propagation
-  // This is critical — without forwarding request.signal, the backend
-  // connection stays open when the browser cancels (seek, navigation),
-  // creating zombie connections that hold Telegram workers
+  // Abort chain: client disconnect → controller.abort() → backend fetch cancelled
+  // 60s timeout covers FFmpeg probe time through slow Telegram connections
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
   const onAbort = () => controller.abort();
   request.signal.addEventListener("abort", onAbort);
 
@@ -33,58 +32,19 @@ async function proxyStream(request: NextRequest, path: string) {
 
     clearTimeout(timeoutId);
 
-    // For HEAD requests, return immediately
-    if (request.method === "HEAD") {
-      const responseHeaders = new Headers();
-      response.headers.forEach((value, key) => {
-        responseHeaders.set(key, value);
-      });
-      return new Response(null, {
-        status: response.status,
-        headers: responseHeaders,
-      });
-    }
-
     // Forward response headers
-    const responseHeaders = new Headers();
-    response.headers.forEach((value, key) => {
-      responseHeaders.set(key, value);
-    });
+    const responseHeaders = new Headers(response.headers);
     responseHeaders.set("X-Accel-Buffering", "no");
     responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
 
-    if (!response.body) {
-      return new Response(null, { status: 204 });
-    }
-
-    // Stream body with proper cleanup on client disconnect
-    const reader = response.body.getReader();
-    const stream = new ReadableStream({
-      async pull(streamController) {
-        try {
-          const { done, value } = await reader.read();
-          if (done) {
-            streamController.close();
-          } else {
-            streamController.enqueue(value);
-          }
-        } catch {
-          streamController.close();
-        }
-      },
-      cancel() {
-        reader.cancel();
-        controller.abort();
-      },
-    });
-
-    return new Response(stream, {
+    // Direct body pass-through — zero-copy streaming, no ReadableStream wrapper
+    // Cleanup chain: client disconnects → request.signal aborts → controller aborts
+    // → backend fetch aborted → response.body stream cancelled automatically
+    return new Response(response.body, {
       status: response.status,
-      statusText: response.statusText,
       headers: responseHeaders,
     });
   } catch {
-    // Client-initiated abort (seek/navigation) is not an error
     if (request.signal.aborted) {
       return new Response(null, { status: 499 });
     }
@@ -111,6 +71,5 @@ export async function HEAD(
   return proxyStream(request, path.join("/"));
 }
 
-// Use Node.js runtime for better streaming support
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

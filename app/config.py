@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # Environment
     # ============================================
     environment: Literal["dev", "test", "prod"] = "dev"
-    debug: bool = True
+    debug: bool = False
     enable_registration: bool = True
 
     # ============================================

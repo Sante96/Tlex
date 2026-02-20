@@ -10,7 +10,8 @@ export {
   getRegistrationStatus,
   setRegistrationStatus,
 } from "./auth";
-export type { LoginResponse, UserResponse } from "./auth";
+export type { LoginResponse, UserResponse, UserInfo } from "./auth";
+export { listUsers, toggleUserAdmin, deleteUser } from "./auth";
 
 // Media
 export {
@@ -20,6 +21,9 @@ export {
   refreshMetadata,
   getMediaCast,
   getMediaEpisodes,
+  getNextEpisode,
+  updateMediaItem,
+  getMediaTmdbImages,
   triggerScan,
   getScanStatus,
 } from "./media";
@@ -29,6 +33,10 @@ export type {
   MediaDetails,
   CastMember,
   EpisodeInfo,
+  NextEpisode,
+  TMDBImage,
+  TMDBImagesResponse,
+  MediaUpdateBody,
 } from "./media";
 
 // Series
@@ -37,12 +45,17 @@ export {
   getSeriesDetails,
   refreshSeriesMetadata,
   getSeriesCast,
+  updateSeries,
+  getSeriesTmdbImages,
+  updateSeasonPoster,
+  getSeasonTmdbImages,
 } from "./series";
 export type {
   SeriesItem,
   SeasonInfo,
   SeriesDetails,
   EpisodeWatchProgress,
+  SeriesUpdateBody,
 } from "./series";
 
 // Progress
@@ -69,7 +82,10 @@ export {
   getSubtitleUrl,
   getSubtitleTracks,
   warmStream,
+  releaseStream,
+  getPoolStatus,
 } from "./stream";
+export type { PoolStatus } from "./stream";
 
 // Watchlist
 export {
@@ -77,6 +93,9 @@ export {
   addToWatchlist,
   removeFromWatchlist,
   checkWatchlistStatus,
+  addSeriesToWatchlist,
+  removeSeriesFromWatchlist,
+  checkSeriesWatchlistStatus,
 } from "./watchlist";
 export type { WatchlistItem, WatchlistResponse } from "./watchlist";
 

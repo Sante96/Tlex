@@ -41,12 +41,14 @@ class MediaItemResponse(BaseModel):
     release_date: str | None
     media_type: str
     duration_seconds: int | None
+    series_id: int | None = None
     season_number: int | None
     episode_number: int | None
     total_size: int
     parts_count: int
     vote_average: float | None = None
     genres: list[str] | None = None
+    content_rating: str | None = None
 
     class Config:
         from_attributes = True

@@ -18,33 +18,31 @@ export function DetailPageLayout({
 }: DetailPageLayoutProps) {
   return (
     <div className="relative min-h-screen">
-      {/* Full-page backdrop image — covers entire content area */}
+      {/* Backdrop — fixed to viewport, visible through semi-transparent sidebar/nav */}
       {backdropUrl && (
-        <>
-          <div className="absolute inset-0 overflow-hidden">
-            <Image
-              src={backdropUrl}
-              alt=""
-              fill
-              className="object-cover object-top"
-              sizes="100vw"
-              priority
-            />
-          </div>
-          {/* Gradient overlay — stops from design breakpoint:
-              0%: transparent, 25%: 10% opacity, 50%: 50% opacity, 65%: 80% opacity */}
+        <div className="fixed inset-0 z-0 overflow-hidden">
+          <Image
+            src={backdropUrl}
+            alt=""
+            fill
+            className="object-cover object-top"
+            sizes="100vw"
+            priority
+          />
+          {/* Gradient overlay */}
           <div
             className="absolute inset-0"
             style={{
               background: `linear-gradient(180deg,
-                #09090b00 0%,
-                #09090b1a 25%,
-                #09090b80 50%,
-                #09090bcc 65%
+                #09090b40 0%,
+                #09090b75 30%,
+                #09090b90 50%,
+                #09090bcc 65%,
+                #09090b 100%
               )`,
             }}
           />
-        </>
+        </div>
       )}
 
       {/* Page content on top */}

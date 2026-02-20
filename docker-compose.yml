@@ -114,8 +114,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # If SSR needs to talk to backend, use http://backend:8000
-      # But for client side (browser), it needs public URL (localhost:8000)
+      # Backend URL for server-side API calls (route handlers, SSR)
+      BACKEND_URL: http://backend:8000
+      # Client-side: empty = same origin (goes through Next.js proxy/rewrites)
       NEXT_PUBLIC_API_URL: ""
     depends_on:
       - backend

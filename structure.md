@@ -4,10 +4,10 @@
 
 # ============================================
 
-# Last updated: 2026-02-04
+# Last updated: 2026-02-19
 
-# Phase: 13 Complete - Security, Watchlist, Settings, Tests, Logging
-# + Concurrent Streaming: Multi-client per worker (premium/standard)
+# Phase: 14 Complete - Plex-Style Visual Overhaul + Edit Modal + Watchlist Series
+# + Concurrent Streaming + User Management + Cleanup/Modularization
 
 tlex/
 ├── 📁 app/ # Main application package
@@ -18,7 +18,7 @@ tlex/
 │ │
 │ ├── 📁 models/ # SQLAlchemy ORM models
 │ │ ├── **init**.py
-│ │ ├── user.py # User & Profile models
+│ │ ├── user.py # User, Profile, Watchlist, WatchProgress models
 │ │ ├── worker.py # Telegram Worker model
 │ │ └── media.py # MediaItem, MediaPart, MediaStream
 │ │
@@ -26,21 +26,23 @@ tlex/
 │ │ ├── **init**.py # Exports all schemas
 │ │ ├── auth.py # UserCreate, UserResponse, TokenResponse
 │ │ ├── media.py # MediaItemResponse, MediaListResponse, etc.
-│ │ ├── profile.py # 🆕 ProfileCreate, ProfileResponse
+│ │ ├── profile.py # ProfileCreate, ProfileResponse
+│ │ ├── watchlist.py # 🆕 WatchlistMediaResponse (supports series)
 │ │ └── scanner.py # ScanRequest, ScanResponse
 │ │
 │ ├── 📁 api/ # REST API layer
 │ │ ├── **init**.py
 │ │ ├── v1/
 │ │ │ ├── **init**.py # Router aggregation
-│ │ │ ├── auth.py # /auth endpoints (JWT login)
+│ │ │ ├── auth.py # /auth endpoints (JWT login, user management)
 │ │ │ ├── scanner.py # /scanner endpoints
-│ │ │ ├── media.py # Media library endpoints
+│ │ │ ├── media.py # Media library endpoints + PATCH update + TMDB images
 │ │ │ ├── profiles.py # 🆕 Profile CRUD + worker assignment
 │ │ │ ├── progress.py # Watch progress endpoints
 │ │ │ ├── series.py # Series/Season endpoints
 │ │ │ ├── stream.py # Streaming endpoints (Phase 3)
-│ │ │ └── subtitles.py # Subtitle extraction (Phase 5)
+│ │ │ ├── subtitles.py # Subtitle extraction (Phase 5)
+│ │ │ └── watchlist.py # Watchlist (media + series)
 │ │ └── deps.py # Dependency injection (get*current_user, get_current_user_optional)
 │ │
 │ ├── 📁 core/ # Core functionality
@@ -64,14 +66,22 @@ tlex/
 │ │ └── models.py
 │ ├── 📁 subtitles/ # 🆕 Modular subtitles package
 │ │ ├── **init**.py
-│ │ ├── service.py
-│ │ ├── fonts.py
-│ │ └── models.py
+│ │ ├── service.py # SubtitleExtractor orchestration
+│ │ ├── mkv_extractor.py # Direct MKV extraction orchestrator (slim)
+│ │ ├── ebml_parser.py # EBML parsing (tracks, clusters, blocks)
+│ │ ├── builders.py # ASS/SRT content builders
+│ │ ├── cluster_reader.py # Cluster reading strategies (Cues + fallback)
+│ │ ├── cache.py # Subtitle cache management
+│ │ ├── fonts.py # Font name extraction
+│ │ └── models.py # SubtitleTrack, AttachedFont dataclasses
 │ ├── 📁 streaming/ # 🆕 Modular streaming package
-│ │ ├── **init**.py
-│ │ ├── reader.py
-│ │ ├── cache.py
-│ │ └── models.py
+│ │ ├── __init__.py # Re-exports VirtualStreamReader, get_virtual_reader, release_reader
+│ │ ├── reader.py # VirtualStreamReader class (pool mgmt + read_range)
+│ │ ├── download.py # stream_part() async generator with retry logic
+│ │ ├── telegram.py # Telegram API: peer cache, file_id refresh/ensure
+│ │ ├── manager.py # Reader cache, factory, release, cleanup
+│ │ ├── cache.py # Chunk cache + file_id cache
+│ │ └── models.py # StreamPosition dataclass
 │ ├── ffprobe.py # FFprobe media analysis ✅
 │ ├── mkv_cues.py # MKV Cues parser for keyframe extraction
 │ └── ffmpeg.py # FFmpeg remux pipeline ✅
@@ -94,8 +104,10 @@ tlex/
 │ │ │ │ ├── layout.tsx # Main layout (sidebar + content)
 │ │ │ │ ├── page.tsx # Home/Dashboard
 │ │ │ │ ├── movies/ # Movies library grid
-│ │ │ │ ├── series/ # Series library grid  
+│ │ │ │ ├── series/ # Series library grid
+│ │ │ │ │ └── [id]/season/[season]/ # Season detail
 │ │ │ │ ├── media/[id]/ # Detail page
+│ │ │ │ ├── watchlist/ # 🆕 Watchlist page (film + serie)
 │ │ │ │ └── settings/ # Settings page
 │ │ │ ├── watch/[id]/ # Player (fullscreen, no sidebar)
 │ │ │ ├── profiles/ # 🆕 Profile selection (Netflix-style)
@@ -103,9 +115,26 @@ tlex/
 │ │ │ └── register/ # Register page
 │ │ │
 │ │ ├── components/
+│ │ │ ├── ds/ # 🆕 Design System components
+│ │ │ │ ├── index.ts # Exports all DS components
+│ │ │ │ ├── action-button.tsx # Glassmorphism action buttons
+│ │ │ │ ├── episode-card.tsx # Plex-style episode grid card
+│ │ │ │ ├── hero-banner.tsx # Full-page hero with poster
+│ │ │ │ ├── detail-page-layout.tsx # Fixed viewport backdrop
+│ │ │ │ ├── edit-media-modal.tsx # Edit modal (orchestrator)
+│ │ │ │ ├── edit-media-tabs/ # 🆕 Extracted tab components
+│ │ │ │ │ ├── index.ts
+│ │ │ │ │ ├── field.tsx # Shared field wrapper
+│ │ │ │ │ ├── general-tab.tsx # Title/overview/date form
+│ │ │ │ │ ├── image-picker-tab.tsx # TMDB image grid picker
+│ │ │ │ │ └── info-tab.tsx # Stream info display
+│ │ │ │ ├── rating-badge.tsx # TMDB logo + rating
+│ │ │ │ ├── meta-row.tsx # Meta info row
+│ │ │ │ ├── poster-card.tsx # Poster card with hover
+│ │ │ │ ├── cast-section.tsx # Horizontal scrolling cast
+│ │ │ │ └── [nav-item, avatar, button, card, input, dropdown...]
 │ │ │ ├── ui/ # shadcn/ui + custom
-│ │ │ │ ├── profile-avatar.tsx # 🆕 Avatar con bordo colorato
-│ │ │ │ ├── avatar-picker.tsx # 🆕 Modal selezione avatar (Portal)
+│ │ │ │ ├── avatar-picker.tsx # Modal selezione avatar (Portal)
 │ │ │ │ └── [shadcn...]
 │ │ │ ├── layout/ # 🆕 Layout components
 │ │ │ │ ├── sidebar.tsx # Sidebar laterale
@@ -124,22 +153,44 @@ tlex/
 │ │ │ │ ├── create-profile-modal.tsx
 │ │ │ │ └── edit-profile-modal.tsx
 │ │ │ ├── player/ # Player components
-│ │ │ │ ├── video-player.tsx
-│ │ │ │ ├── player-controls.tsx
+│ │ │ │ ├── video-player.tsx # Main player orchestrator
+│ │ │ │ ├── player-controls.tsx # Playback controls bar
 │ │ │ │ ├── player-settings.tsx # Dropdown audio/sub/offset
-│ │ │ │ └── subtitle-renderer.tsx # SubtitlesOctopus (Detached Mode)
+│ │ │ │ ├── settings-items.tsx # MenuItem, SelectItem, SyncSubmenu
+│ │ │ │ ├── pool-warning.tsx # Dynamic pool warning overlay
+│ │ │ │ ├── animated-icons.tsx # Framer-motion animated SVG icons
+│ │ │ │ ├── volume-slider.tsx # YouTube-style volume slider
+│ │ │ │ ├── video-seekbar.tsx # Seek bar component
+│ │ │ │ ├── subtitle-renderer.tsx # Thin wrapper for SubtitlesOctopus
+│ │ │ │ ├── episode-picker.tsx # Episode overlay (season tabs + episode list)
+│ │ │ │ ├── next-episode-overlay.tsx # Auto-play next episode countdown overlay
+│ │ │ ├── settings/ # 🆕 Settings sub-components
+│ │ │ │ ├── index.ts
+│ │ │ │ ├── workers-card.tsx
+│ │ │ │ ├── stats-card.tsx
+│ │ │ │ ├── scanner-card.tsx
+│ │ │ │ ├── users-card.tsx # 🆕 User management (admin toggle/delete)
+│ │ │ │ ├── add-worker-card.tsx
+│ │ │ │ └── change-password-modal.tsx
 │ │ │ ├── auth-guard.tsx
-│ │ │ └── [legacy...] # Da rimuovere dopo migrazione
+│ │ │ └── watchlist-button.tsx
 │ │ │
 │ │ ├── contexts/
 │ │ │ ├── auth-context.tsx
 │ │ │ └── profile-context.tsx # 🆕 Profile selection state
 │ │ ├── hooks/
-│ │ │ ├── player/ # 🆕 Player hooks
+│ │ │ ├── use-settings-data.ts # Admin data fetching for settings page
+│ │ │ ├── player/ # Player hooks
 │ │ │ │ ├── use-player-preferences.ts
 │ │ │ │ ├── use-video-sync.ts
 │ │ │ │ ├── use-video-events.ts
-│ │ │ │ └── use-video-hotkeys.ts
+│ │ │ │ ├── use-video-hotkeys.ts
+│ │ │ │ ├── use-pool-status.ts # Pool status polling
+│ │ │ │ ├── use-subtitle-engine.ts # SubtitlesOctopus lifecycle + render loop
+│ │ │ │ ├── use-canvas-sync.ts # Canvas letterbox sizing + ResizeObserver
+│ │ │ │ ├── use-progress-saving.ts # Watch progress periodic + unload saving
+│ │ │ │ ├── use-next-episode.ts # Next episode detection + overlay visibility
+│ │ │ │ └── subtitle-fetchers.ts # Font + subtitle content fetching
 │ │ ├── types/
 │ │ │ └── libass-wasm.d.ts # 🆕 TypeScript types for SubtitlesOctopus
 │ │ └── lib/
@@ -148,16 +199,19 @@ tlex/
 │ │ │ ├── index.ts # Aggregated exports
 │ │ │ ├── client.ts # Axios instance + interceptors
 │ │ │ ├── auth.ts # Login, register, getCurrentUser
-│ │ │ ├── media.ts # Media CRUD, cast, scanner
+│ │ │ ├── media.ts # Media CRUD, cast, scanner, update, TMDB images
 │ │ │ ├── series.ts # Series, seasons, episodes
+│ │ │ ├── watchlist.ts # Watchlist add/remove/check (media + series)
 │ │ │ ├── progress.ts # Watch progress, continue watching
 │ │ │ ├── profiles.ts # Profile CRUD
-│ │ │ └── stream.ts # Stream URLs, subtitles
+│ │ │ ├── stream.ts # Stream URLs, subtitles, pool status, release
+│ │ │ └── workers.ts # Workers & system stats
 │ │ ├── format.ts # Formatting utilities
 │ │ └── utils.ts # General utilities
 │ └── public/
-│ ├── avatars/ # 🆕 Profile avatar images (9 PNG)
-│ └── lib/ # 🆕 SubtitlesOctopus WASM files
+│ ├── avatars/ # Profile avatar images (9 PNG)
+│ ├── tmdb-logo.svg # 🆕 Official TMDB logo (brand assets)
+│ └── lib/ # SubtitlesOctopus WASM files
 │
 ├── 📁 docs/ # Documentation
 │ └── cloudflare-setup.md # Cloudflare Tunnel guide

@@ -1,14 +1,12 @@
 "use client";
 
+import { RotateCcw, RotateCw } from "lucide-react";
 import {
-  Play,
-  Pause,
-  Maximize,
-  Minimize,
-  ChevronLeft,
-  RotateCcw,
-  RotateCw,
-} from "lucide-react";
+  AnimatedPlayPause,
+  AnimatedFullscreen,
+  AnimatedBack,
+  AnimatedEpisodes,
+} from "./animated-icons";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
@@ -16,6 +14,23 @@ import { PlayerSettingsDropdown } from "./player-settings";
 import { VideoSeekbar } from "./video-seekbar";
 import { VolumeSlider } from "./volume-slider";
 import type { MediaStream } from "@/lib/api";
+
+function PlayerTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative group">
+      {children}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-zinc-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+        {label}
+      </div>
+    </div>
+  );
+}
 
 interface PlayerControlsProps {
   visible: boolean;
@@ -44,6 +59,11 @@ interface PlayerControlsProps {
   onSubtitleOffsetChange: (offset: number) => void;
   onSkip: (seconds: number) => void;
   onSeekStart?: () => void;
+  onSettingsOpenChange?: (open: boolean) => void;
+  hasEpisodes?: boolean;
+  episodePickerOpen?: boolean;
+  onToggleEpisodes?: () => void;
+  episodesButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 export function PlayerControls({
@@ -73,6 +93,11 @@ export function PlayerControls({
   onSubtitleOffsetChange,
   onSkip,
   onSeekStart,
+  onSettingsOpenChange,
+  hasEpisodes,
+  episodePickerOpen,
+  onToggleEpisodes,
+  episodesButtonRef,
 }: PlayerControlsProps) {
   return (
     <div
@@ -81,24 +106,26 @@ export function PlayerControls({
         visible ? "opacity-100" : "opacity-0 pointer-events-none",
       )}
     >
-      {/* Top bar - Plex style with centered title */}
-      <div className="flex items-center p-4 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
+      {/* Top bar */}
+      <div className="flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent">
         <button
           onClick={onBack}
-          className="p-2 hover:bg-white/20 rounded-full transition-colors"
+          className="p-2 rounded-full hover:bg-white/10 transition-colors"
         >
-          <ChevronLeft className="h-7 w-7 text-white" />
+          <AnimatedBack className="text-white" />
         </button>
         <div className="flex-1 text-center px-4">
-          <h1 className="text-white font-semibold text-lg truncate">{title}</h1>
+          <h1 className="text-white font-medium text-base truncate drop-shadow-sm">
+            {title}
+          </h1>
           {subtitle && (
-            <p className="text-zinc-400 text-sm truncate">{subtitle}</p>
+            <p className="text-white/60 text-sm truncate">{subtitle}</p>
           )}
         </div>
-        <div className="w-11" /> {/* Spacer to center title */}
+        <div className="w-10" />
       </div>
 
-      {/* Center - Large play/pause button with integrated loader (Plex style) */}
+      {/* Center — play/pause + skip (Plex style with blur) */}
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-8">
           {/* Skip backward */}
@@ -124,7 +151,6 @@ export function PlayerControls({
 
           {/* Big play/pause button with integrated loader */}
           <div className="relative">
-            {/* Outer spinning ring when loading - using Framer Motion */}
             {isLoading && (
               <motion.div
                 className="absolute -inset-2 rounded-full aspect-square"
@@ -146,23 +172,14 @@ export function PlayerControls({
                   : "bg-black/30 hover:bg-black/40 hover:scale-105",
               )}
             >
-              {isPlaying ? (
-                <Pause
-                  className={cn(
-                    "h-12 w-12 drop-shadow-lg",
-                    isLoading ? "text-white/50" : "text-white",
-                  )}
-                />
-              ) : (
-                <Play
-                  className={cn(
-                    "h-12 w-12 ml-1 drop-shadow-lg",
-                    isLoading
-                      ? "text-white/50 fill-white/50"
-                      : "text-white fill-white",
-                  )}
-                />
-              )}
+              <AnimatedPlayPause
+                isPlaying={isPlaying}
+                size={48}
+                className={cn(
+                  "drop-shadow-lg",
+                  isLoading ? "text-white/50" : "text-white",
+                )}
+              />
             </button>
           </div>
 
@@ -189,9 +206,8 @@ export function PlayerControls({
         </div>
       </div>
 
-      {/* Bottom controls - Plex style */}
-      <div className="bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pb-4 pt-8 space-y-1">
-        {/* Progress bar - Plex style seekbar */}
+      {/* Bottom controls */}
+      <div className="bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10 space-y-1">
         <VideoSeekbar
           currentTime={currentTime}
           duration={duration}
@@ -199,24 +215,38 @@ export function PlayerControls({
           onSeekStart={onSeekStart}
         />
 
-        {/* Bottom row: time left, volume, settings, fullscreen */}
+        {/* Bottom row */}
         <div className="flex items-center justify-between">
-          {/* Left - Time */}
-          <div className="text-sm text-white font-medium min-w-[120px]">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </div>
-
-          {/* Right - Controls */}
-          <div className="flex items-center gap-1">
-            {/* Volume - Plex style */}
+          {/* Left — Time + Volume */}
+          <div className="flex items-center">
+            <div className="text-[13px] text-white/90 font-medium tabular-nums px-2 py-2 rounded-full hover:bg-white/10 transition-colors cursor-default">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
             <VolumeSlider
               volume={volume}
               isMuted={isMuted}
               onVolumeChange={onVolumeChange}
               onToggleMute={onToggleMute}
             />
+          </div>
 
-            {/* Settings Dropdown */}
+          {/* Right — Controls */}
+          <div className="flex items-center gap-0.5">
+            {hasEpisodes && (
+              <PlayerTooltip label="Episodi">
+                <button
+                  ref={episodesButtonRef}
+                  onClick={onToggleEpisodes}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <AnimatedEpisodes
+                    isOpen={!!episodePickerOpen}
+                    className="text-white"
+                  />
+                </button>
+              </PlayerTooltip>
+            )}
+
             <PlayerSettingsDropdown
               audioTracks={audioTracks}
               subtitleTracks={subtitleTracks}
@@ -226,19 +256,22 @@ export function PlayerControls({
               onAudioChange={onAudioChange}
               onSubtitleChange={onSubtitleChange}
               onSubtitleOffsetChange={onSubtitleOffsetChange}
+              onOpenChange={onSettingsOpenChange}
             />
 
-            {/* Fullscreen */}
-            <button
-              onClick={onToggleFullscreen}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            <PlayerTooltip
+              label={isFullscreen ? "Esci da schermo intero" : "Schermo intero"}
             >
-              {isFullscreen ? (
-                <Minimize className="h-5 w-5 text-white" />
-              ) : (
-                <Maximize className="h-5 w-5 text-white" />
-              )}
-            </button>
+              <button
+                onClick={onToggleFullscreen}
+                className="p-2 rounded-full hover:bg-white/10 transition-colors"
+              >
+                <AnimatedFullscreen
+                  isFullscreen={isFullscreen}
+                  className="text-white"
+                />
+              </button>
+            </PlayerTooltip>
           </div>
         </div>
       </div>

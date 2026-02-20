@@ -43,6 +43,7 @@ export const DSInput = forwardRef<HTMLInputElement, DSInputProps>(
           <input
             ref={ref}
             disabled={disabled}
+            suppressHydrationWarning
             className={cn(
               "w-full h-10 rounded-lg bg-[#18181b] px-3 text-sm text-[#fafafa] border outline-none transition-colors",
               "placeholder:text-[#52525b]",

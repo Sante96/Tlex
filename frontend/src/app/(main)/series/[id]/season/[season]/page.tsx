@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import {
   HeroBanner,
+  ActionButton,
   MetaRow,
   EpisodeCard,
   CastSection,
   DetailPageLayout,
+  EditMediaModal,
 } from "@/components/ds";
 import {
   getSeriesDetails,
@@ -37,6 +40,15 @@ export default function SeasonDetailPage() {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingSeason, setEditingSeason] = useState(false);
+  const [editingEpisode, setEditingEpisode] = useState<{
+    id: number;
+    title: string;
+    overview: string | null;
+    posterPath: string | null;
+    episodeNumber: number | null;
+    releaseDate: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -83,28 +95,49 @@ export default function SeasonDetailPage() {
     season.poster_path || series.poster_path,
     "w500",
   );
-  const backdropUrl = getTmdbImageUrl(series.backdrop_path, "w1280");
+  const backdropUrl = getTmdbImageUrl(series.backdrop_path, "original");
+  const year = series.first_air_date
+    ? new Date(series.first_air_date).getFullYear()
+    : null;
+  const genresText = series.genres?.join(", ") || "";
 
   return (
     <DetailPageLayout backdropUrl={backdropUrl}>
       <HeroBanner
-        height={200}
+        height={432}
         posterUrl={posterUrl}
-        posterAlt={`${series.title} - ${seasonName}`}
-        posterWidth={100}
-        posterHeight={150}
-        align="center"
+        posterAlt={series.title}
+        posterWidth={200}
+        posterHeight={300}
       >
-        <h1 className="text-[28px] font-bold text-[#fafafa]">{series.title}</h1>
-        <MetaRow
-          voteAverage={series.vote_average}
-          items={[
-            { text: seasonName },
-            { text: `${season.episodes_count} Episodi` },
-          ]}
-        />
+        <h1 className="text-4xl font-bold text-[#fafafa]">{series.title}</h1>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-lg font-semibold text-[#d4d4d8]">
+            {seasonName}
+          </span>
+          <span className="text-sm text-[#d4d4d8]">
+            {season.episodes_count} Episodi
+          </span>
+          <MetaRow
+            voteAverage={series.vote_average}
+            contentRating={series.content_rating}
+            items={[
+              ...(year ? [{ text: String(year) }] : []),
+              ...(genresText ? [{ text: genresText }] : []),
+            ]}
+          />
+        </div>
+        <div className="flex">
+          <ActionButton
+            variant="secondary"
+            icon={<Pencil className="h-4 w-4" />}
+            onClick={() => setEditingSeason(true)}
+          >
+            Modifica Stagione
+          </ActionButton>
+        </div>
         {series.overview && (
-          <p className="text-[13px] text-[#e4e4e7] leading-relaxed line-clamp-2 max-w-2xl">
+          <p className="text-sm text-[#d4d4d8] leading-relaxed line-clamp-3 max-w-3xl text-shadow-sm">
             {series.overview}
           </p>
         )}
@@ -119,7 +152,7 @@ export default function SeasonDetailPage() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-3 gap-6">
           {season.episodes.map((ep) => {
             const progressPercent = ep.watch_progress?.progress_percent ?? 0;
             const isWatched = ep.watch_progress?.is_completed ?? false;
@@ -135,9 +168,20 @@ export default function SeasonDetailPage() {
                     : undefined
                 }
                 overview={ep.overview ?? undefined}
-                thumbnailUrl={getTmdbImageUrl(ep.still_path, "w500")}
+                thumbnailUrl={getTmdbImageUrl(ep.still_path, "original")}
                 progress={!isWatched ? progressPercent : undefined}
+                isWatched={isWatched}
                 onClick={() => router.push(`/watch/${ep.id}`)}
+                onEdit={() =>
+                  setEditingEpisode({
+                    id: ep.id,
+                    title: ep.title,
+                    overview: ep.overview,
+                    posterPath: ep.still_path,
+                    episodeNumber: ep.episode_number,
+                    releaseDate: ep.release_date,
+                  })
+                }
               />
             );
           })}
@@ -149,6 +193,51 @@ export default function SeasonDetailPage() {
         <div className="px-12 pb-8">
           <CastSection cast={cast} />
         </div>
+      )}
+      {/* Season Edit Modal */}
+      {editingSeason && series && (
+        <EditMediaModal
+          mediaId={series.id}
+          title={seasonName}
+          overview={null}
+          posterPath={season.poster_path}
+          releaseDate={null}
+          entityType="season"
+          seriesId={seriesId}
+          seriesTitle={series.title}
+          seasonNumber={seasonNumber}
+          onClose={() => setEditingSeason(false)}
+          onSaved={async () => {
+            const data = await getSeriesDetails(seriesId);
+            setSeries(data);
+            const seasonData = data.seasons.find(
+              (s) => s.season_number === seasonNumber,
+            );
+            setSeason(seasonData || null);
+          }}
+        />
+      )}
+      {/* Episode Edit Modal */}
+      {editingEpisode && series && (
+        <EditMediaModal
+          mediaId={editingEpisode.id}
+          title={editingEpisode.title}
+          overview={editingEpisode.overview}
+          posterPath={editingEpisode.posterPath}
+          releaseDate={editingEpisode.releaseDate}
+          seriesTitle={series.title}
+          seasonNumber={seasonNumber}
+          episodeNumber={editingEpisode.episodeNumber}
+          onClose={() => setEditingEpisode(null)}
+          onSaved={async () => {
+            const data = await getSeriesDetails(seriesId);
+            setSeries(data);
+            const seasonData = data.seasons.find(
+              (s) => s.season_number === seasonNumber,
+            );
+            setSeason(seasonData || null);
+          }}
+        />
       )}
     </DetailPageLayout>
   );

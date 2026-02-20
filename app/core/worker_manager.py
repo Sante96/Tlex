@@ -15,9 +15,13 @@ from app.models.worker import Worker, WorkerStatus
 settings = get_settings()
 
 # Number of Pyrogram clients to create per worker account
-# Premium accounts can handle more concurrent streams due to higher bandwidth
-CLIENTS_PER_WORKER_PREMIUM = 4
-CLIENTS_PER_WORKER_STANDARD = 2
+# Benchmarked: Premium peaks at 6 clients (~45 MB/s), Standard at 4 (~16 MB/s)
+CLIENTS_PER_WORKER_PREMIUM = 6
+CLIENTS_PER_WORKER_STANDARD = 4
+
+# Max clients a single stream can dynamically acquire
+# Streams start with 1 and scale up as they continue
+MAX_CLIENTS_PER_STREAM = 6
 
 
 class WorkerManager:
@@ -122,9 +126,9 @@ class WorkerManager:
                     worker.extra_sessions = extra_sessions
                     logger.info(f"Saved {len(extra_sessions)} extra sessions for worker {worker.id}")
 
-                total_clients = 1 + len([c for wid, c in self._client_pool if wid == worker.id]) - 1
+                total_clients = len([c for wid, c in self._client_pool if wid == worker.id])
                 logger.info(
-                    f"Worker {worker.id}: {total_clients + 1} clients "
+                    f"Worker {worker.id}: {total_clients} clients "
                     f"({'premium' if worker.is_premium else 'standard'})"
                 )
 
@@ -229,17 +233,50 @@ class WorkerManager:
             if not available:
                 total_clients = len(self._client_pool)
                 in_use = sum(1 for v in self._client_in_use.values() if v)
-                logger.warning(f"No available clients! {in_use}/{total_clients} in use.")
+                logger.warning(f"[POOL] No available clients! {in_use}/{total_clients} in use.")
                 return []
 
             # Mark as in use and return clients (inside lock to prevent race)
             result = []
-            for worker_id, client in available:
+            for _worker_id, client in available:
                 self._client_in_use[id(client)] = True
                 result.append(client)
-                logger.debug(f"Acquired client {id(client)} (worker {worker_id})")
 
+            in_use = sum(1 for v in self._client_in_use.values() if v)
+            total = len(self._client_pool)
+            logger.info(f"[POOL] Acquired {len(result)} client(s), pool={in_use}/{total} in use")
             return result
+
+    def pool_pressure(self) -> float:
+        """
+        Return pool usage ratio (0.0 = all free, 1.0 = all in use).
+
+        Used by readers to decide when to voluntarily release excess clients.
+        """
+        total = len(self._client_pool)
+        if total == 0:
+            return 1.0
+        in_use = sum(1 for v in self._client_in_use.values() if v)
+        return in_use / total
+
+    async def try_acquire_one(self) -> Client | None:
+        """
+        Try to acquire one additional client from the pool (non-blocking).
+
+        Used for dynamic scaling: streams start with 1 client and
+        progressively acquire more as they continue.
+
+        Returns:
+            A single Client or None if no clients available.
+        """
+        async with self._lock:
+            for worker_id, client in self._client_pool:
+                client_id = id(client)
+                if not self._client_in_use.get(client_id, False):
+                    self._client_in_use[client_id] = True
+                    logger.debug(f"Dynamic acquire: client {client_id} (worker {worker_id})")
+                    return client
+            return None
 
     def release_clients(self, clients: list[Client]) -> None:
         """
@@ -251,7 +288,10 @@ class WorkerManager:
             client_id = id(client)
             if client_id in self._client_in_use:
                 self._client_in_use[client_id] = False
-                logger.debug(f"Released client {client_id}")
+
+        in_use = sum(1 for v in self._client_in_use.values() if v)
+        total = len(self._client_pool)
+        logger.info(f"[POOL] Released {len(clients)} client(s), pool={in_use}/{total} in use")
 
     async def acquire_worker(self, session: AsyncSession, worker: Worker) -> None:
         """Increment worker load when starting a stream."""
@@ -385,6 +425,23 @@ class WorkerManager:
                 "clients_in_use": clients_in_use,
                 "clients_available": total_clients - clients_in_use,
             },
+        }
+
+    def pool_status(self) -> dict:
+        """
+        Lightweight pool status (no DB session required).
+
+        Returns client pool usage info for frontend warnings.
+        """
+        total = len(self._client_pool)
+        in_use = sum(1 for v in self._client_in_use.values() if v)
+        available = total - in_use
+        pressure = in_use / total if total > 0 else 1.0
+        return {
+            "total_clients": total,
+            "clients_in_use": in_use,
+            "clients_available": available,
+            "pool_pressure": round(pressure, 2),
         }
 
     async def shutdown(self) -> None:
