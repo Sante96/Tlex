@@ -1,6 +1,6 @@
 """People API - person details + their works in the local catalog."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from app.api.deps import DBSession
@@ -11,9 +11,10 @@ router = APIRouter(prefix="/people", tags=["people"])
 
 
 @router.get("/{person_id}")
-async def get_person(session: DBSession, person_id: int) -> dict:
+async def get_person(request: Request, session: DBSession, person_id: int) -> dict:
     """Get person info and all their TMDB credits, flagging which are in the local catalog."""
-    person = await tmdb_client.get_person(person_id)
+    lang = request.headers.get("Accept-Language", "it-IT")
+    person = await tmdb_client.get_person(person_id, language=lang)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 

@@ -37,14 +37,20 @@
 - **Subtitle Sync**: Manual audio/subtitle synchronization offset adjustment (+/- 20s) directly in the player.
 - **Transcoding**: Automatic conversion of unsupported formats (e.g., mkv container features) to browser-compatible streams.
 
-### 👤 User Experience
+### � Backup & Resilience
+- **Automatic Backup Channels**: Mirror entire Telegram channels (topics + messages) to a backup supergroup automatically.
+- **Health Monitoring**: Periodic health checks on main channels with configurable failure thresholds.
+- **Auto-Failover**: When a main channel becomes unreachable, TLEX automatically promotes the backup to main and creates a new backup — zero downtime.
+- **Fallback Streaming**: If a file is unavailable on the main channel, the streaming engine transparently fetches it from the backup.
+
+### �👤 User Experience
 - **Multi-Profile**: Create multiple profiles per account (Netflix-style), including Kids Mode and separate language preferences.
 - **Continue Watching**: Automatic progress tracking. Resume movies and episodes exactly where you left off across devices.
 - **Watchlist**: Save content to your personal list for later viewing.
 
 ### 🛠️ Tech Stack
-- **Backend**: Python (FastAPI), SQLAlchemy (Async), Pyrogram (Telegram Client).
-- **Frontend**: Next.js 16, React 19, Tailwind CSS v4, Framer Motion.
+- **Backend**: Python (FastAPI), SQLAlchemy (Async), Pyrogram (Telegram MTProto Client).
+- **Frontend**: Next.js, React, Tailwind CSS v4, Framer Motion — custom Design System (DSButton, DSCard, DSInput, DSDatePicker).
 - **Infrastructure**: Docker, PostgreSQL (Data), Redis (Cache/Locks), Cloudflared (Tunneling).
 
 ---

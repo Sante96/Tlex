@@ -72,9 +72,10 @@ export function UsersCard({
         {users.map((user) => {
           const isSelf = user.id === currentUserId;
           return (
-            <div
+            <DSCard
               key={user.id}
-              className="flex items-center justify-between bg-white/[0.05] border border-white/[0.06] rounded-lg p-3"
+              level="secondary"
+              className="p-3 rounded-lg shadow-none backdrop-blur-none flex-row items-center justify-between gap-0"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div
@@ -86,12 +87,16 @@ export function UsersCard({
                   <div className="text-sm font-medium text-[#fafafa] truncate">
                     {user.email}
                     {isSelf && (
-                      <span className="ml-2 text-xs text-[#71717a]">({t("users.you")})</span>
+                      <span className="ml-2 text-xs text-[#71717a]">
+                        ({t("users.you")})
+                      </span>
                     )}
                   </div>
                   <div className="text-xs text-[#71717a]">
                     {user.profiles_count}{" "}
-                    {user.profiles_count === 1 ? t("users.profileOne") : t("users.profileMany")}
+                    {user.profiles_count === 1
+                      ? t("users.profileOne")
+                      : t("users.profileMany")}
                     {user.profiles.length > 0 && (
                       <span className="ml-1">
                         · {user.profiles.map((p) => p.name).join(", ")}
@@ -130,7 +135,7 @@ export function UsersCard({
                   </button>
                 )}
               </div>
-            </div>
+            </DSCard>
           );
         })}
       </div>

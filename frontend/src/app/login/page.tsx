@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { MeshGradient } from "@paper-design/shaders-react";
 import { useTranslations } from "next-intl";
+import { DSButton, DSInput } from "@/components/ds";
 import { useAuth } from "@/contexts/auth-context";
 
 export default function LoginPage() {
@@ -66,10 +67,10 @@ export default function LoginPage() {
           <span className="text-4xl font-bold tracking-tight text-[#e5a00d]">
             TLEX
           </span>
-          <h1 className="text-xl font-semibold text-white mt-3">{t("title")}</h1>
-          <p className="text-sm text-[#71717a] mt-1">
-            {t("subtitle")}
-          </p>
+          <h1 className="text-xl font-semibold text-white mt-3">
+            {t("title")}
+          </h1>
+          <p className="text-sm text-[#71717a] mt-1">{t("subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -79,37 +80,29 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Email */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-white/70">{t("email")}</label>
-            <input
-              type="email"
-              placeholder="tu@esempio.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
-            />
-          </div>
+          <DSInput
+            label={t("email")}
+            type="email"
+            placeholder="tu@esempio.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
 
-          {/* Password */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-white/70">{t("password")}</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full h-10 px-3 pr-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
-              />
+          <DSInput
+            label={t("password")}
+            type={showPassword ? "text" : "password"}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            suffix={
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                className="text-[#71717a] hover:text-[#fafafa] transition-colors"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -117,18 +110,21 @@ export default function LoginPage() {
                   <Eye className="h-4 w-4" />
                 )}
               </button>
-            </div>
-          </div>
+            }
+          />
 
-          {/* Submit */}
-          <button
+          <DSButton
             type="submit"
             disabled={isLoading}
-            className="mt-1 h-10 w-full rounded-lg bg-[#e5a00d] hover:bg-[#f0b429] active:bg-[#c89200] text-black text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="mt-1 w-full"
+            icon={
+              isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : undefined
+            }
           >
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isLoading ? t("loading") : t("submit")}
-          </button>
+          </DSButton>
         </form>
 
         <p className="mt-6 text-center text-sm text-[#52525b]">

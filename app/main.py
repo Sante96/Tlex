@@ -56,10 +56,14 @@ async def lifespan(app: FastAPI):
     logger.info("Background subtitle cache population started")
 
     # Start auto-scan scheduler if enabled
-    from app.services.scheduler import auto_scan_scheduler
+    from app.services.scheduler import auto_scan_scheduler, backup_sync_scheduler
     if settings.scanner_auto_interval_hours > 0:
         asyncio.create_task(auto_scan_scheduler.start())
         logger.info(f"Auto-scan scheduler started (interval: {settings.scanner_auto_interval_hours}h)")
+
+    # Start backup sync scheduler (always on, interval managed via Redis)
+    asyncio.create_task(backup_sync_scheduler.start())
+    logger.info("Backup sync scheduler started")
 
     # Background cleanup for stale stream readers (safety net)
     async def stream_reader_cleanup_loop():

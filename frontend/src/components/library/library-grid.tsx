@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { MediaPoster } from "./media-poster";
+import { PosterCardSkeleton } from "@/components/ui/skeleton";
 import type { MediaItem } from "@/lib/api";
 
 interface LibraryGridProps {
@@ -15,11 +16,7 @@ export function LibraryGrid({ items, loading }: LibraryGridProps) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
         {Array.from({ length: 14 }).map((_, i) => (
-          <div key={i} className="space-y-2">
-            <div className="aspect-[2/3] bg-zinc-800 rounded-md animate-pulse" />
-            <div className="h-4 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-3 w-1/2 bg-zinc-800 rounded animate-pulse" />
-          </div>
+          <PosterCardSkeleton key={i} />
         ))}
       </div>
     );

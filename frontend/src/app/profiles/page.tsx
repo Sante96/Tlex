@@ -69,7 +69,9 @@ export default function ProfilesPage() {
             TLEX
           </span>
           <h1 className="text-3xl md:text-4xl font-semibold text-white mt-3">
-            {isEditing ? t("profiles.editProfile") : t("profiles.whoIsWatching")}
+            {isEditing
+              ? t("profiles.editProfile")
+              : t("profiles.whoIsWatching")}
           </h1>
           {isEditing && (
             <p className="text-sm text-[#71717a] mt-2">

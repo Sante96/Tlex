@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Phone, Trash2, Plus, Loader2, Crown } from "lucide-react";
-import { DSCard } from "@/components/ds";
+import { DSButton, DSCard, DSInput } from "@/components/ds";
 import {
   sendWorkerCode,
   verifyWorkerCode,
@@ -101,9 +101,10 @@ export function AddWorkerCard({
         {workers.length > 0 && (
           <div className="flex flex-col gap-2">
             {workers.map((w) => (
-              <div
+              <DSCard
                 key={w.id}
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-[#27272a]/50"
+                level="secondary"
+                className="py-2 px-3 rounded-lg shadow-none backdrop-blur-none flex-row items-center justify-between gap-0"
               >
                 <div className="flex items-center gap-2">
                   <div
@@ -134,7 +135,7 @@ export function AddWorkerCard({
                     <Trash2 className="w-4 h-4" />
                   )}
                 </button>
-              </div>
+              </DSCard>
             ))}
           </div>
         )}
@@ -148,56 +149,56 @@ export function AddWorkerCard({
           <div className="flex flex-col gap-3">
             {/* Phone input (always visible when not done) */}
             <div className="flex gap-2">
-              <input
+              <DSInput
                 type="tel"
                 placeholder="+39 123 456 7890"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, handleSendCode)}
                 disabled={step !== "idle" && step !== "sending"}
-                className="flex-1 h-9 px-3 rounded-lg bg-[#27272a] border border-[#3f3f46] text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none focus:border-[#e5a00d] disabled:opacity-50"
+                className="flex-1"
               />
               {step === "idle" && (
-                <button
+                <DSButton
                   onClick={handleSendCode}
                   disabled={!phone.trim()}
-                  className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-sm font-medium hover:bg-[#c98b0b] transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  icon={<Plus className="w-4 h-4" />}
                 >
-                  <Plus className="w-4 h-4" />
                   {t("workers.sendCode")}
-                </button>
+                </DSButton>
               )}
               {step === "sending" && (
-                <div className="h-9 px-3 flex items-center">
-                  <Loader2 className="w-4 h-4 text-[#e5a00d] animate-spin" />
-                </div>
+                <DSButton
+                  disabled
+                  icon={<Loader2 className="w-4 h-4 animate-spin" />}
+                />
               )}
             </div>
 
             {/* Code input */}
             {(step === "code" || step === "verifying") && (
               <div className="flex gap-2">
-                <input
+                <DSInput
                   type="text"
                   placeholder={t("workers.verifyCodePlaceholder")}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, () => handleVerifyCode())}
                   disabled={step === "verifying"}
-                  className="flex-1 h-9 px-3 rounded-lg bg-[#27272a] border border-[#3f3f46] text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none focus:border-[#e5a00d] disabled:opacity-50"
+                  className="flex-1"
                   autoFocus
                 />
-                <button
+                <DSButton
                   onClick={() => handleVerifyCode()}
                   disabled={!code.trim() || step === "verifying"}
-                  className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-sm font-medium hover:bg-[#c98b0b] transition-colors disabled:opacity-50"
+                  icon={
+                    step === "verifying" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : undefined
+                  }
                 >
-                  {step === "verifying" ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    t("workers.verify")
-                  )}
-                </button>
+                  {step !== "verifying" && t("workers.verify")}
+                </DSButton>
               </div>
             )}
 
@@ -208,7 +209,7 @@ export function AddWorkerCard({
                   {t("workers.twoFaInfo")}
                 </p>
                 <div className="flex gap-2">
-                  <input
+                  <DSInput
                     type="password"
                     placeholder={t("workers.twoFaPlaceholder")}
                     value={password2fa}
@@ -216,16 +217,15 @@ export function AddWorkerCard({
                     onKeyDown={(e) =>
                       handleKeyDown(e, () => handleVerifyCode(password2fa))
                     }
-                    className="flex-1 h-9 px-3 rounded-lg bg-[#27272a] border border-[#3f3f46] text-[#fafafa] text-sm placeholder:text-[#52525b] focus:outline-none focus:border-[#e5a00d]"
+                    className="flex-1"
                     autoFocus
                   />
-                  <button
+                  <DSButton
                     onClick={() => handleVerifyCode(password2fa)}
                     disabled={!password2fa.trim()}
-                    className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-sm font-medium hover:bg-[#c98b0b] transition-colors disabled:opacity-50"
                   >
                     {t("common.confirm")}
-                  </button>
+                  </DSButton>
                 </div>
               </div>
             )}

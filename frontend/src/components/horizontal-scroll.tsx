@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DSIconButton } from "@/components/ds";
 
 interface HorizontalScrollProps {
   children: React.ReactNode;
@@ -59,20 +60,18 @@ export function HorizontalScroll({
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <div className="flex items-center gap-1">
             {canScrollLeft && (
-              <button
+              <DSIconButton
                 onClick={() => scroll("left")}
-                className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 text-zinc-400" />
-              </button>
+                className="rounded-full hover:bg-zinc-800"
+                icon={<ChevronLeft className="w-5 h-5 text-zinc-400" />}
+              />
             )}
             {canScrollRight && (
-              <button
+              <DSIconButton
                 onClick={() => scroll("right")}
-                className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 text-zinc-400" />
-              </button>
+                className="rounded-full hover:bg-zinc-800"
+                icon={<ChevronRight className="w-5 h-5 text-zinc-400" />}
+              />
             )}
           </div>
         </div>

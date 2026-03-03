@@ -17,6 +17,7 @@ from app.models import (  # noqa: E402, F401
     User,
     Worker,
 )
+from app.models.backup import BackupChannel, BackupMessage  # noqa: E402, F401
 
 
 async def main() -> None:
@@ -34,6 +35,8 @@ async def main() -> None:
         print("  - media_items")
         print("  - media_parts")
         print("  - media_streams")
+        print("  - backup_channels")
+        print("  - backup_messages")
     except Exception as e:
         print(f"❌ Error creating tables: {e}")
         raise

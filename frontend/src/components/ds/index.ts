@@ -2,6 +2,8 @@
 export { DSButton } from "./button";
 export { DSCard } from "./card";
 export { DSInput } from "./input";
+export { DSDatePicker } from "./date-picker";
+export { DSIconButton } from "./icon-button";
 export { DSDropdownMenu } from "./dropdown-menu";
 export { DSAvatar } from "./avatar";
 export { DSNavItem } from "./nav-item";

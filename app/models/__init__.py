@@ -1,5 +1,6 @@
 """Database models package."""
 
+from app.models.backup import BackupChannel, BackupMessage
 from app.models.media import MediaItem, MediaPart, MediaStream, Series
 from app.models.user import (
     Profile,
@@ -21,4 +22,6 @@ __all__ = [
     "MediaItem",
     "MediaPart",
     "MediaStream",
+    "BackupChannel",
+    "BackupMessage",
 ]

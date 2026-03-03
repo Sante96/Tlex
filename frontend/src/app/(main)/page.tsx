@@ -15,6 +15,7 @@ import {
   type SeriesItem,
 } from "@/lib/api";
 import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
+import { PosterCardSkeleton } from "@/components/ui/skeleton";
 
 export default function HomePage() {
   const t = useTranslations();
@@ -67,11 +68,7 @@ export default function HomePage() {
       <div className="px-4 md:px-8 py-6 md:py-8">
         <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="animate-pulse shrink-0 w-[130px] md:w-auto">
-              <div className="aspect-[2/3] bg-[#27272a] rounded-lg" />
-              <div className="h-4 w-3/4 bg-[#27272a] rounded mt-2" />
-              <div className="h-3 w-1/2 bg-[#27272a] rounded mt-1" />
-            </div>
+            <PosterCardSkeleton key={i} className="w-[130px] md:w-auto" />
           ))}
         </div>
       </div>
@@ -84,9 +81,7 @@ export default function HomePage() {
         <h1 className="text-2xl font-bold text-[#fafafa] mb-4">
           {t("home.welcome")}
         </h1>
-        <p className="text-[#a1a1aa] mb-6">
-          {t("home.emptyLibrary")}
-        </p>
+        <p className="text-[#a1a1aa] mb-6">{t("home.emptyLibrary")}</p>
         <DSButton
           onClick={handleScan}
           disabled={scanning}

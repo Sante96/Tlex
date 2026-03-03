@@ -44,7 +44,9 @@ export function ScannerCard({
     >
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#fafafa]">{t("scanner.status")}</span>
+          <span className="text-sm font-medium text-[#fafafa]">
+            {t("scanner.status")}
+          </span>
           <DSButton
             variant="ghost"
             onClick={onRefresh}
@@ -63,9 +65,7 @@ export function ScannerCard({
             <span className="text-sm font-medium text-[#fafafa]">
               {t("scanner.autoScan")}
             </span>
-            <p className="text-xs text-[#71717a]">
-              {t("scanner.interval")}
-            </p>
+            <p className="text-xs text-[#71717a]">{t("scanner.interval")}</p>
           </div>
           <Select
             value={String(autoScanData?.interval_hours || 0)}
@@ -93,8 +93,13 @@ export function ScannerCard({
         </div>
 
         {autoScanData && autoScanData.last_scan && (
-          <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3">
-            <div className="text-sm text-[#71717a] mb-1">{t("scanner.lastScan")}</div>
+          <DSCard
+            level="secondary"
+            className="p-3 rounded-lg shadow-none backdrop-blur-none gap-1"
+          >
+            <div className="text-sm text-[#71717a]">
+              {t("scanner.lastScan")}
+            </div>
             <div className="text-lg font-bold">
               {new Date(autoScanData.last_scan).toLocaleString(undefined, {
                 day: "2-digit",
@@ -103,7 +108,7 @@ export function ScannerCard({
                 minute: "2-digit",
               })}
             </div>
-          </div>
+          </DSCard>
         )}
 
         <div className="h-px bg-[#27272a]" />
@@ -113,9 +118,7 @@ export function ScannerCard({
             <span className="text-sm font-medium text-[#fafafa]">
               {t("scanner.triggerScan")}
             </span>
-            <p className="text-xs text-[#71717a]">
-              {t("scanner.scanning")}
-            </p>
+            <p className="text-xs text-[#71717a]">{t("scanner.scanning")}</p>
           </div>
           <DSButton
             onClick={onTriggerScan}

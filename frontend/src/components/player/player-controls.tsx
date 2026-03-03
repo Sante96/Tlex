@@ -277,7 +277,11 @@ export function PlayerControls({
             )}
 
             <PlayerTooltip
-              label={isFullscreen ? t("player.exitFullscreen") : t("player.fullscreen")}
+              label={
+                isFullscreen
+                  ? t("player.exitFullscreen")
+                  : t("player.fullscreen")
+              }
             >
               <button
                 onClick={onToggleFullscreen}

@@ -15,9 +15,10 @@ export function PoolWarningOverlay({
   poolPressure,
 }: PoolWarningOverlayProps) {
   const t = useTranslations();
-  const message = warning === "no_clients"
-    ? t("player.noClientsWarning")
-    : t("player.highPressureWarning");
+  const message =
+    warning === "no_clients"
+      ? t("player.noClientsWarning")
+      : t("player.highPressureWarning");
   return (
     <AnimatePresence>
       {warning && (

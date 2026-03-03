@@ -37,6 +37,8 @@ ENV/
 # Environment Variables (CRITICAL!)
 # ============================================
 .env
+.env.dev
+.env.prod
 .env.local
 .env.*.local
 

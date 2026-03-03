@@ -4,10 +4,14 @@
 
 # ============================================
 
-# Last updated: 2026-02-19
+# Last updated: 2026-03-03
 
-# Phase: 14 Complete - Plex-Style Visual Overhaul + Edit Modal + Watchlist Series
-# + Concurrent Streaming + User Management + Cleanup/Modularization
+# Phase: 16 Complete - Backup System + Design System Unification + Modularization
+# Backup: Telegram megagroup mirroring, topic sync, health check, auto-failover
+# DS Unification: DSButton/DSInput/DSCard across all forms/modals/pages
+# DSDatePicker: custom calendar picker component
+# Modularization: backup/service.py → 4 mixins, series.py → seasons.py, backup-card → row+form
+# Skeleton: PosterCardSkeleton unified across all grid pages
 
 tlex/
 ├── 📁 app/ # Main application package
@@ -20,7 +24,8 @@ tlex/
 │ │ ├── **init**.py
 │ │ ├── user.py # User, Profile, Watchlist, WatchProgress models
 │ │ ├── worker.py # Telegram Worker model
-│ │ └── media.py # MediaItem, MediaPart, MediaStream
+│ │ ├── media.py # MediaItem, MediaPart, MediaStream
+│ │ └── backup.py # BackupChannel, BackupMessage
 │ │
 │ ├── 📁 schemas/ # Pydantic request/response models ✅
 │ │ ├── **init**.py # Exports all schemas
@@ -37,11 +42,14 @@ tlex/
 │ │ │ ├── auth.py # /auth endpoints (JWT login, user management)
 │ │ │ ├── scanner.py # /scanner endpoints
 │ │ │ ├── media.py # Media library endpoints + PATCH update + TMDB images
-│ │ │ ├── profiles.py # 🆕 Profile CRUD + worker assignment
+│ │ │ ├── profiles.py # Profile CRUD + worker assignment
 │ │ │ ├── progress.py # Watch progress endpoints
-│ │ │ ├── series.py # Series/Season endpoints
-│ │ │ ├── stream.py # Streaming endpoints (Phase 3)
-│ │ │ ├── subtitles.py # Subtitle extraction (Phase 5)
+│ │ │ ├── series.py # Series list/detail/cast/trailer/refresh endpoints
+│ │ │ ├── seasons.py # Season-specific endpoints (get, patch, tmdb-images)
+│ │ │ ├── backup.py # Backup channel CRUD + sync + promote + health
+│ │ │ ├── workers.py # Worker management + system stats
+│ │ │ ├── stream.py # Streaming endpoints
+│ │ │ ├── subtitles.py # Subtitle extraction
 │ │ │ └── watchlist.py # Watchlist (media + series)
 │ │ └── deps.py # Dependency injection (get*current_user, get_current_user_optional)
 │ │
@@ -54,17 +62,24 @@ tlex/
 │ │
 │ └── 📁 services/ # Business logic services
 │ ├── **init**.py
-│ ├── 📁 scanner/ # 🆕 Modular scanner package
+│ ├── 📁 backup/ # Backup channel service (mixin architecture)
+│ │ ├── **init**.py # Re-exports backup_service singleton
+│ │ ├── service.py # BackupService facade (assembles mixins)
+│ │ ├── _create_mixin.py # Megagroup creation + topic mirroring
+│ │ ├── _members_mixin.py # Member invite + admin promotion
+│ │ ├── _sync_mixin.py # Per-topic message sync + sync_all scheduler
+│ │ └── _failover_mixin.py # Health check + promote-to-main + fallback lookup
+│ ├── 📁 scanner/ # Modular scanner package
 │ │ ├── **init**.py # Re-exports scanner_service
 │ │ ├── models.py # ScannedFile, MediaGroup dataclasses
 │ │ ├── telegram.py # TelegramScanner class
 │ │ ├── processor.py # Media processing logic
 │ │ └── service.py # ScannerService orchestration
-│ ├── 📁 tmdb/ # 🆕 Modular TMDB package
+│ ├── 📁 tmdb/ # Modular TMDB package
 │ │ ├── **init**.py
 │ │ ├── client.py
 │ │ └── models.py
-│ ├── 📁 subtitles/ # 🆕 Modular subtitles package
+│ ├── 📁 subtitles/ # Modular subtitles package
 │ │ ├── **init**.py
 │ │ ├── service.py # SubtitleExtractor orchestration
 │ │ ├── mkv_extractor.py # Direct MKV extraction orchestrator (slim)
@@ -74,7 +89,7 @@ tlex/
 │ │ ├── cache.py # Subtitle cache management
 │ │ ├── fonts.py # Font name extraction
 │ │ └── models.py # SubtitleTrack, AttachedFont dataclasses
-│ ├── 📁 streaming/ # 🆕 Modular streaming package
+│ ├── 📁 streaming/ # Modular streaming package
 │ │ ├── __init__.py # Re-exports VirtualStreamReader, get_virtual_reader, release_reader
 │ │ ├── reader.py # VirtualStreamReader class (pool mgmt + read_range)
 │ │ ├── download.py # stream_part() async generator with retry logic
@@ -82,9 +97,11 @@ tlex/
 │ │ ├── manager.py # Reader cache, factory, release, cleanup
 │ │ ├── cache.py # Chunk cache + file_id cache
 │ │ └── models.py # StreamPosition dataclass
-│ ├── ffprobe.py # FFprobe media analysis ✅
+│ ├── scheduler.py # Periodic task scheduler (backup sync, auto-scan)
+│ ├── overrides.py # Per-user media/series override helpers
+│ ├── ffprobe.py # FFprobe media analysis
 │ ├── mkv_cues.py # MKV Cues parser for keyframe extraction
-│ └── ffmpeg.py # FFmpeg remux pipeline ✅
+│ └── ffmpeg.py # FFmpeg remux pipeline
 │
 ├── 📁 scripts/ # CLI utilities
 │ ├── create_tables.py # Initialize database
@@ -115,27 +132,39 @@ tlex/
 │ │ │ └── register/ # Register page
 │ │ │
 │ │ ├── components/
-│ │ │ ├── ds/ # 🆕 Design System components
+│ │ │ ├── ds/ # Design System components
 │ │ │ │ ├── index.ts # Exports all DS components
-│ │ │ │ ├── action-button.tsx # Glassmorphism action buttons
+│ │ │ │ ├── button.tsx # DSButton (primary/secondary/ghost/destructive)
+│ │ │ │ ├── card.tsx # DSCard (primary/secondary/tertiary levels)
+│ │ │ │ ├── input.tsx # DSInput (with focus/error states)
+│ │ │ │ ├── icon-button.tsx # DSIconButton (w-8 h-8 ghost icon-only wrapper)
+│ │ │ │ ├── date-picker.tsx # DSDatePicker (custom calendar, locale-aware)
+│ │ │ │ ├── avatar.tsx # DSAvatar
+│ │ │ │ ├── nav-item.tsx # DSNavItem
+│ │ │ │ ├── profile-card.tsx # DSProfileCard
+│ │ │ │ ├── dropdown-menu.tsx # DSDropdownMenu
+│ │ │ │ ├── breadcrumb.tsx # DSBreadcrumb (back navigation)
+│ │ │ │ ├── action-button.tsx # Hero action buttons
 │ │ │ │ ├── episode-card.tsx # Plex-style episode grid card
 │ │ │ │ ├── hero-banner.tsx # Full-page hero with poster
 │ │ │ │ ├── detail-page-layout.tsx # Fixed viewport backdrop
-│ │ │ │ ├── edit-media-modal.tsx # Edit modal (orchestrator)
-│ │ │ │ ├── edit-media-tabs/ # 🆕 Extracted tab components
-│ │ │ │ │ ├── index.ts
-│ │ │ │ │ ├── field.tsx # Shared field wrapper
-│ │ │ │ │ ├── general-tab.tsx # Title/overview/date form
-│ │ │ │ │ ├── image-picker-tab.tsx # TMDB image grid picker
-│ │ │ │ │ └── info-tab.tsx # Stream info display
+│ │ │ │ ├── cast-section.tsx # Horizontal scrolling cast + staff
+│ │ │ │ ├── poster-card.tsx # Poster card with hover overlay
 │ │ │ │ ├── rating-badge.tsx # TMDB logo + rating
-│ │ │ │ ├── meta-row.tsx # Meta info row
-│ │ │ │ ├── poster-card.tsx # Poster card with hover
-│ │ │ │ ├── cast-section.tsx # Horizontal scrolling cast
-│ │ │ │ └── [nav-item, avatar, button, card, input, dropdown...]
-│ │ │ ├── ui/ # shadcn/ui + custom
-│ │ │ │ ├── avatar-picker.tsx # Modal selezione avatar (Portal)
-│ │ │ │ └── [shadcn...]
+│ │ │ │ ├── meta-row.tsx # Dot-separated meta info row
+│ │ │ │ ├── section-header.tsx # Title + "Vedi tutto" link
+│ │ │ │ ├── trailer-modal.tsx # YouTube trailer modal
+│ │ │ │ ├── edit-media-modal.tsx # Edit modal orchestrator
+│ │ │ │ └── edit-media-tabs/ # Extracted tab components
+│ │ │ │ ├── index.ts
+│ │ │ │ ├── field.tsx # Shared field wrapper
+│ │ │ │ ├── general-tab.tsx # Title/overview/DSDatePicker form
+│ │ │ │ ├── image-picker-tab.tsx # TMDB image grid picker
+│ │ │ │ └── info-tab.tsx # Stream info display
+│ │ │ ├── ui/ # shadcn/ui + custom primitives
+│ │ │ │ ├── skeleton.tsx # Skeleton, PosterCardSkeleton, HeroBannerSkeleton, DetailPageSkeleton
+│ │ │ │ ├── avatar-picker.tsx # Avatar selection modal (Portal)
+│ │ │ │ └── [shadcn: switch, select, dropdown-menu, ...]
 │ │ │ ├── layout/ # 🆕 Layout components
 │ │ │ │ ├── bottom-nav.tsx # 🆕 Mobile bottom navigation bar (md:hidden)
 │ │ │ │ ├── sidebar.tsx # hidden md:flex (desktop only)
@@ -164,13 +193,16 @@ tlex/
 │ │ │ │ ├── subtitle-renderer.tsx # Thin wrapper for SubtitlesOctopus
 │ │ │ │ ├── episode-picker.tsx # Episode overlay (season tabs + episode list)
 │ │ │ │ ├── next-episode-overlay.tsx # Auto-play next episode countdown overlay
-│ │ │ ├── settings/ # 🆕 Settings sub-components
+│ │ │ ├── settings/ # Settings sub-components
 │ │ │ │ ├── index.ts
 │ │ │ │ ├── workers-card.tsx
 │ │ │ │ ├── stats-card.tsx
 │ │ │ │ ├── scanner-card.tsx
-│ │ │ │ ├── users-card.tsx # 🆕 User management (admin toggle/delete)
+│ │ │ │ ├── users-card.tsx # User management (admin toggle/delete)
 │ │ │ │ ├── add-worker-card.tsx
+│ │ │ │ ├── backup-card.tsx # Backup channel list + interval selector
+│ │ │ │ ├── backup-row.tsx # Single backup channel row (extracted)
+│ │ │ │ ├── backup-form.tsx # Create backup form (extracted)
 │ │ │ │ └── change-password-modal.tsx
 │ │ │ ├── auth-guard.tsx
 │ │ │ └── watchlist-button.tsx

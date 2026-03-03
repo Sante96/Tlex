@@ -599,7 +599,7 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
 
 
 @router.get("/{media_id}/episodes")
-async def get_media_episodes(session: DBSession, media_id: int) -> list[dict]:
+async def get_media_episodes(request: Request, session: DBSession, media_id: int) -> list[dict]:
     """Get episodes for a TV season from TMDB."""
     query = select(MediaItem).where(MediaItem.id == media_id)
     result = await session.execute(query)
@@ -611,8 +611,9 @@ async def get_media_episodes(session: DBSession, media_id: int) -> list[dict]:
     if not item.tmdb_id or item.media_type != MediaType.EPISODE:
         return []
 
+    lang = request.headers.get("Accept-Language", "it-IT")
     season = item.season_number if item.season_number is not None else 1
-    episodes = await tmdb_client.get_season_episodes(item.tmdb_id, season)
+    episodes = await tmdb_client.get_season_episodes(item.tmdb_id, season, language=lang)
 
     return [
         {

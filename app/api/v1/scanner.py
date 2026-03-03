@@ -37,6 +37,14 @@ async def trigger_scan(
     return ScanResponse(**result)
 
 
+@router.get("/channels")
+async def get_configured_channels(_admin=Depends(get_admin_user)) -> dict:
+    """Return the channel IDs configured in SCANNER_CHANNEL_IDS."""
+    from app.config import get_settings as _gs
+    s = _gs()
+    return {"channel_ids": s.channel_ids_list}
+
+
 @router.get("/status", response_model=ScanStatusResponse)
 async def get_scan_status() -> ScanStatusResponse:
     """Get current scan status."""

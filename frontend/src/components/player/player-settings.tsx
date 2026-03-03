@@ -105,7 +105,8 @@ export function PlayerSettingsDropdown({
   const goBack = () => setView("main");
 
   const selectedAudioLabel =
-    audioTracks[selectedAudio]?.language || `${t("player.track")} ${selectedAudio + 1}`;
+    audioTracks[selectedAudio]?.language ||
+    `${t("player.track")} ${selectedAudio + 1}`;
 
   const selectedSubLabel =
     selectedSubtitle !== null

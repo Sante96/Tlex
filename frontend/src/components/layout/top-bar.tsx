@@ -6,7 +6,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LogOut, UserCircle, Users, Search, X } from "lucide-react";
-import { DSAvatar, DSDropdownMenu, DSBreadcrumb } from "@/components/ds";
+import {
+  DSAvatar,
+  DSDropdownMenu,
+  DSBreadcrumb,
+  DSIconButton,
+} from "@/components/ds";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { SearchBar } from "@/components/layout/search-bar";
 import { useAuth } from "@/contexts/auth-context";
@@ -123,13 +128,11 @@ export function TopBar() {
             transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
           >
             <SearchBar className="flex-1 min-w-0" />
-            <button
-              type="button"
+            <DSIconButton
               onClick={() => setShowMobileSearch(false)}
-              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
+              className="shrink-0 w-9 h-9 hover:text-[#fafafa]"
+              icon={<X className="h-5 w-5" />}
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -165,13 +168,11 @@ export function TopBar() {
             <div className="flex items-center gap-1 shrink-0">
               {/* Search icon — mobile only, hidden when breadcrumb is shown */}
               {!breadcrumbItems && (
-                <button
-                  type="button"
+                <DSIconButton
                   onClick={() => setShowMobileSearch(true)}
-                  className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
-                >
-                  <Search className="h-5 w-5" />
-                </button>
+                  className="md:hidden w-9 h-9 hover:text-[#fafafa]"
+                  icon={<Search className="h-5 w-5" />}
+                />
               )}
               <DSDropdownMenu
                 trigger={

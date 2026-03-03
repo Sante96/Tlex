@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Volume2, Subtitles, Monitor, User, Save, Languages } from "lucide-react";
+import {
+  Volume2,
+  Subtitles,
+  Monitor,
+  User,
+  Save,
+  Languages,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSetLocale, getClientLocale, type Locale } from "@/lib/locale";
 import {
@@ -21,6 +28,7 @@ import {
   StatsCard,
   ScannerCard,
   UsersCard,
+  BackupCard,
 } from "@/components/settings";
 import { ChangePasswordModal } from "@/components/settings/change-password-modal";
 import { AddWorkerCard } from "@/components/settings/add-worker-card";
@@ -44,10 +52,13 @@ export default function SettingsPage() {
   const applyLocale = useSetLocale();
   const [currentLocale, setCurrentLocale] = useState<Locale>(getClientLocale);
 
-  const handleSetLocale = useCallback((loc: Locale) => {
-    setCurrentLocale(loc);
-    applyLocale(loc);
-  }, [applyLocale]);
+  const handleSetLocale = useCallback(
+    (loc: Locale) => {
+      setCurrentLocale(loc);
+      applyLocale(loc);
+    },
+    [applyLocale],
+  );
   const profilePrefs = useMemo<UserPreferences>(() => {
     const p = (profile?.preferences ?? {}) as Record<string, unknown>;
     return {
@@ -135,10 +146,18 @@ export default function SettingsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ita">{t("settings.audio.italian")}</SelectItem>
-                  <SelectItem value="eng">{t("settings.audio.english")}</SelectItem>
-                  <SelectItem value="jpn">{t("settings.audio.japanese")}</SelectItem>
-                  <SelectItem value="original">{t("settings.audio.original")}</SelectItem>
+                  <SelectItem value="ita">
+                    {t("settings.audio.italian")}
+                  </SelectItem>
+                  <SelectItem value="eng">
+                    {t("settings.audio.english")}
+                  </SelectItem>
+                  <SelectItem value="jpn">
+                    {t("settings.audio.japanese")}
+                  </SelectItem>
+                  <SelectItem value="original">
+                    {t("settings.audio.original")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -179,10 +198,18 @@ export default function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ita">{t("settings.audio.italian")}</SelectItem>
-                    <SelectItem value="eng">{t("settings.audio.english")}</SelectItem>
-                    <SelectItem value="jpn">{t("settings.audio.japanese")}</SelectItem>
-                    <SelectItem value="none">{t("settings.subtitles.none")}</SelectItem>
+                    <SelectItem value="ita">
+                      {t("settings.audio.italian")}
+                    </SelectItem>
+                    <SelectItem value="eng">
+                      {t("settings.audio.english")}
+                    </SelectItem>
+                    <SelectItem value="jpn">
+                      {t("settings.audio.japanese")}
+                    </SelectItem>
+                    <SelectItem value="none">
+                      {t("settings.subtitles.none")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -219,20 +246,21 @@ export default function SettingsPage() {
             title={t("settings.language.title")}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#fafafa]">{t("settings.language.description")}</span>
+              <span className="text-sm text-[#fafafa]">
+                {t("settings.language.description")}
+              </span>
               <div className="flex gap-2">
                 {(["it", "en"] as Locale[]).map((loc) => (
-                  <button
+                  <DSButton
                     key={loc}
+                    variant={currentLocale === loc ? "primary" : "secondary"}
                     onClick={() => handleSetLocale(loc)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      currentLocale === loc
-                        ? "bg-[#e5a00d] text-black"
-                        : "bg-white/5 border border-white/10 text-white/70 hover:bg-white/10"
-                    }`}
+                    className="!h-8 !px-3"
                   >
-                    {loc === "en" ? t("settings.language.english") : t("settings.language.italian")}
-                  </button>
+                    {loc === "en"
+                      ? t("settings.language.english")
+                      : t("settings.language.italian")}
+                  </DSButton>
                 ))}
               </div>
             </div>
@@ -244,32 +272,36 @@ export default function SettingsPage() {
           >
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">{t("settings.account.email")}</span>
+                <span className="text-sm text-[#fafafa]">
+                  {t("settings.account.email")}
+                </span>
                 <span className="text-sm text-[#a1a1aa]">
                   {user?.email || "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">{t("settings.account.role")}</span>
+                <span className="text-sm text-[#fafafa]">
+                  {t("settings.account.role")}
+                </span>
                 <span className="text-sm text-[#a1a1aa]">
                   {user?.is_admin ? t("common.admin") : t("common.user")}
                 </span>
               </div>
               <div className="h-px bg-[#27272a]" />
-              <button
+              <DSButton
+                variant="secondary"
                 onClick={() => setShowChangePassword(true)}
-                className="h-9 w-full rounded-md text-sm text-[#fafafa] transition-colors hover:bg-[#27272a]"
-                style={{ border: "1px solid #27272a" }}
+                className="w-full"
               >
                 {t("settings.account.changePassword")}
-              </button>
-              <a
-                href="/profiles"
-                className="flex items-center justify-center h-9 w-full rounded-md text-sm text-[#fafafa] transition-colors hover:bg-[#27272a]"
-                style={{ border: "1px solid #27272a" }}
+              </DSButton>
+              <DSButton
+                variant="secondary"
+                onClick={() => (window.location.href = "/profiles")}
+                className="w-full"
               >
                 {t("settings.account.manageProfiles")}
-              </a>
+              </DSButton>
               {user?.is_admin && registrationOpen !== null && (
                 <>
                   <div className="h-px bg-[#27272a]" />
@@ -333,6 +365,7 @@ export default function SettingsPage() {
               workers={workersData?.workers ?? []}
               onWorkersChanged={loadWorkersStatus}
             />
+            <BackupCard />
           </div>
         )}
       </div>

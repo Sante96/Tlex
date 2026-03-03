@@ -20,13 +20,12 @@ export function ExpandableOverview({
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > maxChars;
 
-  const displayText = isLong && !expanded ? text.slice(0, maxChars) + "…" : text;
+  const displayText =
+    isLong && !expanded ? text.slice(0, maxChars) + "…" : text;
 
   return (
     <div className={cn("max-w-3xl", className)}>
-      <p className="text-sm text-[#d4d4d8] leading-relaxed">
-        {displayText}
-      </p>
+      <p className="text-sm text-[#d4d4d8] leading-relaxed">{displayText}</p>
       {isLong && (
         <button
           onClick={() => setExpanded((v) => !v)}

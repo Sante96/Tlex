@@ -12,6 +12,8 @@ from app.database import async_session_maker
 settings = get_settings()
 
 REDIS_KEY_INTERVAL = "tlex:scanner:interval_hours"
+REDIS_KEY_BACKUP_INTERVAL = "tlex:backup:interval_hours"
+DEFAULT_BACKUP_INTERVAL_HOURS = 6
 
 
 class AutoScanScheduler:
@@ -162,3 +164,90 @@ class AutoScanScheduler:
 
 # Singleton instance
 auto_scan_scheduler = AutoScanScheduler()
+
+
+class BackupSyncScheduler:
+    """Scheduler for periodic backup channel message sync."""
+
+    def __init__(self):
+        self._running = False
+        self._last_sync: datetime | None = None
+        self._redis: redis.Redis | None = None
+
+    async def _get_redis(self) -> redis.Redis:
+        if self._redis is None:
+            self._redis = redis.from_url(settings.redis_url)
+        return self._redis
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def last_sync(self) -> datetime | None:
+        return self._last_sync
+
+    async def get_interval_hours(self) -> int:
+        try:
+            r = await self._get_redis()
+            value = await r.get(REDIS_KEY_BACKUP_INTERVAL)
+            return int(value) if value else DEFAULT_BACKUP_INTERVAL_HOURS
+        except Exception:
+            return DEFAULT_BACKUP_INTERVAL_HOURS
+
+    async def set_interval_hours(self, hours: int) -> None:
+        try:
+            r = await self._get_redis()
+            await r.set(REDIS_KEY_BACKUP_INTERVAL, str(hours))
+        except Exception as e:
+            logger.error(f"Failed to set backup interval in Redis: {e}")
+
+    async def start(self) -> None:
+        """Start the backup sync scheduler."""
+        if self._running:
+            return
+        self._running = True
+        logger.info("Backup sync scheduler started")
+
+        while self._running:
+            try:
+                interval_hours = await self.get_interval_hours()
+                if interval_hours <= 0:
+                    await asyncio.sleep(60)
+                    continue
+
+                await asyncio.sleep(interval_hours * 3600)
+
+                if not self._running:
+                    break
+
+                from app.services.backup.service import backup_service
+
+                logger.info("[BACKUP] Running scheduled sync...")
+                self._last_sync = datetime.now()
+                result = await backup_service.sync_all()
+                logger.info(
+                    f"[BACKUP] Scheduled sync done: {result.get('synced', 0)} new messages"
+                )
+
+            except asyncio.CancelledError:
+                logger.info("Backup sync scheduler cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Backup sync scheduler error: {e}")
+                await asyncio.sleep(60)
+
+    async def stop(self) -> None:
+        self._running = False
+
+    async def get_status(self) -> dict:
+        interval = await self.get_interval_hours()
+        return {
+            "enabled": interval > 0,
+            "running": self._running,
+            "interval_hours": interval,
+            "last_sync": self._last_sync.isoformat() if self._last_sync else None,
+        }
+
+
+backup_sync_scheduler = BackupSyncScheduler()

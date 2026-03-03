@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Trash2, X, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { DSButton, DSIconButton, DSInput } from "@/components/ds";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 import { deleteProfile, updateProfile, type Profile } from "@/lib/api";
@@ -77,13 +78,14 @@ export function EditProfileModal({
         }}
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-white">{t("profiles.edit.title")}</h2>
-          <button
+          <h2 className="text-xl font-semibold text-white">
+            {t("profiles.edit.title")}
+          </h2>
+          <DSIconButton
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            className="hover:text-white text-white/50"
+            icon={<X className="h-5 w-5" />}
+          />
         </div>
 
         {showDeleteConfirm ? (
@@ -100,28 +102,36 @@ export function EditProfileModal({
               <p className="text-red-400 text-sm text-center">{error}</p>
             )}
             <div className="flex gap-3">
-              <button
+              <DSButton
+                variant="ghost"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeleting}
-                className="flex-1 h-10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors border border-white/10"
+                className="flex-1"
               >
                 {t("common.cancel")}
-              </button>
-              <button
+              </DSButton>
+              <DSButton
+                variant="destructive"
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="flex-1 h-10 rounded-lg bg-red-500/90 hover:bg-red-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1"
+                icon={
+                  isDeleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : undefined
+                }
               >
-                {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isDeleting ? t("profiles.edit.deleting") : t("common.delete")}
-              </button>
+              </DSButton>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSave} className="flex flex-col gap-5">
             {/* Avatar picker */}
             <div>
-              <label className="block text-sm text-white/70 mb-3">{t("profiles.edit.avatar")}</label>
+              <label className="block text-sm text-white/70 mb-3">
+                {t("profiles.edit.avatar")}
+              </label>
               <div className="grid grid-cols-5 gap-2">
                 {PROFILE_AVATARS.map((avatar) => (
                   <ProfileAvatar
@@ -136,18 +146,14 @@ export function EditProfileModal({
               </div>
             </div>
 
-            {/* Name */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm text-white/70">{t("profiles.edit.name")}</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
-                maxLength={20}
-                required
-              />
-            </div>
+            <DSInput
+              label={t("profiles.edit.name")}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={20}
+              required
+            />
 
             {/* Kids toggle */}
             <label className="flex items-center gap-3 cursor-pointer">
@@ -164,7 +170,9 @@ export function EditProfileModal({
                 )}
               </div>
               <div>
-                <span className="text-sm text-white">{t("profiles.edit.kidsProfile")}</span>
+                <span className="text-sm text-white">
+                  {t("profiles.edit.kidsProfile")}
+                </span>
                 <p className="text-xs text-[#71717a]">
                   {t("profiles.edit.kidsDescription")}
                 </p>
@@ -178,30 +186,35 @@ export function EditProfileModal({
             {/* Actions */}
             <div className="flex gap-3 pt-1">
               {canDelete && (
-                <button
+                <DSButton
                   type="button"
+                  variant="ghost"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="h-10 w-10 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors border border-red-500/20 shrink-0"
+                  className="!h-10 !w-10 !px-0 text-red-400 hover:text-red-300 border border-red-500/20 shrink-0"
                   title={t("profiles.edit.deleteTitle")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                  icon={<Trash2 className="h-4 w-4" />}
+                />
               )}
-              <button
+              <DSButton
                 type="button"
+                variant="ghost"
                 onClick={onClose}
-                className="flex-1 h-10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors border border-white/10"
+                className="flex-1"
               >
                 {t("common.cancel")}
-              </button>
-              <button
+              </DSButton>
+              <DSButton
                 type="submit"
                 disabled={isSaving || !name.trim()}
-                className="flex-1 h-10 rounded-lg bg-[#e5a00d] hover:bg-[#f0b429] text-black text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1"
+                icon={
+                  isSaving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : undefined
+                }
               >
-                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isSaving ? t("profiles.edit.saving") : t("profiles.edit.save")}
-              </button>
+              </DSButton>
             </div>
           </form>
         )}

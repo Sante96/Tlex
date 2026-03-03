@@ -23,7 +23,9 @@ export function StatsCard({ data, loading, onRefresh }: StatsCardProps) {
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#fafafa]">{t("stats.data")}</span>
+          <span className="text-sm font-medium text-[#fafafa]">
+            {t("stats.data")}
+          </span>
           <DSButton
             variant="ghost"
             onClick={onRefresh}
@@ -38,21 +40,30 @@ export function StatsCard({ data, loading, onRefresh }: StatsCardProps) {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-2 text-center">
-            <Film className="w-4 h-4 mx-auto mb-1 text-blue-400" />
+          <DSCard
+            level="secondary"
+            className="p-2 rounded-lg shadow-none backdrop-blur-none gap-1 text-center"
+          >
+            <Film className="w-4 h-4 mx-auto text-blue-400" />
             <div className="text-lg font-bold">{data.media.movies}</div>
             <div className="text-xs text-[#71717a]">{t("home.movies")}</div>
-          </div>
-          <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-2 text-center">
-            <Tv className="w-4 h-4 mx-auto mb-1 text-purple-400" />
+          </DSCard>
+          <DSCard
+            level="secondary"
+            className="p-2 rounded-lg shadow-none backdrop-blur-none gap-1 text-center"
+          >
+            <Tv className="w-4 h-4 mx-auto text-purple-400" />
             <div className="text-lg font-bold">{data.media.episodes}</div>
             <div className="text-xs text-[#71717a]">{t("stats.episodes")}</div>
-          </div>
-          <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-2 text-center">
-            <Users className="w-4 h-4 mx-auto mb-1 text-green-400" />
+          </DSCard>
+          <DSCard
+            level="secondary"
+            className="p-2 rounded-lg shadow-none backdrop-blur-none gap-1 text-center"
+          >
+            <Users className="w-4 h-4 mx-auto text-green-400" />
             <div className="text-lg font-bold">{data.users.profiles}</div>
             <div className="text-xs text-[#71717a]">{t("stats.profiles")}</div>
-          </div>
+          </DSCard>
         </div>
 
         <div className="text-xs text-[#71717a] pt-1">

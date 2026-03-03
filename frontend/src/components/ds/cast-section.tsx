@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { DSIconButton } from "@/components/ds";
 import type { CastMember } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
@@ -52,32 +53,32 @@ function PeopleRow({
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-[#fafafa]">{title}</h2>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <DSIconButton
             onClick={() => scroll("left")}
             disabled={!canScrollLeft}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-[#27272a] transition-colors disabled:opacity-30"
-          >
-            <ChevronLeft
-              className={`h-[18px] w-[18px] ${canScrollLeft ? "text-[#fafafa]" : "text-[#71717a]"}`}
-            />
-          </button>
-          <button
-            type="button"
+            className="rounded-full bg-[#27272a] disabled:opacity-30"
+            icon={
+              <ChevronLeft
+                className={`h-[18px] w-[18px] ${canScrollLeft ? "text-[#fafafa]" : "text-[#71717a]"}`}
+              />
+            }
+          />
+          <DSIconButton
             onClick={() => scroll("right")}
             disabled={!canScrollRight}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-[#27272a] transition-colors disabled:opacity-30"
-          >
-            <ChevronRight
-              className={`h-[18px] w-[18px] ${canScrollRight ? "text-[#fafafa]" : "text-[#71717a]"}`}
-            />
-          </button>
+            className="rounded-full bg-[#27272a] disabled:opacity-30"
+            icon={
+              <ChevronRight
+                className={`h-[18px] w-[18px] ${canScrollRight ? "text-[#fafafa]" : "text-[#71717a]"}`}
+              />
+            }
+          />
         </div>
       </div>
 
       <div
         ref={scrollRef}
-        className="flex gap-6 overflow-x-auto scrollbar-hide py-2"
+        className="flex gap-6 overflow-x-auto scrollbar-hide py-2 px-1"
         style={{ scrollbarWidth: "none" }}
       >
         {members.map((member) => (

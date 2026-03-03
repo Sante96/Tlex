@@ -21,7 +21,9 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
     >
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#fafafa]">{t("workers.status")}</span>
+          <span className="text-sm font-medium text-[#fafafa]">
+            {t("workers.status")}
+          </span>
           <DSButton
             variant="ghost"
             onClick={onRefresh}
@@ -39,23 +41,36 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
           <>
             {/* Summary Stats */}
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3 text-center">
+              <DSCard
+                level="secondary"
+                className="p-3 rounded-lg shadow-none backdrop-blur-none gap-1 text-center"
+              >
                 <div className="text-2xl font-bold text-green-500">
                   {data.summary.active}
                 </div>
-                <div className="text-xs text-[#71717a]">{t("workers.active")}</div>
-              </div>
-              <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3 text-center">
+                <div className="text-xs text-[#71717a]">
+                  {t("workers.active")}
+                </div>
+              </DSCard>
+              <DSCard
+                level="secondary"
+                className="p-3 rounded-lg shadow-none backdrop-blur-none gap-1 text-center"
+              >
                 <div className="text-2xl font-bold text-yellow-500">
                   {data.summary.flood_wait}
                 </div>
-                <div className="text-xs text-[#71717a]">{t("workers.floodWait")}</div>
-              </div>
+                <div className="text-xs text-[#71717a]">
+                  {t("workers.floodWait")}
+                </div>
+              </DSCard>
             </div>
 
             {/* Client Pool Stats */}
-            <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3">
-              <div className="text-sm font-medium text-[#fafafa] mb-2">
+            <DSCard
+              level="secondary"
+              className="p-3 rounded-lg shadow-none backdrop-blur-none gap-2"
+            >
+              <div className="text-sm font-medium text-[#fafafa]">
                 {t("workers.clientPool")}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -63,7 +78,9 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                   <div className="text-lg font-bold text-blue-400">
                     {data.summary.total_clients}
                   </div>
-                  <div className="text-xs text-[#71717a]">{t("workers.total")}</div>
+                  <div className="text-xs text-[#71717a]">
+                    {t("workers.total")}
+                  </div>
                 </div>
                 <div>
                   <div className="text-lg font-bold text-orange-400">
@@ -75,19 +92,22 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                   <div className="text-lg font-bold text-green-400">
                     {data.summary.clients_available}
                   </div>
-                  <div className="text-xs text-[#71717a]">{t("workers.inactive")}</div>
+                  <div className="text-xs text-[#71717a]">
+                    {t("workers.inactive")}
+                  </div>
                 </div>
               </div>
-            </div>
+            </DSCard>
 
             <div className="h-px bg-[#27272a]" />
 
             {/* Worker List */}
             <div className="space-y-2">
               {data.workers.map((worker) => (
-                <div
+                <DSCard
                   key={worker.id}
-                  className="flex items-center justify-between bg-white/[0.05] border border-white/[0.06] rounded-lg p-3"
+                  level="secondary"
+                  className="p-3 rounded-lg shadow-none backdrop-blur-none flex-row items-center justify-between gap-0"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -124,7 +144,7 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                       </div>
                     )}
                   </div>
-                </div>
+                </DSCard>
               ))}
             </div>
           </>

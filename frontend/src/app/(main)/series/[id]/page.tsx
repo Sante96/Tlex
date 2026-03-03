@@ -247,9 +247,7 @@ export default function SeriesDetailPage() {
             {refreshing ? t("media.refreshing") : t("media.refresh")}
           </ActionButton>
         </div>
-        {series.overview && (
-          <ExpandableOverview text={series.overview} />
-        )}
+        {series.overview && <ExpandableOverview text={series.overview} />}
       </HeroBanner>
 
       {showTrailer && trailerKey && (
@@ -261,7 +259,9 @@ export default function SeriesDetailPage() {
 
       {/* Seasons */}
       <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
-        <h2 className="text-2xl font-semibold text-[#fafafa]">{t("media.seasons")}</h2>
+        <h2 className="text-2xl font-semibold text-[#fafafa]">
+          {t("media.seasons")}
+        </h2>
         <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
           {series.seasons.map((season) => {
             const seasonName =
@@ -378,11 +378,11 @@ function SeriesSkeleton() {
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div
               key={i}
-              className="flex flex-col items-center gap-2 shrink-0 w-[100px]"
+              className="flex flex-col items-center gap-2 shrink-0 w-[200px]"
             >
-              <div className="w-20 h-20 rounded-full bg-[#27272a]" />
-              <div className="h-3 w-16 bg-[#27272a] rounded" />
-              <div className="h-2.5 w-12 bg-[#27272a] rounded" />
+              <div className="w-[200px] h-[200px] rounded-full bg-[#27272a]" />
+              <div className="h-3 w-24 bg-[#27272a] rounded" />
+              <div className="h-2.5 w-16 bg-[#27272a] rounded" />
             </div>
           ))}
         </div>

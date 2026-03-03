@@ -13,6 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DSIconButton } from "@/components/ds";
 import { getSeriesDetails, type SeasonInfo } from "@/lib/api";
 import {
   getTmdbImageUrl,
@@ -254,30 +255,28 @@ export function EpisodePicker({
 
               {/* Scroll chevrons — desktop only */}
               <div className="hidden md:flex items-center gap-1">
-                <button
+                <DSIconButton
                   onClick={() => scroll("left")}
                   disabled={!canScrollLeft}
                   className={cn(
-                    "w-8 h-8 flex items-center justify-center rounded-full transition-colors",
+                    "rounded-full",
                     canScrollLeft
-                      ? "hover:bg-white/10 text-zinc-400"
+                      ? "text-zinc-400"
                       : "text-white/10 cursor-default",
                   )}
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
+                  icon={<ChevronLeft className="w-5 h-5" />}
+                />
+                <DSIconButton
                   onClick={() => scroll("right")}
                   disabled={!canScrollRight}
                   className={cn(
-                    "w-8 h-8 flex items-center justify-center rounded-full transition-colors",
+                    "rounded-full",
                     canScrollRight
-                      ? "hover:bg-white/10 text-zinc-400"
+                      ? "text-zinc-400"
                       : "text-white/10 cursor-default",
                   )}
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+                  icon={<ChevronRight className="w-5 h-5" />}
+                />
               </div>
             </div>
 
@@ -411,7 +410,9 @@ function EpisodeThumb({
             {title}
           </h3>
           <div className="flex items-center gap-1.5 text-[11px] text-white/60">
-            <span>{t("media.episode")} {episodeNumber}</span>
+            <span>
+              {t("media.episode")} {episodeNumber}
+            </span>
             {duration && (
               <>
                 <span className="text-white/30">·</span>

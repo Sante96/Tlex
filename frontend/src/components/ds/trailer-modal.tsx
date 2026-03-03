@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { DSIconButton } from "@/components/ds";
 
 interface TrailerModalProps {
   youtubeKey: string;
@@ -36,12 +37,11 @@ export function TrailerModal({ youtubeKey, onClose }: TrailerModalProps) {
           transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
+          <DSIconButton
             onClick={onClose}
-            className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 text-white/80 hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            className="absolute top-3 right-3 z-10 rounded-full bg-black/60 text-white/80 hover:text-white"
+            icon={<X className="h-4 w-4" />}
+          />
           <iframe
             src={`https://www.youtube.com/embed/${youtubeKey}?autoplay=1&rel=0`}
             title="Trailer"

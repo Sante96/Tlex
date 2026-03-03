@@ -133,10 +133,10 @@ class TMDBClient:
             content_rating=content_rating,
         )
 
-    async def get_person(self, person_id: int) -> dict | None:
+    async def get_person(self, person_id: int, language: str | None = None) -> dict | None:
         """Get person details, combined credits and social links from TMDB."""
-        details = await self._get(f"/person/{person_id}")
-        credits = await self._get(f"/person/{person_id}/combined_credits")
+        details = await self._get(f"/person/{person_id}", language=language)
+        credits = await self._get(f"/person/{person_id}/combined_credits", language=language)
         external = await self._get(f"/person/{person_id}/external_ids")
         if not details:
             return None
@@ -286,10 +286,10 @@ class TMDBClient:
     # --- Season / Episode ---
 
     async def get_season_details(
-        self, tv_id: int, season_number: int
+        self, tv_id: int, season_number: int, language: str | None = None
     ) -> dict | None:
         """Get season-specific details including poster."""
-        return await self._get(f"/tv/{tv_id}/season/{season_number}")
+        return await self._get(f"/tv/{tv_id}/season/{season_number}", language=language)
 
     async def get_season_episodes(
         self, tmdb_id: int, season_number: int, language: str | None = None
@@ -309,11 +309,11 @@ class TMDBClient:
         ]
 
     async def get_episode_details(
-        self, tmdb_id: int, season_number: int, episode_number: int
+        self, tmdb_id: int, season_number: int, episode_number: int, language: str | None = None
     ) -> EpisodeInfo | None:
         """Get specific episode details from TMDB."""
         ep = await self._get(
-            f"/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}"
+            f"/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}", language=language
         )
         if not ep:
             return None

@@ -152,8 +152,6 @@ export function Sidebar() {
         </div>
       )}
 
-
-
       {/* Nav Bottom */}
       <nav
         className={`flex flex-col gap-1 pt-3 ${isCollapsed ? "items-center" : ""}`}
@@ -180,7 +178,6 @@ export function Sidebar() {
           </p>
         </div>
       )}
-
     </motion.aside>
   );
 }

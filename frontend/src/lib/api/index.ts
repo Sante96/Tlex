@@ -126,5 +126,20 @@ export {
   getScanStatus as getScannerStatus,
   triggerScan as triggerManualScan,
   setAutoScanInterval,
+  getConfiguredChannels,
 } from "./scanner";
 export type { AutoScanStatus, ScanStatus } from "./scanner";
+
+// Backup
+export {
+  listBackupChannels,
+  createBackupChannel,
+  syncBackupChannel,
+  toggleBackupChannel,
+  deleteBackupChannel,
+  promoteBackupChannel,
+  setMaxFailures,
+  getBackupSyncInterval,
+  setBackupSyncInterval,
+} from "./backup";
+export type { BackupChannel, BackupTopic } from "./backup";

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, Eye, EyeOff } from "lucide-react";
+import { X, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { DSButton, DSIconButton, DSInput } from "@/components/ds";
 import { changePassword } from "@/lib/api";
 import { AxiosError } from "axios";
 
@@ -67,13 +68,14 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
         }}
       >
         <div className="flex justify-between items-start mb-6">
-          <h2 className="text-xl font-semibold text-white">{t("changePassword.title")}</h2>
-          <button
+          <h2 className="text-xl font-semibold text-white">
+            {t("changePassword.title")}
+          </h2>
+          <DSIconButton
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            className="hover:text-white text-white/50"
+            icon={<X className="h-5 w-5" />}
+          />
         </div>
 
         {success ? (
@@ -82,20 +84,17 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm text-white/70">{t("changePassword.current")}</label>
-              <div className="relative">
-                <input
-                  type={showCurrent ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full h-10 px-3 pr-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#e5a00d] transition-colors"
-                  required
-                />
+            <DSInput
+              label={t("changePassword.current")}
+              type={showCurrent ? "text" : "password"}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              suffix={
                 <button
                   type="button"
                   onClick={() => setShowCurrent(!showCurrent)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                  className="text-[#71717a] hover:text-[#fafafa] transition-colors"
                 >
                   {showCurrent ? (
                     <EyeOff className="h-4 w-4" />
@@ -103,24 +102,20 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
                     <Eye className="h-4 w-4" />
                   )}
                 </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm text-white/70">{t("changePassword.new")}</label>
-              <div className="relative">
-                <input
-                  type={showNew ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full h-10 px-3 pr-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#e5a00d] transition-colors"
-                  required
-                  minLength={6}
-                />
+              }
+            />
+            <DSInput
+              label={t("changePassword.new")}
+              type={showNew ? "text" : "password"}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={6}
+              suffix={
                 <button
                   type="button"
                   onClick={() => setShowNew(!showNew)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                  className="text-[#71717a] hover:text-[#fafafa] transition-colors"
                 >
                   {showNew ? (
                     <EyeOff className="h-4 w-4" />
@@ -128,40 +123,38 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
                     <Eye className="h-4 w-4" />
                   )}
                 </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm text-white/70">{t("changePassword.confirm")}</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#e5a00d] transition-colors"
-                required
-                minLength={6}
-              />
-            </div>
+              }
+            />
+            <DSInput
+              label={t("changePassword.confirm")}
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+            />
 
             {error && (
               <p className="text-red-400 text-sm text-center">{error}</p>
             )}
 
             <div className="flex items-center justify-end gap-3 pt-1">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors"
-              >
+              <DSButton type="button" variant="ghost" onClick={onClose}>
                 {t("common.cancel")}
-              </button>
-              <button
+              </DSButton>
+              <DSButton
                 type="submit"
                 disabled={loading}
-                className="px-5 py-2 rounded-lg text-sm font-semibold text-black bg-[#e5a00d] hover:bg-[#f0b429] transition-colors disabled:opacity-50"
+                icon={
+                  loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : undefined
+                }
               >
-                {loading ? t("changePassword.saving") : t("changePassword.submit")}
-              </button>
+                {loading
+                  ? t("changePassword.saving")
+                  : t("changePassword.submit")}
+              </DSButton>
             </div>
           </form>
         )}

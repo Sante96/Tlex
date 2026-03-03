@@ -12,6 +12,15 @@ export interface ScanStatus {
   is_scanning: boolean;
 }
 
+export async function getConfiguredChannels(): Promise<{
+  channel_ids: number[];
+}> {
+  const { data } = await api.get<{ channel_ids: number[] }>(
+    "/api/v1/scanner/channels",
+  );
+  return data;
+}
+
 export async function getAutoScanStatus(): Promise<AutoScanStatus> {
   const { data } = await api.get<AutoScanStatus>(
     "/api/v1/scanner/auto-scan/status",

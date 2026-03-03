@@ -36,47 +36,70 @@ async def populate_peer_cache(client: Client, parts: list[MediaPart]) -> None:
             logger.warning(f"Failed to populate peer cache via dialogs: {e}")
 
 
+async def _fetch_file_id_from_channel(
+    client: Client, channel_id: int, message_id: int
+) -> str | None:
+    """Fetch file_id from a specific channel/message pair."""
+    import asyncio
+
+    messages = await asyncio.wait_for(
+        client.get_messages(chat_id=channel_id, message_ids=message_id),
+        timeout=10.0,
+    )
+    if not messages:
+        return None
+    message = messages if not isinstance(messages, list) else messages[0]
+    doc = message.document or message.video
+    return doc.file_id if doc else None
+
+
 async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
     """
     Refresh expired file_id by fetching the original message.
+    Falls back to the backup channel if the main channel is unavailable.
 
     NOTE: Does NOT update DB to avoid race conditions during parallel streaming.
     The file_id is only cached in memory. DB will be updated during next scan.
     """
+    # --- Primary: fetch from main channel ---
     try:
-        import asyncio
-
         logger.debug(f"Refreshing file_id for part {part.part_index}")
-
-        messages = await asyncio.wait_for(
-            client.get_messages(
-                chat_id=part.channel_id,
-                message_ids=part.message_id,
-            ),
-            timeout=10.0,
+        new_file_id = await _fetch_file_id_from_channel(client, part.channel_id, part.message_id)
+        if new_file_id:
+            part.telegram_file_id = new_file_id
+            logger.debug(f"Refreshed file_id for part {part.part_index}")
+            return new_file_id
+        logger.error(f"No document in message {part.message_id}")
+    except Exception as e:
+        logger.warning(
+            f"Failed to refresh file_id from main channel for part {part.part_index}: {e}"
         )
 
-        if not messages:
-            logger.error(f"Message {part.message_id} not found")
-            return None
+    # --- Fallback: try backup channel ---
+    try:
+        from app.services.backup.service import backup_service
 
-        message = messages if not isinstance(messages, list) else messages[0]
-        doc = message.document or message.video
-
-        if not doc:
-            logger.error(f"No document in message {part.message_id}")
-            return None
-
-        new_file_id = doc.file_id
-
-        # Only update in-memory, no DB operations to avoid race conditions
-        part.telegram_file_id = new_file_id
-        logger.debug(f"Refreshed file_id for part {part.part_index}")
-        return new_file_id
-
+        loc = await backup_service.get_fallback_location(part.channel_id, part.message_id)
+        if loc:
+            backup_channel_id, backup_message_id = loc
+            logger.info(
+                f"[BACKUP] Trying backup channel {backup_channel_id} "
+                f"msg={backup_message_id} for part {part.part_index}"
+            )
+            fallback_file_id = await _fetch_file_id_from_channel(
+                client, backup_channel_id, backup_message_id
+            )
+            if fallback_file_id:
+                part.telegram_file_id = fallback_file_id
+                logger.info(f"[BACKUP] Fallback file_id obtained for part {part.part_index}")
+                return fallback_file_id
+            logger.error(f"[BACKUP] No document in backup message {backup_message_id}")
+        else:
+            logger.debug(f"No backup mapping found for channel={part.channel_id} msg={part.message_id}")
     except Exception as e:
-        logger.error(f"Failed to refresh file_id for part {part.part_index}: {e}")
-        return None
+        logger.error(f"[BACKUP] Fallback refresh failed for part {part.part_index}: {e}")
+
+    return None
 
 
 async def refresh_all_file_ids(

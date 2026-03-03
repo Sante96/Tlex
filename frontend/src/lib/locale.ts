@@ -2,7 +2,12 @@
 
 import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
-import { LOCALE_COOKIE, type Locale, locales, defaultLocale } from "@/i18n/config";
+import {
+  LOCALE_COOKIE,
+  type Locale,
+  locales,
+  defaultLocale,
+} from "@/i18n/config";
 
 export function getClientLocale(): Locale {
   const raw = Cookies.get(LOCALE_COOKIE);

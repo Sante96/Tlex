@@ -119,7 +119,8 @@ export default function PersonPage() {
           <div className="flex flex-col gap-1">
             {birthday && (
               <p className="text-sm text-[#71717a]">
-                <span className="text-[#a1a1aa]">{t("person.bornOn")}</span> {birthday}
+                <span className="text-[#a1a1aa]">{t("person.bornOn")}</span>{" "}
+                {birthday}
               </p>
             )}
             {person.place_of_birth && (
@@ -195,7 +196,8 @@ export default function PersonPage() {
           <h2 className="text-2xl font-semibold text-[#fafafa]">
             {t("person.filmography")}
             <span className="text-[#71717a] text-lg font-normal ml-2">
-              ({person.works.filter((w) => w.in_catalog).length} {t("person.inCatalog")})
+              ({person.works.filter((w) => w.in_catalog).length}{" "}
+              {t("person.inCatalog")})
             </span>
           </h2>
           <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
@@ -258,9 +260,7 @@ export default function PersonPage() {
         </section>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-[#71717a] text-sm">
-            {t("person.noFilmography")}
-          </p>
+          <p className="text-[#71717a] text-sm">{t("person.noFilmography")}</p>
         </div>
       )}
     </div>

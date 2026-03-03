@@ -97,6 +97,7 @@ async def list_series(
 
 @router.get("/{series_id}")
 async def get_series(
+    request: Request,
     session: DBSession,
     series_id: int,
     current_user: User | None = Depends(get_current_user_optional),
@@ -172,8 +173,9 @@ async def get_series(
         if override:
             seasons_data[season_num]["poster_path"] = override
         elif series.tmdb_id:
+            lang = request.headers.get("Accept-Language", "it-IT")
             season_details = await tmdb_client.get_season_details(
-                series.tmdb_id, season_num
+                series.tmdb_id, season_num, language=lang
             )
             if season_details and season_details.get("poster_path"):
                 seasons_data[season_num]["poster_path"] = season_details["poster_path"]
@@ -213,55 +215,6 @@ async def get_series(
     apply_series_override(detail_data, series_override)
 
     return detail_data
-
-
-@router.get("/{series_id}/season/{season_number}")
-async def get_season(session: DBSession, series_id: int, season_number: int) -> dict:
-    """Get all episodes for a specific season."""
-    query = (
-        select(Series)
-        .where(Series.id == series_id)
-        .options(selectinload(Series.episodes))
-    )
-    result = await session.execute(query)
-    series = result.scalar_one_or_none()
-
-    if not series:
-        raise HTTPException(status_code=404, detail="Series not found")
-
-    # Filter episodes for this season
-    episodes = [
-        ep for ep in series.episodes
-        if ep.season_number == season_number
-    ]
-    episodes.sort(key=lambda e: e.episode_number or 0)
-
-    # Get season poster from TMDB if available
-    if series.tmdb_id:
-        season_data = await tmdb_client.get_season_episodes(series.tmdb_id, season_number)
-        if season_data:
-            # Season poster would need another API call, use first ep thumbnail for now
-            pass
-
-    return {
-        "series_id": series.id,
-        "series_title": series.title,
-        "season_number": season_number,
-        "poster_path": episodes[0].poster_path if episodes else series.poster_path,
-        "backdrop_path": series.backdrop_path,
-        "episodes": [
-            {
-                "id": ep.id,
-                "episode_number": ep.episode_number,
-                "title": ep.title,
-                "overview": ep.overview,
-                "poster_path": ep.poster_path,
-                "duration_seconds": ep.duration_seconds,
-            }
-            for ep in episodes
-        ],
-        "episodes_count": len(episodes),
-    }
 
 
 @router.get("/{series_id}/cast")
@@ -349,72 +302,6 @@ async def get_series_tmdb_images(session: DBSession, series_id: int) -> dict:
         "stills": [],
         "posters": images.get("posters", []),
         "backdrops": images.get("backdrops", []),
-    }
-
-
-class SeasonPosterUpdateBody(BaseModel):
-    poster_path: str
-
-
-@router.patch("/{series_id}/season/{season_number}")
-async def update_season(
-    session: DBSession,
-    series_id: int,
-    season_number: int,
-    body: SeasonPosterUpdateBody,
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Update poster for a specific season (per-user override)."""
-    query = select(Series).where(Series.id == series_id)
-    result = await session.execute(query)
-    series = result.scalar_one_or_none()
-
-    if not series:
-        raise HTTPException(status_code=404, detail="Series not found")
-
-    # Get existing user override or create new one
-    override = await get_series_override(session, current_user, series_id)
-    existing_posters = dict((override.season_posters or {}) if override else {})
-    existing_posters[str(season_number)] = body.poster_path
-
-    await upsert_series_override(
-        session,
-        current_user,
-        series_id,
-        season_posters=existing_posters,
-    )
-
-    logger.info(
-        f"User {current_user.id} updated season {season_number} poster for series {series_id}"
-    )
-
-    return {
-        "series_id": series.id,
-        "season_number": season_number,
-        "poster_path": body.poster_path,
-    }
-
-
-@router.get("/{series_id}/season/{season_number}/tmdb-images")
-async def get_season_tmdb_images(
-    session: DBSession, series_id: int, season_number: int
-) -> dict:
-    """Fetch available images from TMDB for a specific season."""
-    query = select(Series).where(Series.id == series_id)
-    result = await session.execute(query)
-    series = result.scalar_one_or_none()
-
-    if not series:
-        raise HTTPException(status_code=404, detail="Series not found")
-
-    if not series.tmdb_id:
-        return {"stills": [], "posters": [], "backdrops": []}
-
-    images = await tmdb_client.get_season_images(series.tmdb_id, season_number)
-    return {
-        "stills": [],
-        "posters": images.get("posters", []),
-        "backdrops": [],
     }
 
 

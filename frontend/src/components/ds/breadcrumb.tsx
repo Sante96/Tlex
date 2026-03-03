@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DSButton } from "@/components/ds";
 
 interface BreadcrumbItem {
   label: string;
@@ -19,13 +20,13 @@ export function DSBreadcrumb({ items }: DSBreadcrumbProps) {
   return (
     <div className="flex items-center gap-2">
       {/* Back button */}
-      <button
+      <DSButton
         type="button"
+        variant="secondary"
         onClick={() => router.back()}
-        className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#27272a] hover:bg-[#3f3f46] transition-colors shrink-0"
-      >
-        <ChevronLeft className="h-5 w-5 text-[#fafafa]" />
-      </button>
+        className="!h-9 !w-9 !px-0 shrink-0"
+        icon={<ChevronLeft className="h-5 w-5" />}
+      />
 
       {/* Crumbs */}
       {items.map((item, i) => {

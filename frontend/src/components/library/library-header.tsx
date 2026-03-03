@@ -33,7 +33,9 @@ export function LibraryHeader({
     <div className="flex items-center justify-between mb-6">
       <div>
         <h1 className="text-2xl font-bold text-white">{title}</h1>
-        <p className="text-sm text-muted-foreground">{totalCount} {t("library.elements")}</p>
+        <p className="text-sm text-muted-foreground">
+          {totalCount} {t("library.elements")}
+        </p>
       </div>
 
       <div className="flex items-center gap-3">
@@ -44,8 +46,12 @@ export function LibraryHeader({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="title">{t("library.sortTitle")}</SelectItem>
-            <SelectItem value="date_added">{t("library.sortDateAdded")}</SelectItem>
-            <SelectItem value="release_date">{t("library.sortReleaseDate")}</SelectItem>
+            <SelectItem value="date_added">
+              {t("library.sortDateAdded")}
+            </SelectItem>
+            <SelectItem value="release_date">
+              {t("library.sortReleaseDate")}
+            </SelectItem>
           </SelectContent>
         </Select>
 

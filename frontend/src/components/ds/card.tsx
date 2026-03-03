@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils";
 
 const levels = {
   primary: "bg-[rgba(10,10,10,0.55)] border-white/[0.06]",
-  secondary: "bg-[rgba(20,20,22,0.6)] border-white/[0.06]",
-  tertiary: "bg-[rgba(30,30,34,0.65)] border-white/[0.08]",
+  secondary: "bg-white/[0.04] border-white/[0.06]",
+  tertiary: "bg-white/[0.06] border-white/[0.08]",
 } as const;
 
 type CardLevel = keyof typeof levels;

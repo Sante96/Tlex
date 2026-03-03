@@ -4,8 +4,8 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { DSButton } from "@/components/ds";
 import { ProfileAvatar, PROFILE_AVATARS } from "./profile-avatar";
-import { cn } from "@/lib/utils";
 
 interface AvatarPickerProps {
   currentAvatar?: string;
@@ -73,24 +73,16 @@ export function AvatarPicker({
         </div>
 
         <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 h-10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors border border-white/10"
-          >
+          <DSButton variant="ghost" onClick={onClose} className="flex-1">
             {t("common.cancel")}
-          </button>
-          <button
+          </DSButton>
+          <DSButton
             onClick={handleConfirm}
             disabled={!selected}
-            className={cn(
-              "flex-1 h-10 rounded-lg text-sm font-semibold transition-colors",
-              selected
-                ? "bg-[#e5a00d] text-black hover:bg-[#f0b429]"
-                : "bg-white/5 text-white/25 cursor-not-allowed border border-white/10",
-            )}
+            className="flex-1"
           >
             {t("common.confirm")}
-          </button>
+          </DSButton>
         </div>
       </div>
     </div>,

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { DSButton, DSInput } from "@/components/ds";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 
@@ -78,19 +79,15 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
             </div>
           </div>
 
-          {/* Name Input */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-white/70">{t("profiles.create.nameLabel")}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Es. Mario"
-              className="h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
-              maxLength={20}
-              autoFocus
-            />
-          </div>
+          <DSInput
+            label={t("profiles.create.nameLabel")}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Es. Mario"
+            maxLength={20}
+            autoFocus
+          />
 
           {/* Kids toggle */}
           <label className="flex items-center gap-3 cursor-pointer">
@@ -107,7 +104,9 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
               )}
             </div>
             <div>
-              <span className="text-sm text-white">{t("profiles.create.kidsProfile")}</span>
+              <span className="text-sm text-white">
+                {t("profiles.create.kidsProfile")}
+              </span>
               <p className="text-xs text-[#71717a]">
                 {t("profiles.create.kidsDescription")}
               </p>
@@ -118,22 +117,24 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">
-            <button
+            <DSButton
               type="button"
+              variant="ghost"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 h-10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors"
-              style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+              className="flex-1"
             >
               {t("common.cancel")}
-            </button>
-            <button
+            </DSButton>
+            <DSButton
               type="submit"
               disabled={isSubmitting || !name.trim()}
-              className="flex-1 h-10 rounded-lg bg-[#e5a00d] hover:bg-[#f0b429] text-black text-sm font-semibold transition-colors disabled:opacity-50"
+              className="flex-1"
             >
-              {isSubmitting ? t("profiles.create.loading") : t("profiles.create.submit")}
-            </button>
+              {isSubmitting
+                ? t("profiles.create.loading")
+                : t("profiles.create.submit")}
+            </DSButton>
           </div>
         </form>
       </div>

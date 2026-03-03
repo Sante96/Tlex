@@ -2,6 +2,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { DSInput, DSDatePicker } from "@/components/ds";
 import { Field } from "./field";
 
 interface GeneralTabProps {
@@ -25,19 +26,17 @@ export function GeneralTab({
   return (
     <div className="flex flex-col gap-5">
       <Field label={t("fieldTitle")}>
-        <input
+        <DSInput
           type="text"
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          className="w-full h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-[#e5a00d] transition-colors"
         />
       </Field>
       <Field label={t("releaseDate")}>
-        <input
-          type="date"
+        <DSDatePicker
           value={releaseDate}
-          onChange={(e) => onReleaseDateChange(e.target.value)}
-          className="w-48 h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-[#fafafa] outline-none focus:border-[#e5a00d] transition-colors"
+          onChange={onReleaseDateChange}
+          className="w-48"
         />
       </Field>
       <Field label={t("synopsis")}>
@@ -45,7 +44,7 @@ export function GeneralTab({
           value={overview}
           onChange={(e) => onOverviewChange(e.target.value)}
           rows={5}
-          className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-[#e5a00d] transition-colors resize-none"
+          className="w-full px-3 py-2.5 rounded-lg bg-[#18181b] border border-[#3f3f46] text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-[#e5a00d] focus:border-2 transition-colors resize-none"
         />
       </Field>
     </div>

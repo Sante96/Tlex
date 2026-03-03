@@ -33,7 +33,10 @@ export default function SeasonDetailPage() {
   const router = useRouter();
   const seriesId = Number(params.id);
   const seasonNumber = Number(params.season);
-  const seasonName = seasonNumber === 0 ? t("media.specials") : `${t("media.season")} ${seasonNumber}`;
+  const seasonName =
+    seasonNumber === 0
+      ? t("media.specials")
+      : `${t("media.season")} ${seasonNumber}`;
 
   const [series, setSeries] = useState<SeriesDetails | null>(null);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
@@ -143,15 +146,15 @@ export default function SeasonDetailPage() {
             {t("media.editSeason")}
           </ActionButton>
         </div>
-        {series.overview && (
-          <ExpandableOverview text={series.overview} />
-        )}
+        {series.overview && <ExpandableOverview text={series.overview} />}
       </HeroBanner>
 
       {/* Episodes */}
       <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-[#fafafa]">{t("media.episodes")}</h2>
+          <h2 className="text-2xl font-semibold text-[#fafafa]">
+            {t("media.episodes")}
+          </h2>
           <span className="text-sm text-[#a1a1aa]">
             {season.episodes_count} {t("media.episodes").toLowerCase()}
           </span>
@@ -261,9 +264,9 @@ function SeasonSkeleton() {
       </div>
       <div className="px-4 md:px-12 py-4 md:py-8">
         <div className="h-7 w-20 bg-[#27272a] rounded mb-6" />
-        <div className="flex flex-col gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-[120px] bg-[#18181b] rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="aspect-video bg-[#27272a] rounded-lg" />
           ))}
         </div>
       </div>

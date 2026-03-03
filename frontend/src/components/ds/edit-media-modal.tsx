@@ -2,8 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { X, Pencil, Image as ImageIcon, Monitor, Info } from "lucide-react";
+import {
+  X,
+  Pencil,
+  Image as ImageIcon,
+  Monitor,
+  Info,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DSButton, DSIconButton } from "@/components/ds";
 import {
   updateMediaItem,
   getMediaTmdbImages,
@@ -60,18 +68,50 @@ export function EditMediaModal({
   const t = useTranslations();
 
   const MEDIA_TABS: Tab[] = [
-    { id: "general", label: t("editMedia.general"), icon: <Pencil className="h-4 w-4" /> },
-    { id: "poster", label: t("editMedia.poster"), icon: <ImageIcon className="h-4 w-4" /> },
-    { id: "backdrop", label: t("editMedia.backdrop"), icon: <Monitor className="h-4 w-4" /> },
-    { id: "info", label: t("editMedia.info"), icon: <Info className="h-4 w-4" /> },
+    {
+      id: "general",
+      label: t("editMedia.general"),
+      icon: <Pencil className="h-4 w-4" />,
+    },
+    {
+      id: "poster",
+      label: t("editMedia.poster"),
+      icon: <ImageIcon className="h-4 w-4" />,
+    },
+    {
+      id: "backdrop",
+      label: t("editMedia.backdrop"),
+      icon: <Monitor className="h-4 w-4" />,
+    },
+    {
+      id: "info",
+      label: t("editMedia.info"),
+      icon: <Info className="h-4 w-4" />,
+    },
   ];
   const SERIES_TABS: Tab[] = [
-    { id: "general", label: t("editMedia.general"), icon: <Pencil className="h-4 w-4" /> },
-    { id: "poster", label: t("editMedia.poster"), icon: <ImageIcon className="h-4 w-4" /> },
-    { id: "backdrop", label: t("editMedia.backdrop"), icon: <Monitor className="h-4 w-4" /> },
+    {
+      id: "general",
+      label: t("editMedia.general"),
+      icon: <Pencil className="h-4 w-4" />,
+    },
+    {
+      id: "poster",
+      label: t("editMedia.poster"),
+      icon: <ImageIcon className="h-4 w-4" />,
+    },
+    {
+      id: "backdrop",
+      label: t("editMedia.backdrop"),
+      icon: <Monitor className="h-4 w-4" />,
+    },
   ];
   const SEASON_TABS: Tab[] = [
-    { id: "poster", label: t("editMedia.poster"), icon: <ImageIcon className="h-4 w-4" /> },
+    {
+      id: "poster",
+      label: t("editMedia.poster"),
+      icon: <ImageIcon className="h-4 w-4" />,
+    },
   ];
 
   const tabs =
@@ -194,12 +234,11 @@ export function EditMediaModal({
               {modalTitle}
             </h2>
           </div>
-          <button
+          <DSIconButton
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors shrink-0"
-          >
-            <X className="h-5 w-5 text-[#a1a1aa]" />
-          </button>
+            className="shrink-0"
+            icon={<X className="h-5 w-5 text-[#a1a1aa]" />}
+          />
         </div>
 
         {/* Mobile: horizontal tab bar */}
@@ -283,19 +322,18 @@ export function EditMediaModal({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-lg text-sm font-medium text-[#fafafa] hover:bg-white/10 transition-colors"
-          >
+          <DSButton variant="ghost" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
+          </DSButton>
+          <DSButton
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 rounded-lg text-sm font-semibold text-black bg-[#e5a00d] hover:bg-[#f0b429] active:bg-[#c89200] transition-colors disabled:opacity-50"
+            icon={
+              saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined
+            }
           >
             {saving ? t("common.saving") : t("common.saveChanges")}
-          </button>
+          </DSButton>
         </div>
       </div>
     </div>

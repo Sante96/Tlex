@@ -233,9 +233,7 @@ export default function MediaDetailPage() {
             {refreshing ? t("media.refreshing") : t("media.refresh")}
           </ActionButton>
         </div>
-        {media.overview && (
-          <ExpandableOverview text={media.overview} />
-        )}
+        {media.overview && <ExpandableOverview text={media.overview} />}
       </HeroBanner>
 
       {showTrailer && trailerKey && (
@@ -248,7 +246,9 @@ export default function MediaDetailPage() {
       {/* Similar Movies */}
       {similar.length > 0 && (
         <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
-          <h2 className="text-2xl font-semibold text-[#fafafa]">{t("media.similarMovies")}</h2>
+          <h2 className="text-2xl font-semibold text-[#fafafa]">
+            {t("media.similarMovies")}
+          </h2>
           <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
             {similar.map((item) => (
               <PosterCard

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Play, MoreVertical } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { DSIconButton } from "@/components/ds";
 import type { MediaItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
@@ -60,15 +61,14 @@ export function MediaPoster({ media, showTitle = true }: MediaPosterProps) {
           </div>
 
           {/* More menu button */}
-          <button
-            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70"
+          <DSIconButton
+            className="absolute top-2 right-2 rounded-full bg-black/50 hover:bg-black/70 text-white"
             onClick={(e) => {
               e.preventDefault();
               // TODO: Open context menu
             }}
-          >
-            <MoreVertical className="w-4 h-4 text-white" />
-          </button>
+            icon={<MoreVertical className="w-4 h-4" />}
+          />
         </div>
 
         {/* Watch progress indicator (top-left dot) */}
