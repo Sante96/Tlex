@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
+# Use copy mode so .venv can be copied between stages (hardlinks don't survive COPY --from)
+ENV UV_LINK_MODE=copy
 
 # Install build tools (needed for tgcrypto on Python 3.13)
 RUN apt-get update && apt-get install -y --no-install-recommends \
