@@ -3,19 +3,22 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface PosterCardProps {
   href: string;
   imageUrl: string | null;
   title: string;
   subtitle?: string;
-  /** Width in px, default 180 */
+  /** Width in px. When omitted together with height, card is fluid (w-full, aspect-[2/3]) */
   width?: number;
-  /** Height in px, default 270 */
+  /** Height in px. When omitted together with width, card is fluid */
   height?: number;
   /** Optional progress bar 0-100 */
   progress?: number;
   children?: React.ReactNode;
+  /** Extra classes for the outer wrapper. When provided in fluid mode, overrides the default w-full */
+  className?: string;
 }
 
 export function PosterCard({
@@ -23,21 +26,28 @@ export function PosterCard({
   imageUrl,
   title,
   subtitle,
-  width = 180,
-  height = 270,
+  width,
+  height,
   progress,
   children,
+  className,
 }: PosterCardProps) {
+  const isFluid = width === undefined && height === undefined;
+  const fixedW = width ?? 180;
+  const fixedH = height ?? 270;
+  const outerClass = cn(isFluid ? (className ?? "w-full") : className);
+
   return (
     <motion.div
       whileHover={{ scale: 1.05, y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      style={{ width }}
+      className={outerClass || undefined}
+      style={isFluid ? undefined : { width: fixedW }}
     >
       <Link href={href} className="group block">
         <div
-          className="relative bg-[#27272a] rounded-lg overflow-hidden"
-          style={{ width, height }}
+          className={`relative bg-[#27272a] rounded-lg overflow-hidden${isFluid ? " aspect-[2/3] w-full" : ""}`}
+          style={isFluid ? undefined : { width: fixedW, height: fixedH }}
         >
           {imageUrl ? (
             <Image src={imageUrl} alt={title} fill className="object-cover" />

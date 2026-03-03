@@ -1,6 +1,7 @@
 "use client";
 
-import { RotateCcw, RotateCw } from "lucide-react";
+import { RotateCcw, RotateCw, PictureInPicture2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   AnimatedPlayPause,
   AnimatedFullscreen,
@@ -53,6 +54,7 @@ interface PlayerControlsProps {
   onVolumeChange: (value: number) => void;
   onToggleMute: () => void;
   onToggleFullscreen: () => void;
+  onTogglePiP?: () => void;
   onBack: () => void;
   onAudioChange: (index: number) => void;
   onSubtitleChange: (index: number | null) => void;
@@ -87,6 +89,7 @@ export function PlayerControls({
   onVolumeChange,
   onToggleMute,
   onToggleFullscreen,
+  onTogglePiP,
   onBack,
   onAudioChange,
   onSubtitleChange,
@@ -99,6 +102,7 @@ export function PlayerControls({
   onToggleEpisodes,
   episodesButtonRef,
 }: PlayerControlsProps) {
+  const t = useTranslations();
   return (
     <div
       className={cn(
@@ -114,7 +118,7 @@ export function PlayerControls({
         >
           <AnimatedBack className="text-white" />
         </button>
-        <div className="flex-1 text-center px-4">
+        <div className="flex-1 min-w-0 text-center px-4">
           <h1 className="text-white font-medium text-base truncate drop-shadow-sm">
             {title}
           </h1>
@@ -222,18 +226,20 @@ export function PlayerControls({
             <div className="text-[13px] text-white/90 font-medium tabular-nums px-2 py-2 rounded-full hover:bg-white/10 transition-colors cursor-default">
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
-            <VolumeSlider
-              volume={volume}
-              isMuted={isMuted}
-              onVolumeChange={onVolumeChange}
-              onToggleMute={onToggleMute}
-            />
+            <div className="hidden md:flex">
+              <VolumeSlider
+                volume={volume}
+                isMuted={isMuted}
+                onVolumeChange={onVolumeChange}
+                onToggleMute={onToggleMute}
+              />
+            </div>
           </div>
 
           {/* Right — Controls */}
           <div className="flex items-center gap-0.5">
             {hasEpisodes && (
-              <PlayerTooltip label="Episodi">
+              <PlayerTooltip label={t("player.episodes")}>
                 <button
                   ref={episodesButtonRef}
                   onClick={onToggleEpisodes}
@@ -259,8 +265,19 @@ export function PlayerControls({
               onOpenChange={onSettingsOpenChange}
             />
 
+            {onTogglePiP && (
+              <PlayerTooltip label="Picture in Picture">
+                <button
+                  onClick={onTogglePiP}
+                  className="hidden md:flex p-2 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <PictureInPicture2 className="h-5 w-5 text-white" />
+                </button>
+              </PlayerTooltip>
+            )}
+
             <PlayerTooltip
-              label={isFullscreen ? "Esci da schermo intero" : "Schermo intero"}
+              label={isFullscreen ? t("player.exitFullscreen") : t("player.fullscreen")}
             >
               <button
                 onClick={onToggleFullscreen}

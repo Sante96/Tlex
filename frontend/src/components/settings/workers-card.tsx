@@ -1,7 +1,8 @@
 "use client";
 
 import { RefreshCw, Server } from "lucide-react";
-import { DSButton } from "@/components/ds";
+import { useTranslations } from "next-intl";
+import { DSButton, DSCard } from "@/components/ds";
 import type { WorkersStatusResponse } from "@/lib/api";
 
 interface WorkersCardProps {
@@ -11,19 +12,16 @@ interface WorkersCardProps {
 }
 
 export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
+  const t = useTranslations();
   return (
-    <div className="bg-zinc-900 rounded-lg p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <Server className="w-5 h-5 text-plex-orange" />
-        <div>
-          <h2 className="font-semibold">Workers</h2>
-          <p className="text-xs text-muted-foreground">Telegram streaming</p>
-        </div>
-      </div>
-
+    <DSCard
+      icon={<Server className="w-5 h-5 text-[#e5a00d]" />}
+      title={t("workers.title")}
+      description={t("workers.description")}
+    >
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#fafafa]">Stato</span>
+          <span className="text-sm font-medium text-[#fafafa]">{t("workers.status")}</span>
           <DSButton
             variant="ghost"
             onClick={onRefresh}
@@ -41,41 +39,43 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
           <>
             {/* Summary Stats */}
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-zinc-800 rounded-lg p-3 text-center">
+              <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-green-500">
                   {data.summary.active}
                 </div>
-                <div className="text-xs text-muted-foreground">Attivi</div>
+                <div className="text-xs text-[#71717a]">{t("workers.active")}</div>
               </div>
-              <div className="bg-zinc-800 rounded-lg p-3 text-center">
+              <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-yellow-500">
                   {data.summary.flood_wait}
                 </div>
-                <div className="text-xs text-muted-foreground">FloodWait</div>
+                <div className="text-xs text-[#71717a]">{t("workers.floodWait")}</div>
               </div>
             </div>
 
             {/* Client Pool Stats */}
-            <div className="bg-zinc-800 rounded-lg p-3">
-              <div className="text-sm font-medium mb-2">Client Pool</div>
+            <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3">
+              <div className="text-sm font-medium text-[#fafafa] mb-2">
+                {t("workers.clientPool")}
+              </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <div className="text-lg font-bold text-blue-500">
+                  <div className="text-lg font-bold text-blue-400">
                     {data.summary.total_clients}
                   </div>
-                  <div className="text-xs text-muted-foreground">Totali</div>
+                  <div className="text-xs text-[#71717a]">{t("workers.total")}</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-orange-500">
+                  <div className="text-lg font-bold text-orange-400">
                     {data.summary.clients_in_use}
                   </div>
-                  <div className="text-xs text-muted-foreground">In uso</div>
+                  <div className="text-xs text-[#71717a]">{t("common.on")}</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-green-500">
+                  <div className="text-lg font-bold text-green-400">
                     {data.summary.clients_available}
                   </div>
-                  <div className="text-xs text-muted-foreground">Liberi</div>
+                  <div className="text-xs text-[#71717a]">{t("workers.inactive")}</div>
                 </div>
               </div>
             </div>
@@ -87,7 +87,7 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
               {data.workers.map((worker) => (
                 <div
                   key={worker.id}
-                  className="flex items-center justify-between bg-zinc-800 rounded-lg p-3"
+                  className="flex items-center justify-between bg-white/[0.05] border border-white/[0.06] rounded-lg p-3"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -103,12 +103,12 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                       <div className="text-sm font-medium">
                         Worker #{worker.id}
                         {worker.is_premium && (
-                          <span className="ml-2 text-xs text-plex-orange">
+                          <span className="ml-2 text-xs text-[#e5a00d]">
                             Premium
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-[#71717a]">
                         ****{worker.phone}
                       </div>
                     </div>
@@ -130,6 +130,6 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
           </>
         )}
       </div>
-    </div>
+    </DSCard>
   );
 }

@@ -137,9 +137,9 @@ tlex/
 │ │ │ │ ├── avatar-picker.tsx # Modal selezione avatar (Portal)
 │ │ │ │ └── [shadcn...]
 │ │ │ ├── layout/ # 🆕 Layout components
-│ │ │ │ ├── sidebar.tsx # Sidebar laterale
-│ │ │ │ ├── top-bar.tsx # Search + user avatar
-│ │ │ │ └── main-layout.tsx
+│ │ │ │ ├── bottom-nav.tsx # 🆕 Mobile bottom navigation bar (md:hidden)
+│ │ │ │ ├── sidebar.tsx # hidden md:flex (desktop only)
+│ │ │ │ └── top-bar.tsx # Search + user avatar
 │ │ │ ├── library/ # 🆕 Library components
 │ │ │ │ ├── library-grid.tsx # Grid di poster
 │ │ │ │ ├── library-header.tsx # Filtri, sort
@@ -206,6 +206,7 @@ tlex/
 │ │ │ ├── profiles.ts # Profile CRUD
 │ │ │ ├── stream.ts # Stream URLs, subtitles, pool status, release
 │ │ │ └── workers.ts # Workers & system stats
+│ │ ├── breakpoints.ts # 🆕 BREAKPOINTS constants + useIsMobile/useBreakpoint hooks
 │ │ ├── format.ts # Formatting utilities
 │ │ └── utils.ts # General utilities
 │ └── public/

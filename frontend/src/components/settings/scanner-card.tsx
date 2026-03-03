@@ -1,7 +1,8 @@
 "use client";
 
 import { Clock, RefreshCw, Play, Loader2 } from "lucide-react";
-import { DSButton } from "@/components/ds";
+import { useTranslations } from "next-intl";
+import { DSButton, DSCard } from "@/components/ds";
 import {
   Select,
   SelectContent,
@@ -34,21 +35,16 @@ export function ScannerCard({
   onTriggerScan,
   onAutoScanChange,
 }: ScannerCardProps) {
+  const t = useTranslations();
   return (
-    <div className="bg-zinc-900 rounded-lg p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <Clock className="w-5 h-5 text-plex-orange" />
-        <div>
-          <h2 className="font-semibold">Scanner Automatico</h2>
-          <p className="text-xs text-muted-foreground">
-            Scansione periodica dei canali Telegram
-          </p>
-        </div>
-      </div>
-
+    <DSCard
+      icon={<Clock className="w-5 h-5 text-[#e5a00d]" />}
+      title={t("scanner.title")}
+      description={t("scanner.description")}
+    >
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[#fafafa]">Stato</span>
+          <span className="text-sm font-medium text-[#fafafa]">{t("scanner.status")}</span>
           <DSButton
             variant="ghost"
             onClick={onRefresh}
@@ -65,10 +61,10 @@ export function ScannerCard({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-sm font-medium text-[#fafafa]">
-              Intervallo auto-scan
+              {t("scanner.autoScan")}
             </span>
-            <p className="text-xs text-muted-foreground">
-              Frequenza scansione automatica
+            <p className="text-xs text-[#71717a]">
+              {t("scanner.interval")}
             </p>
           </div>
           <Select
@@ -86,23 +82,21 @@ export function ScannerCard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="0">Disattivo</SelectItem>
-              <SelectItem value="1">1 ora</SelectItem>
-              <SelectItem value="3">3 ore</SelectItem>
-              <SelectItem value="6">6 ore</SelectItem>
-              <SelectItem value="12">12 ore</SelectItem>
-              <SelectItem value="24">24 ore</SelectItem>
+              <SelectItem value="0">{t("scanner.intervalDisabled")}</SelectItem>
+              <SelectItem value="1">{t("scanner.interval1h")}</SelectItem>
+              <SelectItem value="3">{t("scanner.interval3h")}</SelectItem>
+              <SelectItem value="6">{t("scanner.interval6h")}</SelectItem>
+              <SelectItem value="12">{t("scanner.interval12h")}</SelectItem>
+              <SelectItem value="24">{t("scanner.interval24h")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {autoScanData && autoScanData.last_scan && (
-          <div className="bg-zinc-800 rounded-lg p-3">
-            <div className="text-sm text-muted-foreground mb-1">
-              Ultimo scan
-            </div>
+          <div className="bg-white/[0.05] border border-white/[0.06] rounded-lg p-3">
+            <div className="text-sm text-[#71717a] mb-1">{t("scanner.lastScan")}</div>
             <div className="text-lg font-bold">
-              {new Date(autoScanData.last_scan).toLocaleString("it-IT", {
+              {new Date(autoScanData.last_scan).toLocaleString(undefined, {
                 day: "2-digit",
                 month: "2-digit",
                 hour: "2-digit",
@@ -117,10 +111,10 @@ export function ScannerCard({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-sm font-medium text-[#fafafa]">
-              Scan manuale
+              {t("scanner.triggerScan")}
             </span>
-            <p className="text-xs text-muted-foreground">
-              Avvia una scansione immediata
+            <p className="text-xs text-[#71717a]">
+              {t("scanner.scanning")}
             </p>
           </div>
           <DSButton
@@ -135,11 +129,11 @@ export function ScannerCard({
             }
           >
             {triggering || scanStatus?.is_scanning
-              ? "Scansione..."
-              : "Avvia scan"}
+              ? t("scanner.scanning")
+              : t("scanner.triggerScan")}
           </DSButton>
         </div>
       </div>
-    </div>
+    </DSCard>
   );
 }

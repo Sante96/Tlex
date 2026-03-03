@@ -45,12 +45,12 @@ class TMDBClient:
         self._language = settings.tmdb_language
 
     async def _get(
-        self, path: str, *, use_language: bool = True, **extra
+        self, path: str, *, use_language: bool = True, language: str | None = None, **extra
     ) -> dict | None:
         """Shared HTTP GET with error handling."""
         params: dict = {"api_key": self._api_key}
         if use_language:
-            params["language"] = self._language
+            params["language"] = language or self._language
         params.update(extra)
         async with httpx.AsyncClient() as client:
             try:
@@ -66,13 +66,13 @@ class TMDBClient:
     # --- Movie ---
 
     async def search_movie(
-        self, title: str, year: int | None = None
+        self, title: str, year: int | None = None, language: str | None = None
     ) -> TMDBResult | None:
         """Search for a movie by title."""
         extra: dict = {"query": title}
         if year:
             extra["year"] = str(year)
-        data = await self._get("/search/movie", **extra)
+        data = await self._get("/search/movie", language=language, **extra)
         if not data or not data.get("results"):
             logger.warning(f"No TMDB results for movie: {title}")
             return None
@@ -96,9 +96,9 @@ class TMDBClient:
             media_type="movie",
         )
 
-    async def get_movie_full_details(self, tmdb_id: int) -> MovieDetails | None:
+    async def get_movie_full_details(self, tmdb_id: int, language: str | None = None) -> MovieDetails | None:
         """Get full movie details including genres, vote_average, content_rating."""
-        r = await self._get(f"/movie/{tmdb_id}", append_to_response="release_dates")
+        r = await self._get(f"/movie/{tmdb_id}", append_to_response="release_dates", language=language)
         if not r:
             return None
 
@@ -133,6 +133,41 @@ class TMDBClient:
             content_rating=content_rating,
         )
 
+    async def get_person(self, person_id: int) -> dict | None:
+        """Get person details, combined credits and social links from TMDB."""
+        details = await self._get(f"/person/{person_id}")
+        credits = await self._get(f"/person/{person_id}/combined_credits")
+        external = await self._get(f"/person/{person_id}/external_ids")
+        if not details:
+            return None
+        return {
+            "id": details.get("id"),
+            "name": details.get("name"),
+            "biography": details.get("biography"),
+            "birthday": details.get("birthday"),
+            "place_of_birth": details.get("place_of_birth"),
+            "profile_path": details.get("profile_path"),
+            "credits": credits.get("cast", []) + credits.get("crew", []) if credits else [],
+            "imdb_id": external.get("imdb_id") if external else None,
+            "instagram_id": external.get("instagram_id") if external else None,
+            "twitter_id": external.get("twitter_id") if external else None,
+        }
+
+    async def get_trailer(self, tmdb_id: int, media_type: str = "movie") -> str | None:
+        """Return YouTube key for the first official trailer, or None."""
+        endpoint = f"/{media_type}/{tmdb_id}/videos"
+        data = await self._get(endpoint)
+        if not data:
+            return None
+        videos = data.get("results", [])
+        for v in videos:
+            if v.get("site") == "YouTube" and v.get("type") == "Trailer" and v.get("official"):
+                return v.get("key")
+        for v in videos:
+            if v.get("site") == "YouTube" and v.get("type") == "Trailer":
+                return v.get("key")
+        return None
+
     async def get_movie_credits(self, tmdb_id: int) -> list[CastMember]:
         """Get cast and crew for a movie."""
         data = await self._get(f"/movie/{tmdb_id}/credits")
@@ -140,33 +175,34 @@ class TMDBClient:
             return []
 
         members: list[CastMember] = []
-        for p in data.get("cast", [])[:15]:
+        for p in data.get("cast", []):
             members.append(CastMember(
                 id=p["id"], name=p.get("name", ""), character=p.get("character"),
                 job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
             ))
+        seen_crew: set[str] = set()
         for p in data.get("crew", []):
-            if p.get("job") in ("Director", "Writer", "Screenplay"):
+            key = f"{p['id']}-{p.get('job')}"
+            if key not in seen_crew:
+                seen_crew.add(key)
                 members.append(CastMember(
                     id=p["id"], name=p.get("name", ""), character=None,
                     job=p.get("job"), profile_path=p.get("profile_path"),
                     order=100 + len(members),
                 ))
-                if len([m for m in members if m.job]) >= 5:
-                    break
         return members
 
     # --- TV ---
 
     async def search_tv(
-        self, title: str, season: int | None = None, episode: int | None = None
+        self, title: str, season: int | None = None, episode: int | None = None, language: str | None = None
     ) -> TMDBResult | None:
         """Search for a TV show by title."""
         clean_title = clean_tv_title(title)
         if clean_title != title:
             logger.debug(f"Cleaned TV title: '{title}' -> '{clean_title}'")
 
-        data = await self._get("/search/tv", query=clean_title)
+        data = await self._get("/search/tv", query=clean_title, language=language)
         if not data or not data.get("results"):
             logger.warning(f"No TMDB results for TV: {title}")
             return None
@@ -191,10 +227,10 @@ class TMDBClient:
             media_type="tv",
         )
 
-    async def get_tv_details(self, tmdb_id: int) -> TVDetails | None:
+    async def get_tv_details(self, tmdb_id: int, language: str | None = None) -> TVDetails | None:
         """Get detailed TV show info including genres, rating, content rating."""
         data = await self._get(
-            f"/tv/{tmdb_id}", append_to_response="content_ratings"
+            f"/tv/{tmdb_id}", append_to_response="content_ratings", language=language
         )
         if not data:
             return None
@@ -230,22 +266,21 @@ class TMDBClient:
             return []
 
         members: list[CastMember] = []
-        for p in data.get("cast", [])[:15]:
+        for p in data.get("cast", []):
             roles = p.get("roles", [])
             members.append(CastMember(
                 id=p["id"], name=p.get("name", ""),
                 character=roles[0].get("character") if roles else None,
                 job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
             ))
-        for p in data.get("crew", [])[:5]:
+        for p in data.get("crew", []):
             jobs = p.get("jobs", [])
             job = jobs[0].get("job") if jobs else None
-            if job in ("Director", "Writer", "Executive Producer", "Creator"):
-                members.append(CastMember(
-                    id=p["id"], name=p.get("name", ""), character=None,
-                    job=job, profile_path=p.get("profile_path"),
-                    order=100 + len(members),
-                ))
+            members.append(CastMember(
+                id=p["id"], name=p.get("name", ""), character=None,
+                job=job, profile_path=p.get("profile_path"),
+                order=100 + len(members),
+            ))
         return members
 
     # --- Season / Episode ---
@@ -257,10 +292,10 @@ class TMDBClient:
         return await self._get(f"/tv/{tv_id}/season/{season_number}")
 
     async def get_season_episodes(
-        self, tmdb_id: int, season_number: int
+        self, tmdb_id: int, season_number: int, language: str | None = None
     ) -> list[EpisodeInfo]:
         """Get all episodes for a season with thumbnails."""
-        data = await self._get(f"/tv/{tmdb_id}/season/{season_number}")
+        data = await self._get(f"/tv/{tmdb_id}/season/{season_number}", language=language)
         if not data:
             return []
         return [

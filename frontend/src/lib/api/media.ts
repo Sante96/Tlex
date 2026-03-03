@@ -97,6 +97,13 @@ export async function getMediaCast(id: number): Promise<CastMember[]> {
   return response.data;
 }
 
+export async function getMediaTrailer(id: number): Promise<string | null> {
+  const response = await api.get<{ key: string | null }>(
+    `/api/v1/media/${id}/trailer`,
+  );
+  return response.data.key;
+}
+
 export async function getMediaEpisodes(id: number): Promise<EpisodeInfo[]> {
   const response = await api.get<EpisodeInfo[]>(`/api/v1/media/${id}/episodes`);
   return response.data;

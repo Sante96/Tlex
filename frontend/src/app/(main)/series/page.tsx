@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { PosterCard } from "@/components/ds";
 import { getSeriesList, triggerScan, type SeriesItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
 export default function SeriesPage() {
+  const t = useTranslations();
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,12 +40,12 @@ export default function SeriesPage() {
   };
 
   return (
-    <div style={{ padding: "32px 48px" }}>
+    <div className="px-4 md:px-12 py-6 md:py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#fafafa]">Serie TV</h1>
-          <p className="text-sm text-[#a1a1aa]">{series.length} serie</p>
+          <h1 className="text-2xl font-bold text-[#fafafa]">{t("nav.series")}</h1>
+          <p className="text-sm text-[#a1a1aa]">{series.length} {t("nav.series").toLowerCase()}</p>
         </div>
         <button
           onClick={handleRefresh}
@@ -54,16 +56,16 @@ export default function SeriesPage() {
           <RefreshCw
             className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
           />
-          Aggiorna
+          {t("common.refresh")}
         </button>
       </div>
 
       {/* Grid */}
       {loading ? (
-        <div className="flex flex-wrap gap-5">
+        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="w-[180px] animate-pulse">
-              <div className="h-[270px] bg-[#27272a] rounded-lg" />
+            <div key={i} className="animate-pulse shrink-0 w-[130px] md:w-auto">
+              <div className="aspect-[2/3] bg-[#27272a] rounded-lg" />
               <div className="h-4 w-3/4 bg-[#27272a] rounded mt-2" />
               <div className="h-3 w-1/2 bg-[#27272a] rounded mt-1" />
             </div>
@@ -71,10 +73,10 @@ export default function SeriesPage() {
         </div>
       ) : series.length === 0 ? (
         <div className="text-center py-12 text-[#a1a1aa]">
-          Nessuna serie trovata. Avvia una scansione per importare contenuti.
+          {t("media.seriesEmpty")}
         </div>
       ) : (
-        <div className="flex flex-wrap gap-5">
+        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
           {series.map((s) => (
             <PosterCard
               key={s.id}
@@ -83,9 +85,10 @@ export default function SeriesPage() {
               title={s.title}
               subtitle={
                 s.seasons_count === 1
-                  ? "1 Stagione"
-                  : `${s.seasons_count} Stagioni`
+                  ? `1 ${t("media.season")}`
+                  : `${s.seasons_count} ${t("media.seasons")}`
               }
+              className="shrink-0 w-[130px] md:w-full"
             />
           ))}
         </div>

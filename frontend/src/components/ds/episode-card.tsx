@@ -47,7 +47,7 @@ export function EpisodeCard({
             e.stopPropagation();
             onEdit();
           }}
-          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-black/80"
+          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-black/80"
         >
           <Pencil className="h-3.5 w-3.5 text-white" />
         </button>

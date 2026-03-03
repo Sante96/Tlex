@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -373,6 +373,7 @@ async def analyze_media(
 
 @router.post("/{media_id}/refresh-metadata")
 async def refresh_metadata(
+    request: Request,
     session: DBSession,
     media_id: int,
     _admin=Depends(get_admin_user),
@@ -391,15 +392,16 @@ async def refresh_metadata(
         raise HTTPException(status_code=404, detail="Media not found")
 
     old_title = item.title
+    lang = request.headers.get("Accept-Language", "it-IT")
 
     if item.media_type == MediaType.MOVIE:
         # For movies: first find tmdb_id via search, then fetch full details
-        tmdb_result = await tmdb_client.search_movie(item.title)
+        tmdb_result = await tmdb_client.search_movie(item.title, language=lang)
         if not tmdb_result:
             raise HTTPException(
                 status_code=404, detail=f"No TMDB results found for: {item.title}"
             )
-        movie_details = await tmdb_client.get_movie_full_details(tmdb_result.tmdb_id)
+        movie_details = await tmdb_client.get_movie_full_details(tmdb_result.tmdb_id, language=lang)
         if movie_details:
             item.tmdb_id = movie_details.tmdb_id
             item.title = movie_details.title
@@ -422,7 +424,7 @@ async def refresh_metadata(
             item.backdrop_path = tmdb_result.backdrop_path
     else:
         tmdb_result = await tmdb_client.search_tv(
-            item.title, item.season_number, item.episode_number
+            item.title, item.season_number, item.episode_number, language=lang
         )
         if not tmdb_result:
             raise HTTPException(
@@ -480,6 +482,21 @@ async def get_media_cast(session: DBSession, media_id: int) -> list[dict]:
         }
         for c in credits
     ]
+
+
+@router.get("/{media_id}/trailer")
+async def get_media_trailer(session: DBSession, media_id: int) -> dict:
+    """Get YouTube trailer key for a media item from TMDB."""
+    query = select(MediaItem).where(MediaItem.id == media_id)
+    result = await session.execute(query)
+    item = result.scalar_one_or_none()
+
+    if not item or not item.tmdb_id:
+        return {"key": None}
+
+    media_type = "tv" if item.media_type == MediaType.EPISODE else "movie"
+    key = await tmdb_client.get_trailer(item.tmdb_id, media_type)
+    return {"key": key}
 
 
 class MediaUpdateBody(BaseModel):

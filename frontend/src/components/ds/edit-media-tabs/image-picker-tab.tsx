@@ -1,4 +1,7 @@
 /* ── Tab: Image Picker (Locandina / Sfondo) ───────────────────── */
+"use client";
+
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +25,7 @@ export function ImagePickerTab({
   loading,
   aspect,
 }: ImagePickerTabProps) {
+  const t = useTranslations("editMedia");
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -34,7 +38,7 @@ export function ImagePickerTab({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#71717a]">
         <ImageIcon className="h-10 w-10 mb-3 opacity-50" />
-        <p className="text-sm">Nessuna immagine disponibile da TMDB</p>
+        <p className="text-sm">{t("noImages")}</p>
       </div>
     );
   }
@@ -42,7 +46,7 @@ export function ImagePickerTab({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[#a1a1aa]">
-        Seleziona una {label.toLowerCase()} dalle immagini disponibili su TMDB
+        {t("selectImage", { label: label.toLowerCase() })}
       </p>
       <div
         className={cn(

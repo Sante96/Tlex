@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Phone, Trash2, Plus, Loader2, Crown } from "lucide-react";
 import { DSCard } from "@/components/ds";
 import {
@@ -22,6 +23,7 @@ export function AddWorkerCard({
   workers,
   onWorkersChanged,
 }: AddWorkerCardProps) {
+  const t = useTranslations();
   const [step, setStep] = useState<Step>("idle");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -33,7 +35,7 @@ export function AddWorkerCard({
     if (err instanceof AxiosError && err.response?.data?.detail) {
       return err.response.data.detail;
     }
-    return "Errore sconosciuto";
+    return t("workers.unknownError");
   };
 
   const handleSendCode = async () => {
@@ -140,7 +142,7 @@ export function AddWorkerCard({
         {/* Add worker form */}
         {step === "done" ? (
           <p className="text-green-400 text-sm text-center py-2">
-            Worker aggiunto con successo!
+            {t("workers.addSuccess")}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -162,7 +164,7 @@ export function AddWorkerCard({
                   className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-sm font-medium hover:bg-[#c98b0b] transition-colors disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" />
-                  Invia codice
+                  {t("workers.sendCode")}
                 </button>
               )}
               {step === "sending" && (
@@ -177,7 +179,7 @@ export function AddWorkerCard({
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Codice di verifica"
+                  placeholder={t("workers.verifyCodePlaceholder")}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, () => handleVerifyCode())}
@@ -193,7 +195,7 @@ export function AddWorkerCard({
                   {step === "verifying" ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    "Verifica"
+                    t("workers.verify")
                   )}
                 </button>
               </div>
@@ -203,12 +205,12 @@ export function AddWorkerCard({
             {step === "2fa" && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs text-[#a1a1aa]">
-                  Account con verifica in due passaggi (2FA)
+                  {t("workers.twoFaInfo")}
                 </p>
                 <div className="flex gap-2">
                   <input
                     type="password"
-                    placeholder="Password 2FA"
+                    placeholder={t("workers.twoFaPlaceholder")}
                     value={password2fa}
                     onChange={(e) => setPassword2fa(e.target.value)}
                     onKeyDown={(e) =>
@@ -222,7 +224,7 @@ export function AddWorkerCard({
                     disabled={!password2fa.trim()}
                     className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-sm font-medium hover:bg-[#c98b0b] transition-colors disabled:opacity-50"
                   >
-                    Conferma
+                    {t("common.confirm")}
                   </button>
                 </div>
               </div>

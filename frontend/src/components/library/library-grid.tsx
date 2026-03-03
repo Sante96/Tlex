@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { MediaPoster } from "./media-poster";
 import type { MediaItem } from "@/lib/api";
 
@@ -9,6 +10,7 @@ interface LibraryGridProps {
 }
 
 export function LibraryGrid({ items, loading }: LibraryGridProps) {
+  const t = useTranslations("library");
   if (loading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
@@ -26,7 +28,7 @@ export function LibraryGrid({ items, loading }: LibraryGridProps) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-muted-foreground">Nessun contenuto trovato</p>
+        <p className="text-muted-foreground">{t("noContent")}</p>
       </div>
     );
   }

@@ -1,14 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Settings,
-  Volume2,
-  Subtitles,
-  Monitor,
-  User,
-  Save,
-} from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Volume2, Subtitles, Monitor, User, Save, Languages } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useSetLocale, getClientLocale, type Locale } from "@/lib/locale";
 import {
   Select,
   SelectContent,
@@ -18,6 +13,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/auth-context";
+import { useProfile } from "@/contexts/profile-context";
+import { updateProfile } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import {
   WorkersCard,
   StatsCard,
@@ -38,14 +36,31 @@ interface UserPreferences {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { profile } = useProfile();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [preferences, setPreferences] = useState<UserPreferences>({
-    default_audio: "ita",
-    default_subtitle: "ita",
-    subtitles_enabled: true,
-    autoplay_next: true,
-  });
+  const toast = useToast();
+  const t = useTranslations();
+  const applyLocale = useSetLocale();
+  const [currentLocale, setCurrentLocale] = useState<Locale>(getClientLocale);
+
+  const handleSetLocale = useCallback((loc: Locale) => {
+    setCurrentLocale(loc);
+    applyLocale(loc);
+  }, [applyLocale]);
+  const profilePrefs = useMemo<UserPreferences>(() => {
+    const p = (profile?.preferences ?? {}) as Record<string, unknown>;
+    return {
+      default_audio: (p.default_audio as string) || "ita",
+      default_subtitle: (p.default_subtitle as string) || "ita",
+      subtitles_enabled: p.subtitles_enabled !== false,
+      autoplay_next: p.autoplay_next !== false,
+    };
+  }, [profile?.preferences]);
+
+  const [localPrefs, setLocalPrefs] = useState<UserPreferences | null>(null);
+  const preferences = localPrefs ?? profilePrefs;
+  const setPreferences = (p: UserPreferences) => setLocalPrefs(p);
 
   const {
     workersData,
@@ -71,33 +86,44 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      if (profile) {
+        await updateProfile(profile.id, {
+          preferences: preferences as unknown as Record<string, unknown>,
+        });
+      }
+      localStorage.setItem(
+        "pref_autoplay_next",
+        String(preferences.autoplay_next),
+      );
+      localStorage.setItem(
+        "pref_subtitles_enabled",
+        String(preferences.subtitles_enabled),
+      );
+      toast(t("settings.saved"), "success");
+    } catch {
+      toast(t("settings.saveError"), "error");
+    }
     setSaving(false);
   };
 
   return (
-    <div style={{ padding: "32px 48px" }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
-        <Settings className="w-8 h-8 text-[#e5a00d]" />
-        <h1 className="text-[28px] font-bold text-[#fafafa]">Impostazioni</h1>
-      </div>
-
+    <div className="px-4 md:px-12 py-6 md:py-8">
       {/* 2-column grid layout matching design */}
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Left Column */}
         <div className="flex-1 flex flex-col gap-6">
           {/* Audio */}
           <DSCard
             icon={<Volume2 className="w-5 h-5 text-[#e5a00d]" />}
-            title="Audio"
+            title={t("settings.audio.title")}
           >
             <div className="flex items-center justify-between">
               <label
                 htmlFor="audio-lang"
                 className="text-sm font-medium text-[#fafafa]"
               >
-                Lingua audio predefinita
+                {t("settings.audio.defaultLanguage")}
               </label>
               <Select
                 value={preferences.default_audio}
@@ -109,10 +135,10 @@ export default function SettingsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ita">Italiano</SelectItem>
-                  <SelectItem value="eng">English</SelectItem>
-                  <SelectItem value="jpn">日本語</SelectItem>
-                  <SelectItem value="original">Originale</SelectItem>
+                  <SelectItem value="ita">{t("settings.audio.italian")}</SelectItem>
+                  <SelectItem value="eng">{t("settings.audio.english")}</SelectItem>
+                  <SelectItem value="jpn">{t("settings.audio.japanese")}</SelectItem>
+                  <SelectItem value="original">{t("settings.audio.original")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -121,12 +147,12 @@ export default function SettingsPage() {
           {/* Sottotitoli */}
           <DSCard
             icon={<Subtitles className="w-5 h-5 text-[#e5a00d]" />}
-            title="Sottotitoli"
+            title={t("settings.subtitles.title")}
           >
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <label htmlFor="subtitles-enabled" className="text-[#fafafa]">
-                  Mostra sottotitoli automaticamente
+                  {t("settings.subtitles.autoShow")}
                 </label>
                 <Switch
                   id="subtitles-enabled"
@@ -141,7 +167,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <label htmlFor="subtitle-lang" className="text-[#fafafa]">
-                  Lingua sottotitoli predefinita
+                  {t("settings.subtitles.defaultLanguage")}
                 </label>
                 <Select
                   value={preferences.default_subtitle}
@@ -153,10 +179,10 @@ export default function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ita">Italiano</SelectItem>
-                    <SelectItem value="eng">English</SelectItem>
-                    <SelectItem value="jpn">日本語</SelectItem>
-                    <SelectItem value="none">Nessuno</SelectItem>
+                    <SelectItem value="ita">{t("settings.audio.italian")}</SelectItem>
+                    <SelectItem value="eng">{t("settings.audio.english")}</SelectItem>
+                    <SelectItem value="jpn">{t("settings.audio.japanese")}</SelectItem>
+                    <SelectItem value="none">{t("settings.subtitles.none")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -166,15 +192,15 @@ export default function SettingsPage() {
           {/* Riproduzione */}
           <DSCard
             icon={<Monitor className="w-5 h-5 text-[#e5a00d]" />}
-            title="Riproduzione"
+            title={t("settings.playback.title")}
           >
             <div className="flex items-center justify-between">
               <div>
                 <label htmlFor="autoplay" className="text-[#fafafa]">
-                  Autoplay episodio successivo
+                  {t("settings.playback.autoplayNext")}
                 </label>
                 <p className="text-xs text-[#71717a] mt-0.5">
-                  Riproduce automaticamente il prossimo episodio
+                  {t("settings.playback.autoplayDescription")}
                 </p>
               </div>
               <Switch
@@ -189,20 +215,44 @@ export default function SettingsPage() {
 
           {/* Account */}
           <DSCard
+            icon={<Languages className="w-5 h-5 text-[#e5a00d]" />}
+            title={t("settings.language.title")}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#fafafa]">{t("settings.language.description")}</span>
+              <div className="flex gap-2">
+                {(["it", "en"] as Locale[]).map((loc) => (
+                  <button
+                    key={loc}
+                    onClick={() => handleSetLocale(loc)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      currentLocale === loc
+                        ? "bg-[#e5a00d] text-black"
+                        : "bg-white/5 border border-white/10 text-white/70 hover:bg-white/10"
+                    }`}
+                  >
+                    {loc === "en" ? t("settings.language.english") : t("settings.language.italian")}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </DSCard>
+
+          <DSCard
             icon={<User className="w-5 h-5 text-[#e5a00d]" />}
-            title="Account"
+            title={t("settings.account.title")}
           >
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">Email</span>
+                <span className="text-sm text-[#fafafa]">{t("settings.account.email")}</span>
                 <span className="text-sm text-[#a1a1aa]">
                   {user?.email || "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">Ruolo</span>
+                <span className="text-sm text-[#fafafa]">{t("settings.account.role")}</span>
                 <span className="text-sm text-[#a1a1aa]">
-                  {user?.is_admin ? "Amministratore" : "Utente"}
+                  {user?.is_admin ? t("common.admin") : t("common.user")}
                 </span>
               </div>
               <div className="h-px bg-[#27272a]" />
@@ -211,14 +261,14 @@ export default function SettingsPage() {
                 className="h-9 w-full rounded-md text-sm text-[#fafafa] transition-colors hover:bg-[#27272a]"
                 style={{ border: "1px solid #27272a" }}
               >
-                Cambia password
+                {t("settings.account.changePassword")}
               </button>
               <a
                 href="/profiles"
                 className="flex items-center justify-center h-9 w-full rounded-md text-sm text-[#fafafa] transition-colors hover:bg-[#27272a]"
                 style={{ border: "1px solid #27272a" }}
               >
-                Gestisci profili
+                {t("settings.account.manageProfiles")}
               </a>
               {user?.is_admin && registrationOpen !== null && (
                 <>
@@ -226,12 +276,12 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-sm text-[#fafafa]">
-                        Registrazioni
+                        {t("settings.account.registrations")}
                       </span>
                       <p className="text-xs text-[#71717a] mt-0.5">
                         {registrationOpen
-                          ? "Nuovi utenti possono registrarsi"
-                          : "Registrazioni chiuse"}
+                          ? t("settings.account.registrationsOpen")
+                          : t("settings.account.registrationsClosed")}
                       </p>
                     </div>
                     <Switch
@@ -294,9 +344,14 @@ export default function SettingsPage() {
           disabled={saving}
           icon={<Save className="w-4 h-4" />}
         >
-          {saving ? "Salvataggio..." : "Salva preferenze"}
+          {saving ? t("settings.saving") : t("settings.save")}
         </DSButton>
       </div>
+
+      {/* Credit — mobile only (desktop has it in the sidebar) */}
+      <p className="md:hidden text-[10px] text-[#3f3f46] text-center pt-6 tracking-wide select-none">
+        made by Sante
+      </p>
 
       {showChangePassword && (
         <ChangePasswordModal onClose={() => setShowChangePassword(false)} />

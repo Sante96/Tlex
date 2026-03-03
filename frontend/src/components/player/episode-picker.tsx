@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
+import { useIsMobile } from "@/lib/breakpoints";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -37,10 +39,12 @@ export function EpisodePicker({
   onEpisodeSelect,
   toggleButtonRef,
 }: EpisodePickerProps) {
+  const t = useTranslations();
   const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
   const [activeSeason, setActiveSeason] = useState(currentSeason);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isMobile = useIsMobile();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -157,16 +161,51 @@ export function EpisodePicker({
       {open && (
         <motion.div
           ref={panelRef}
-          className="absolute top-0 left-0 right-0 z-30"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -20, opacity: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          className={
+            isMobile
+              ? "absolute bottom-0 left-0 right-0 z-30"
+              : "absolute top-0 left-0 right-0 z-30"
+          }
+          initial={isMobile ? { y: "100%" } : { y: -20, opacity: 0 }}
+          animate={isMobile ? { y: 0 } : { y: 0, opacity: 1 }}
+          exit={isMobile ? { y: "100%" } : { y: -20, opacity: 0 }}
+          transition={{
+            duration: isMobile ? 0.3 : 0.2,
+            ease: [0.4, 0, 0.2, 1],
+          }}
+          {...(isMobile
+            ? {
+                drag: "y" as const,
+                dragConstraints: { top: 0, bottom: 0 },
+                dragElastic: { top: 0, bottom: 0.3 },
+                onDragEnd: (
+                  _: unknown,
+                  info: { offset: { y: number }; velocity: { y: number } },
+                ) => {
+                  if (info.offset.y > 80 || info.velocity.y > 400) onClose();
+                },
+              }
+            : {})}
         >
           <div
-            className="mx-4 mt-4 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xs"
-            style={{ backgroundColor: "rgba(10, 10, 10, 0.6)" }}
+            className={
+              isMobile
+                ? "rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.6)]"
+                : "mx-4 mt-4 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xs"
+            }
+            style={{
+              backgroundColor: isMobile
+                ? "rgba(14, 14, 16, 0.98)"
+                : "rgba(10, 10, 10, 0.6)",
+            }}
           >
+            {/* Handle bar on mobile */}
+            {isMobile && (
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-white/20" />
+              </div>
+            )}
+
             {/* Header: season dropdown (left) + scroll chevrons (right) */}
             <div className="flex items-center justify-between px-4 py-2.5">
               {/* Season dropdown */}
@@ -175,7 +214,7 @@ export function EpisodePicker({
                   onClick={() => setDropdownOpen((v) => !v)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors"
                 >
-                  Stagione {activeSeason}
+                  {t("media.season")} {activeSeason}
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 text-zinc-400 transition-transform",
@@ -203,7 +242,7 @@ export function EpisodePicker({
                             : "text-white hover:bg-white/[0.08]",
                         )}
                       >
-                        Stagione {season.season_number}
+                        {t("media.season")} {season.season_number}
                         <span className="ml-auto text-[11px] text-zinc-500">
                           {season.episodes_count} ep
                         </span>
@@ -213,8 +252,8 @@ export function EpisodePicker({
                 )}
               </div>
 
-              {/* Scroll chevrons (always rendered, disabled when can't scroll) */}
-              <div className="flex items-center gap-1">
+              {/* Scroll chevrons — desktop only */}
+              <div className="hidden md:flex items-center gap-1">
                 <button
                   onClick={() => scroll("left")}
                   disabled={!canScrollLeft}
@@ -274,7 +313,7 @@ export function EpisodePicker({
                   </div>
                 ) : !currentSeasonData?.episodes.length ? (
                   <div className="w-full text-center py-8 text-zinc-500 text-sm">
-                    Nessun episodio
+                    {t("media.noEpisodes")}
                   </div>
                 ) : (
                   currentSeasonData.episodes.map((ep) => {
@@ -327,12 +366,13 @@ function EpisodeThumb({
   isCurrent: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations();
   return (
     <button
       data-current={isCurrent ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "flex-shrink-0 w-80 rounded-xl overflow-hidden transition-all group cursor-pointer",
+        "flex-shrink-0 w-44 md:w-80 rounded-xl overflow-hidden transition-all group cursor-pointer",
         isCurrent && "ring-2 ring-plex-orange",
       )}
     >
@@ -371,7 +411,7 @@ function EpisodeThumb({
             {title}
           </h3>
           <div className="flex items-center gap-1.5 text-[11px] text-white/60">
-            <span>Episodio {episodeNumber}</span>
+            <span>{t("media.episode")} {episodeNumber}</span>
             {duration && (
               <>
                 <span className="text-white/30">·</span>

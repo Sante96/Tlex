@@ -5,25 +5,27 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Home, Heart, Film, Tv, Settings, Menu, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { DSNavItem } from "@/components/ds";
+import pkg from "../../../package.json";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { getScannerStatus } from "@/lib/api";
 
 const SIDEBAR_EXPANDED = 260;
 const SIDEBAR_COLLAPSED = 72;
 
-const navItems = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Watchlist", href: "/watchlist", icon: Heart },
+const navRoutes = [
+  { key: "nav.home", href: "/", icon: Home },
+  { key: "nav.watchlist", href: "/watchlist", icon: Heart },
 ];
 
-const libraryItems = [
-  { label: "Film", href: "/movies", icon: Film },
-  { label: "Serie TV", href: "/series", icon: Tv },
+const libraryRoutes = [
+  { key: "nav.movies", href: "/movies", icon: Film },
+  { key: "nav.series", href: "/series", icon: Tv },
 ];
 
-const bottomItems = [
-  { label: "Impostazioni", href: "/settings", icon: Settings },
+const bottomRoutes = [
+  { key: "nav.settings", href: "/settings", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -34,6 +36,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const [isScanning, setIsScanning] = useState(false);
+  const t = useTranslations();
 
   const sidebarWidth = isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
@@ -52,7 +55,7 @@ export function Sidebar() {
 
   return (
     <motion.aside
-      className="fixed left-0 top-0 h-screen flex flex-col z-40 overflow-hidden"
+      className="hidden md:flex fixed left-0 top-0 h-screen flex-col z-40 overflow-hidden"
       animate={{ width: sidebarWidth }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       style={{
@@ -88,12 +91,12 @@ export function Sidebar() {
       <nav
         className={`flex flex-col gap-1 pt-4 ${isCollapsed ? "items-center" : ""}`}
       >
-        {navItems.map((item) => (
+        {navRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
             icon={<item.icon className="h-5 w-5" />}
-            label={item.label}
+            label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={isCollapsed}
           />
@@ -109,7 +112,7 @@ export function Sidebar() {
       {/* Library label */}
       {!isCollapsed && (
         <span className="text-[11px] font-semibold uppercase text-[#52525b] tracking-[1px]">
-          Librerie
+          {t("nav.libraries")}
         </span>
       )}
 
@@ -117,12 +120,12 @@ export function Sidebar() {
       <nav
         className={`flex flex-col gap-1 ${isCollapsed ? "items-center" : "mt-2"}`}
       >
-        {libraryItems.map((item) => (
+        {libraryRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
             icon={<item.icon className="h-5 w-5" />}
-            label={item.label}
+            label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={isCollapsed}
           />
@@ -138,38 +141,46 @@ export function Sidebar() {
           className={`flex items-center rounded-[10px] mb-3 bg-[#e5a00d]/10 border border-[#e5a00d]/30 ${
             isCollapsed ? "justify-center w-11 h-11" : "gap-2 px-3.5 py-2"
           }`}
-          title={isCollapsed ? "Scansione..." : undefined}
+          title={isCollapsed ? t("home.scanning") : undefined}
         >
           <Loader2 className="h-4 w-4 animate-spin text-[#e5a00d] shrink-0" />
           {!isCollapsed && (
             <span className="text-xs font-medium text-[#e5a00d]">
-              Scansione...
+              {t("home.scanning")}
             </span>
           )}
         </div>
       )}
 
-      {/* Divider */}
-      <div
-        className="h-px bg-[#27272a]"
-        style={{ width: isCollapsed ? 40 : "100%", alignSelf: "center" }}
-      />
+
 
       {/* Nav Bottom */}
       <nav
         className={`flex flex-col gap-1 pt-3 ${isCollapsed ? "items-center" : ""}`}
       >
-        {bottomItems.map((item) => (
+        {bottomRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
             icon={<item.icon className="h-5 w-5" />}
-            label={item.label}
+            label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={isCollapsed}
           />
         ))}
       </nav>
+      {/* Credit */}
+      {!isCollapsed && (
+        <div className="flex flex-row items-center justify-between pt-3 select-none">
+          <p className="text-[10px] text-[#3f3f46] tracking-wide">
+            {t("common.madeBy")}
+          </p>
+          <p className="text-[10px] text-[#3f3f46] tracking-wide">
+            v{pkg.version}
+          </p>
+        </div>
+      )}
+
     </motion.aside>
   );
 }

@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { PoolWarning } from "@/hooks/player/use-pool-status";
 
 interface PoolWarningOverlayProps {
@@ -9,16 +10,14 @@ interface PoolWarningOverlayProps {
   poolPressure?: number;
 }
 
-const MESSAGES: Record<NonNullable<PoolWarning>, string> = {
-  no_clients: "Nessun client disponibile. Lo streaming potrebbe non avviarsi.",
-  high_pressure:
-    "Pool client quasi pieno. Lo streaming potrebbe essere più lento.",
-};
-
 export function PoolWarningOverlay({
   warning,
   poolPressure,
 }: PoolWarningOverlayProps) {
+  const t = useTranslations();
+  const message = warning === "no_clients"
+    ? t("player.noClientsWarning")
+    : t("player.highPressureWarning");
   return (
     <AnimatePresence>
       {warning && (
@@ -37,7 +36,7 @@ export function PoolWarningOverlay({
         >
           <AlertTriangle className="w-4 h-4 text-white shrink-0" />
           <span className="text-white font-medium">
-            {MESSAGES[warning]}
+            {message}
             {poolPressure !== undefined && warning === "high_pressure" && (
               <span className="ml-1 opacity-75">
                 ({Math.round(poolPressure * 100)}%)

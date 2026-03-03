@@ -20,3 +20,4 @@ export { DSBreadcrumb } from "./breadcrumb";
 export { DetailPageLayout } from "./detail-page-layout";
 export { EditMediaModal } from "./edit-media-modal";
 export type { EntityType } from "./edit-media-modal";
+export { TrailerModal } from "./trailer-modal";

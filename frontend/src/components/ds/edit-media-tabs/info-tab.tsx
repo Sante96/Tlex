@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Info } from "lucide-react";
 
 interface StreamData {
@@ -12,6 +13,7 @@ interface StreamData {
 }
 
 export function InfoTab({ mediaId }: { mediaId: number }) {
+  const t = useTranslations("editMedia");
   const [streams, setStreams] = useState<StreamData[]>([]);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function InfoTab({ mediaId }: { mediaId: number }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#71717a]">
         <Info className="h-10 w-10 mb-3 opacity-50" />
-        <p className="text-sm">Nessuna informazione tecnica disponibile</p>
+        <p className="text-sm">{t("noInfo")}</p>
       </div>
     );
   }
@@ -49,7 +51,7 @@ export function InfoTab({ mediaId }: { mediaId: number }) {
         <StreamGroup label="Audio" streams={audioStreams} />
       )}
       {subtitleStreams.length > 0 && (
-        <StreamGroup label="Sottotitoli" streams={subtitleStreams} />
+        <StreamGroup label={t("subtitles")} streams={subtitleStreams} />
       )}
     </div>
   );

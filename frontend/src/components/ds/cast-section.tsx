@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { CastMember } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
@@ -10,7 +11,13 @@ interface CastSectionProps {
   cast: CastMember[];
 }
 
-export function CastSection({ cast }: CastSectionProps) {
+function PeopleRow({
+  title,
+  members,
+}: {
+  title: string;
+  members: CastMember[];
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -27,25 +34,23 @@ export function CastSection({ cast }: CastSectionProps) {
     const el = scrollRef.current;
     if (el) el.addEventListener("scroll", checkScroll);
     return () => el?.removeEventListener("scroll", checkScroll);
-  }, [cast]);
+  }, [members]);
 
   const scroll = (direction: "left" | "right") => {
     const el = scrollRef.current;
     if (!el) return;
-    const amount = 400;
     el.scrollBy({
-      left: direction === "left" ? -amount : amount,
+      left: direction === "left" ? -400 : 400,
       behavior: "smooth",
     });
   };
 
-  if (!cast.length) return null;
+  if (!members.length) return null;
 
   return (
     <section className="flex flex-col gap-4">
-      {/* Header with chevrons */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-[#fafafa]">Cast</h2>
+        <h2 className="text-2xl font-semibold text-[#fafafa]">{title}</h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -70,43 +75,60 @@ export function CastSection({ cast }: CastSectionProps) {
         </div>
       </div>
 
-      {/* Scrollable cast grid */}
       <div
         ref={scrollRef}
-        className="flex gap-5 overflow-x-auto scrollbar-hide"
+        className="flex gap-6 overflow-x-auto scrollbar-hide py-2"
         style={{ scrollbarWidth: "none" }}
       >
-        {cast.map((member) => (
-          <div
-            key={member.id}
-            className="flex flex-col items-center gap-2 shrink-0 w-[100px]"
+        {members.map((member) => (
+          <Link
+            key={`${member.id}-${member.character ?? member.job}`}
+            href={`/person/${member.id}`}
+            className="flex flex-col items-center gap-2 shrink-0 w-[200px] group"
           >
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-[#27272a] shrink-0">
+            <div
+              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-[#e5a00d] transition-all duration-200 group-hover:scale-105"
+              style={{ boxShadow: "none" }}
+            >
               {member.profile_path ? (
                 <Image
                   src={getTmdbImageUrl(member.profile_path, "w300") || ""}
                   alt={member.name}
-                  width={80}
-                  height={80}
-                  className="object-cover w-full h-full"
+                  width={200}
+                  height={200}
+                  className="object-cover w-full h-full transition-[filter] duration-200 group-hover:brightness-110"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#52525b] text-lg font-semibold">
+                <div className="w-full h-full flex items-center justify-center text-[#52525b] group-hover:text-[#e5a00d] text-lg font-semibold transition-colors duration-200">
                   {member.name.charAt(0)}
                 </div>
               )}
             </div>
-            <span className="text-xs font-medium text-[#fafafa] text-center leading-tight line-clamp-2">
+            <span className="text-xs font-medium text-[#a1a1aa] group-hover:text-white text-center leading-tight line-clamp-2 transition-colors duration-200">
               {member.name}
             </span>
-            {member.character && (
-              <span className="text-[11px] text-[#71717a] text-center leading-tight line-clamp-1 -mt-1">
-                {member.character}
+            {(member.character || member.job) && (
+              <span className="text-[11px] text-[#52525b] group-hover:text-[#a1a1aa] text-center leading-tight line-clamp-1 -mt-1 transition-colors duration-200">
+                {member.character ?? member.job}
               </span>
             )}
-          </div>
+          </Link>
         ))}
       </div>
     </section>
+  );
+}
+
+export function CastSection({ cast }: CastSectionProps) {
+  const actors = cast.filter((m) => m.job === null);
+  const crew = cast.filter((m) => m.job !== null);
+
+  if (!cast.length) return null;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <PeopleRow title="Cast" members={actors} />
+      <PeopleRow title="Staff" members={crew} />
+    </div>
   );
 }

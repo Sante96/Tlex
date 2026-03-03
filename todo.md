@@ -135,10 +135,17 @@ Tutte le fasi principali sono completate! 🎉
 
 ---
 
+### ✅ Mobile Responsive Layout (2026-02-21)
+- [x] `src/lib/breakpoints.ts` → BREAKPOINTS constants + `useIsMobile` + `useBreakpoint` hooks
+- [x] `BottomNav` component (`md:hidden`) — bottom navigation bar per mobile
+- [x] `Sidebar` → `hidden md:flex` (nascosta su mobile)
+- [x] `layout.tsx` → `marginLeft=0` su mobile via `useIsMobile`, `pb-16 md:pb-0` su main
+- [x] `TopBar` → `px-4 md:px-6` padding ridotto su mobile
+
 ### Frontend Polish
 
 - [ ] Menu contestuale poster (tre punti)
-- [ ] Mobile responsive polish
+- [ ] Mobile responsive polish (pagine interne: grid cols, hero, ecc.)
 - [x] Animazioni transizione pagine ✅
 - [ ] Testare tag ASS avanzati (karaoke, animazioni)
 

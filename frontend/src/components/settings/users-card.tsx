@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Users, Shield, ShieldOff, Trash2, RefreshCw } from "lucide-react";
-import { DSButton } from "@/components/ds";
+import { useTranslations } from "next-intl";
+import { DSButton, DSCard } from "@/components/ds";
 import { Switch } from "@/components/ui/switch";
 import { toggleUserAdmin, deleteUser, type UserInfo } from "@/lib/api";
 
@@ -21,6 +22,7 @@ export function UsersCard({
 }: UsersCardProps) {
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const t = useTranslations();
 
   const handleToggleAdmin = async (userId: number, newValue: boolean) => {
     setTogglingId(userId);
@@ -34,7 +36,7 @@ export function UsersCard({
   const handleDelete = async (user: UserInfo) => {
     if (
       !window.confirm(
-        `Eliminare l'utente ${user.email}? Questa azione è irreversibile.`,
+        `${t("users.deleteConfirm")} ${user.email}? ${t("profiles.edit.deleteWarning")}`,
       )
     )
       return;
@@ -46,19 +48,15 @@ export function UsersCard({
     setDeletingId(null);
   };
 
+  const description = `${users.length} ${users.length === 1 ? t("users.registeredOne") : t("users.registeredMany")}`;
+
   return (
-    <div className="bg-zinc-900 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Users className="w-5 h-5 text-[#e5a00d]" />
-          <div>
-            <h2 className="font-semibold text-[#fafafa]">Utenti</h2>
-            <p className="text-xs text-[#71717a]">
-              {users.length}{" "}
-              {users.length === 1 ? "utente registrato" : "utenti registrati"}
-            </p>
-          </div>
-        </div>
+    <DSCard
+      icon={<Users className="w-5 h-5 text-[#e5a00d]" />}
+      title={t("users.title")}
+      description={description}
+    >
+      <div className="flex justify-end -mt-1">
         <DSButton
           variant="ghost"
           onClick={onRefresh}
@@ -76,7 +74,7 @@ export function UsersCard({
           return (
             <div
               key={user.id}
-              className="flex items-center justify-between bg-zinc-800 rounded-lg p-3"
+              className="flex items-center justify-between bg-white/[0.05] border border-white/[0.06] rounded-lg p-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div
@@ -88,12 +86,12 @@ export function UsersCard({
                   <div className="text-sm font-medium text-[#fafafa] truncate">
                     {user.email}
                     {isSelf && (
-                      <span className="ml-2 text-xs text-[#71717a]">(tu)</span>
+                      <span className="ml-2 text-xs text-[#71717a]">({t("users.you")})</span>
                     )}
                   </div>
                   <div className="text-xs text-[#71717a]">
                     {user.profiles_count}{" "}
-                    {user.profiles_count === 1 ? "profilo" : "profili"}
+                    {user.profiles_count === 1 ? t("users.profileOne") : t("users.profileMany")}
                     {user.profiles.length > 0 && (
                       <span className="ml-1">
                         · {user.profiles.map((p) => p.name).join(", ")}
@@ -126,7 +124,7 @@ export function UsersCard({
                     onClick={() => handleDelete(user)}
                     disabled={deletingId === user.id}
                     className="p-1.5 rounded-md transition-colors text-[#52525b] hover:text-red-400 hover:bg-red-500/10"
-                    title="Elimina utente"
+                    title={t("users.deleteUser")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -136,6 +134,6 @@ export function UsersCard({
           );
         })}
       </div>
-    </div>
+    </DSCard>
   );
 }

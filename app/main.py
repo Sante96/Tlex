@@ -8,6 +8,7 @@ from loguru import logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app._version import __version__
 from app.api.deps import DBSession
 from app.api.v1 import router as api_v1_router
 from app.config import get_settings
@@ -117,7 +118,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TLEX - Telegram Media Server",
     description="Self-hosted streaming platform using Telegram as storage backend",
-    version="1.2.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -145,7 +146,7 @@ async def root():
     """Health check endpoint."""
     return {
         "name": "TLEX",
-        "version": "1.0.3",
+        "version": __version__,
         "status": "running",
         "environment": settings.environment,
     }

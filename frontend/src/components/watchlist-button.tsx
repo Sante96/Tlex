@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { DSButton } from "@/components/ds";
 import {
   addToWatchlist,
@@ -16,6 +17,7 @@ interface WatchlistButtonProps {
 }
 
 export function WatchlistButton({ mediaId, className }: WatchlistButtonProps) {
+  const t = useTranslations();
   const [inWatchlist, setInWatchlist] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +58,7 @@ export function WatchlistButton({ mediaId, className }: WatchlistButtonProps) {
       onClick={handleToggle}
       disabled={loading}
       className={cn("!px-2 !h-10 !w-10", className)}
-      title={inWatchlist ? "Rimuovi dalla lista" : "Aggiungi alla lista"}
+      title={inWatchlist ? t("media.removeWatchlist") : t("media.addWatchlist")}
       icon={
         <Heart
           className={cn(

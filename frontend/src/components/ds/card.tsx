@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 const levels = {
-  primary: "bg-[#18181b] border-[#27272a]",
-  secondary: "bg-[#1f1f23] border-[#27272a]",
-  tertiary: "bg-[#27272a] border-[#3f3f46]",
+  primary: "bg-[rgba(10,10,10,0.55)] border-white/[0.06]",
+  secondary: "bg-[rgba(20,20,22,0.6)] border-white/[0.06]",
+  tertiary: "bg-[rgba(30,30,34,0.65)] border-white/[0.08]",
 } as const;
 
 type CardLevel = keyof typeof levels;
@@ -28,7 +28,7 @@ export function DSCard({
   return (
     <div
       className={cn(
-        "rounded-xl border p-5 flex flex-col gap-3",
+        "rounded-xl border p-5 flex flex-col gap-3 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
         levels[level],
         className,
       )}

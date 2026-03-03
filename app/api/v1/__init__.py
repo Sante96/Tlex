@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth,
     media,
+    people,
     profiles,
     progress,
     scanner,
@@ -25,5 +26,6 @@ router.include_router(subtitles.router, prefix="/subtitles", tags=["subtitles"])
 router.include_router(progress.router)
 router.include_router(profiles.router)
 router.include_router(watchlist.router)
+router.include_router(people.router)
 router.include_router(workers.router, tags=["workers"])
 

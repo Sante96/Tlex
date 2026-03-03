@@ -2,14 +2,14 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DBSession, get_current_user, get_current_user_optional
-from app.models.media import Series
+from app.models.media import MediaItem, Series
 from app.models.user import User, WatchProgress
 from app.services.overrides import (
     apply_series_override,
@@ -282,6 +282,20 @@ async def get_series_cast(session: DBSession, series_id: int) -> list:
     return credits
 
 
+@router.get("/{series_id}/trailer")
+async def get_series_trailer(session: DBSession, series_id: int) -> dict:
+    """Get YouTube trailer key for a TV series from TMDB."""
+    query = select(Series).where(Series.id == series_id)
+    result = await session.execute(query)
+    series = result.scalar_one_or_none()
+
+    if not series or not series.tmdb_id:
+        return {"key": None}
+
+    key = await tmdb_client.get_trailer(series.tmdb_id, "tv")
+    return {"key": key}
+
+
 @router.patch("/{series_id}")
 async def update_series(
     session: DBSession,
@@ -405,7 +419,7 @@ async def get_season_tmdb_images(
 
 
 @router.post("/{series_id}/refresh-metadata")
-async def refresh_series_metadata(session: DBSession, series_id: int) -> dict:
+async def refresh_series_metadata(request: Request, session: DBSession, series_id: int) -> dict:
     """Refresh TMDB metadata for a series."""
     query = select(Series).where(Series.id == series_id)
     result = await session.execute(query)
@@ -415,7 +429,8 @@ async def refresh_series_metadata(session: DBSession, series_id: int) -> dict:
         raise HTTPException(status_code=404, detail="Series not found")
 
     # Search TMDB
-    tmdb_result = await tmdb_client.search_tv(series.title)
+    lang = request.headers.get("Accept-Language", "it-IT")
+    tmdb_result = await tmdb_client.search_tv(series.title, language=lang)
 
     if not tmdb_result:
         raise HTTPException(
@@ -438,15 +453,48 @@ async def refresh_series_metadata(session: DBSession, series_id: int) -> dict:
             pass
 
     # Fetch and update extended metadata (genres, rating, content_rating)
-    tv_details = await tmdb_client.get_tv_details(tmdb_result.tmdb_id)
+    tv_details = await tmdb_client.get_tv_details(tmdb_result.tmdb_id, language=lang)
     if tv_details:
         series.genres = ",".join(tv_details.genres) if tv_details.genres else None
         series.vote_average = tv_details.vote_average
         series.content_rating = tv_details.content_rating
 
+    # Refresh episode titles and overviews from TMDB
+    ep_query = select(MediaItem).where(MediaItem.series_id == series.id)
+    ep_result = await session.execute(ep_query)
+    episodes = ep_result.scalars().all()
+
+    # Group episodes by season to minimise TMDB requests
+    seasons_needed: set[int] = {
+        ep.season_number for ep in episodes if ep.season_number is not None
+    }
+    tmdb_episodes: dict[tuple[int, int], str | None] = {}  # (season, ep) -> title
+    tmdb_overviews: dict[tuple[int, int], str | None] = {}
+
+    for season_num in seasons_needed:
+        tmdb_season_eps = await tmdb_client.get_season_episodes(
+            tmdb_result.tmdb_id, season_num, language=lang
+        )
+        for ep_info in tmdb_season_eps:
+            key = (season_num, ep_info.episode_number)
+            tmdb_episodes[key] = ep_info.name
+            tmdb_overviews[key] = ep_info.overview
+
+    updated_eps = 0
+    for ep in episodes:
+        if ep.season_number is None or ep.episode_number is None:
+            continue
+        key = (ep.season_number, ep.episode_number)
+        if key in tmdb_episodes:
+            if tmdb_episodes[key]:
+                ep.title = tmdb_episodes[key]
+            if tmdb_overviews[key]:
+                ep.overview = tmdb_overviews[key]
+            updated_eps += 1
+
     await session.commit()
 
-    logger.info(f"Refreshed series metadata: '{old_title}' -> '{series.title}'")
+    logger.info(f"Refreshed series metadata: '{old_title}' -> '{series.title}' ({updated_eps} episodes updated)")
 
     return {
         "message": f"Metadata refreshed for: {series.title}",

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { DSButton, DSCard, DSInput } from "@/components/ds";
+import { MeshGradient } from "@paper-design/shaders-react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/auth-context";
 
 export default function LoginPage() {
@@ -16,72 +17,99 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslations("auth.login");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-
     try {
       await login({ email, password });
       router.push("/profiles");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("submit"));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-plex-orange/10 via-zinc-950 to-zinc-950" />
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="fixed inset-0 z-0">
+        <MeshGradient
+          style={{ width: "100%", height: "100%" }}
+          colors={["#09090b", "#1c1500", "#09090b"]}
+          distortion={1}
+          swirl={0.1}
+          grainMixer={0}
+          grainOverlay={0}
+          speed={0.3}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
+        />
+      </div>
 
-      <DSCard className="w-full max-w-md relative z-10 !bg-zinc-900/90 backdrop-blur">
-        <div className="text-center pb-2 mb-4">
-          <Link href="/" className="inline-block mb-4">
-            <span className="text-4xl font-bold text-plex-orange">TLEX</span>
-          </Link>
-          <h1 className="text-2xl font-semibold text-white">Bentornato</h1>
-          <p className="text-sm text-[#a1a1aa] mt-1">
-            Accedi al tuo account per continuare
+      {/* Glass card */}
+      <div
+        className="relative z-10 w-full max-w-sm rounded-2xl p-8 shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
+        style={{
+          backgroundColor: "rgba(10,10,10,0.7)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        {/* Logo + heading */}
+        <div className="text-center mb-8">
+          <span className="text-4xl font-bold tracking-tight text-[#e5a00d]">
+            TLEX
+          </span>
+          <h1 className="text-xl font-semibold text-white mt-3">{t("title")}</h1>
+          <p className="text-sm text-[#71717a] mt-1">
+            {t("subtitle")}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
-            <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
               {error}
             </div>
           )}
 
-          <DSInput
-            id="email"
-            label="Email"
-            type="email"
-            placeholder="tu@esempio.com"
-            value={email}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setEmail(e.target.value)
-            }
-            required
-          />
+          {/* Email */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-white/70">{t("email")}</label>
+            <input
+              type="email"
+              placeholder="tu@esempio.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
+            />
+          </div>
 
-          <DSInput
-            id="password"
-            label="Password"
-            type={showPassword ? "text" : "password"}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPassword(e.target.value)
-            }
-            required
-            suffix={
+          {/* Password */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-white/70">{t("password")}</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="w-full h-10 px-3 pr-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
+              />
               <button
                 type="button"
-                className="text-[#71717a] hover:text-white transition-colors"
                 onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -89,33 +117,30 @@ export default function LoginPage() {
                   <Eye className="h-4 w-4" />
                 )}
               </button>
-            }
-          />
+            </div>
+          </div>
 
-          <DSButton
+          {/* Submit */}
+          <button
             type="submit"
-            className="w-full"
             disabled={isLoading}
-            icon={
-              isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : undefined
-            }
+            className="mt-1 h-10 w-full rounded-lg bg-[#e5a00d] hover:bg-[#f0b429] active:bg-[#c89200] text-black text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isLoading ? "Accesso in corso..." : "Accedi"}
-          </DSButton>
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading ? t("loading") : t("submit")}
+          </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-[#52525b]">
-          Non hai un account?{" "}
+        <p className="mt-6 text-center text-sm text-[#52525b]">
+          {t("noAccount")}{" "}
           <Link
             href="/register"
-            className="text-plex-orange hover:text-plex-orange/80"
+            className="text-[#e5a00d] hover:text-[#f0b429] transition-colors"
           >
-            Registrati
+            {t("register")}
           </Link>
-        </div>
-      </DSCard>
+        </p>
+      </div>
     </div>
   );
 }

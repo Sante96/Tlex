@@ -32,7 +32,7 @@ export function AuthGuard({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 text-red-600 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#e5a00d] animate-spin" />
       </div>
     );
   }

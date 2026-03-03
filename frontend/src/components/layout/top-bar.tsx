@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
-import { LogOut, UserCircle, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { LogOut, UserCircle, Users, Search, X } from "lucide-react";
 import { DSAvatar, DSDropdownMenu, DSBreadcrumb } from "@/components/ds";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { SearchBar } from "@/components/layout/search-bar";
@@ -14,6 +17,7 @@ const DEFAULT_AVATAR = "/avatars/avatar-01.png";
 
 function useBreadcrumbItems(): { label: string; href?: string }[] | null {
   const pathname = usePathname();
+  const t = useTranslations();
   const [titleCache, setTitleCache] = useState<Record<string, string>>({});
 
   // Extract IDs from pathname
@@ -50,20 +54,20 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
   if (seasonMatch) {
     const name = titleCache[`series-${seasonMatch[1]}`] || "...";
     return [
-      { label: "Serie TV", href: "/series" },
+      { label: t("nav.series"), href: "/series" },
       { label: name, href: `/series/${seasonMatch[1]}` },
-      { label: `Stagione ${seasonMatch[2]}` },
+      { label: `${t("topbar.seasonLabel")} ${seasonMatch[2]}` },
     ];
   }
 
   if (seriesMatch) {
     const name = titleCache[`series-${seriesMatch[1]}`] || "...";
-    return [{ label: "Serie TV", href: "/series" }, { label: name }];
+    return [{ label: t("nav.series"), href: "/series" }, { label: name }];
   }
 
   if (mediaMatch) {
     const name = titleCache[`media-${mediaMatch[1]}`] || "...";
-    return [{ label: "Film", href: "/movies" }, { label: name }];
+    return [{ label: t("nav.movies"), href: "/movies" }, { label: name }];
   }
 
   return null;
@@ -71,9 +75,11 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
 
 export function TopBar() {
   const router = useRouter();
+  const t = useTranslations();
   const { logout } = useAuth();
   const { profile, clearProfile, refreshProfiles } = useProfile();
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const breadcrumbItems = useBreadcrumbItems();
 
   const handleAvatarChange = async (newAvatarSrc: string) => {
@@ -98,49 +104,106 @@ export function TopBar() {
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 sticky top-0 z-30"
-      style={{
-        background: "rgba(9, 9, 11, 0.80)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(39, 39, 42, 0.5)",
-      }}
+      className="h-14 flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 relative"
+      style={{ borderBottom: "1px solid rgba(39, 39, 42, 0.5)" }}
     >
-      {/* Left side: breadcrumb on detail pages, searchbar elsewhere */}
-      {breadcrumbItems ? (
-        <DSBreadcrumb items={breadcrumbItems} />
-      ) : (
-        <SearchBar />
-      )}
-
-      {/* User menu */}
-      <DSDropdownMenu
-        trigger={
-          <DSAvatar
-            letter={profileLetter}
-            src={profile?.avatar_url ?? undefined}
-          />
-        }
-        items={[
-          {
-            icon: <UserCircle className="h-4 w-4" />,
-            label: "Cambia Avatar",
-            onClick: () => setShowAvatarPicker(true),
-          },
-          {
-            icon: <Users className="h-4 w-4" />,
-            label: "Cambia Profilo",
-            onClick: handleSwitchProfile,
-          },
-          { label: "", separator: true },
-          {
-            icon: <LogOut className="h-4 w-4" />,
-            label: "Esci",
-            onClick: handleLogout,
-            destructive: true,
-          },
-        ]}
+      {/* Blur layer as sibling — keeps header from creating a stacking context */}
+      <div
+        className="absolute inset-0 -z-10 pointer-events-none backdrop-blur-xl"
+        style={{ background: "rgba(9, 9, 11, 0.80)" }}
       />
+      <AnimatePresence mode="wait" initial={false}>
+        {showMobileSearch ? (
+          <motion.div
+            key="search"
+            className="flex flex-1 items-center gap-2"
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 16 }}
+            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <SearchBar className="flex-1 min-w-0" />
+            <button
+              type="button"
+              onClick={() => setShowMobileSearch(false)}
+              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="normal"
+            className="flex flex-1 items-center justify-between"
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {/* Left side */}
+            <div className="flex-1 min-w-0">
+              {breadcrumbItems ? (
+                <DSBreadcrumb items={breadcrumbItems} />
+              ) : (
+                <>
+                  {/* Logo on mobile */}
+                  <Link
+                    href="/"
+                    className="md:hidden text-xl font-extrabold tracking-tight text-[#e5a00d]"
+                  >
+                    TLEX
+                  </Link>
+                  {/* SearchBar on desktop */}
+                  <div className="hidden md:block">
+                    <SearchBar />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Right side */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Search icon — mobile only, hidden when breadcrumb is shown */}
+              {!breadcrumbItems && (
+                <button
+                  type="button"
+                  onClick={() => setShowMobileSearch(true)}
+                  className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              )}
+              <DSDropdownMenu
+                trigger={
+                  <DSAvatar
+                    letter={profileLetter}
+                    src={profile?.avatar_url ?? undefined}
+                  />
+                }
+                items={[
+                  {
+                    icon: <UserCircle className="h-4 w-4" />,
+                    label: t("topbar.changeAvatar"),
+                    onClick: () => setShowAvatarPicker(true),
+                  },
+                  {
+                    icon: <Users className="h-4 w-4" />,
+                    label: t("topbar.switchProfile"),
+                    onClick: handleSwitchProfile,
+                  },
+                  { label: "", separator: true },
+                  {
+                    icon: <LogOut className="h-4 w-4" />,
+                    label: t("topbar.logout"),
+                    onClick: handleLogout,
+                    destructive: true,
+                  },
+                ]}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (

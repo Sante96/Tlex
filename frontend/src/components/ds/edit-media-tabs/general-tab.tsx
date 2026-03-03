@@ -1,4 +1,7 @@
 /* ── Tab: Generale ────────────────────────────────────────────── */
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Field } from "./field";
 
 interface GeneralTabProps {
@@ -18,9 +21,10 @@ export function GeneralTab({
   onOverviewChange,
   onReleaseDateChange,
 }: GeneralTabProps) {
+  const t = useTranslations("editMedia");
   return (
     <div className="flex flex-col gap-5">
-      <Field label="Titolo">
+      <Field label={t("fieldTitle")}>
         <input
           type="text"
           value={title}
@@ -28,7 +32,7 @@ export function GeneralTab({
           className="w-full h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-[#e5a00d] transition-colors"
         />
       </Field>
-      <Field label="Data di uscita">
+      <Field label={t("releaseDate")}>
         <input
           type="date"
           value={releaseDate}
@@ -36,7 +40,7 @@ export function GeneralTab({
           className="w-48 h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-[#fafafa] outline-none focus:border-[#e5a00d] transition-colors"
         />
       </Field>
-      <Field label="Riassunto">
+      <Field label={t("synopsis")}>
         <textarea
           value={overview}
           onChange={(e) => onOverviewChange(e.target.value)}

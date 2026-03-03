@@ -10,11 +10,13 @@ export const api = axios.create({
   },
 });
 
-// Add auth token to requests
+// Add auth token and locale to requests
 api.interceptors.request.use((config) => {
   const token = Cookies.get("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const locale = Cookies.get("TLEX_LOCALE") || "it";
+  config.headers["Accept-Language"] = locale === "en" ? "en-US" : "it-IT";
   return config;
 });

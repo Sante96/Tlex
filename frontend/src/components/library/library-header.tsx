@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { RefreshCw, Grid3X3, List } from "lucide-react";
 import { DSButton } from "@/components/ds";
 import {
@@ -27,23 +28,24 @@ export function LibraryHeader({
   onRefresh,
   isRefreshing,
 }: LibraryHeaderProps) {
+  const t = useTranslations();
   return (
     <div className="flex items-center justify-between mb-6">
       <div>
         <h1 className="text-2xl font-bold text-white">{title}</h1>
-        <p className="text-sm text-muted-foreground">{totalCount} elementi</p>
+        <p className="text-sm text-muted-foreground">{totalCount} {t("library.elements")}</p>
       </div>
 
       <div className="flex items-center gap-3">
         {/* Sort */}
         <Select value={sortBy} onValueChange={onSortChange}>
           <SelectTrigger className="w-[160px] bg-zinc-800 border-zinc-700">
-            <SelectValue placeholder="Ordina per" />
+            <SelectValue placeholder={t("library.sortBy")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="title">Titolo</SelectItem>
-            <SelectItem value="date_added">Data aggiunta</SelectItem>
-            <SelectItem value="release_date">Data uscita</SelectItem>
+            <SelectItem value="title">{t("library.sortTitle")}</SelectItem>
+            <SelectItem value="date_added">{t("library.sortDateAdded")}</SelectItem>
+            <SelectItem value="release_date">{t("library.sortReleaseDate")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -73,7 +75,7 @@ export function LibraryHeader({
               />
             }
           >
-            Aggiorna
+            {t("common.refresh")}
           </DSButton>
         )}
       </div>

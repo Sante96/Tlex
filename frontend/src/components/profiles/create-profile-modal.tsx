@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 
@@ -20,12 +21,13 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
   const [isKids, setIsKids] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const t = useTranslations();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!name.trim()) {
-      setError("Inserisci un nome per il profilo");
+      setError(t("profiles.create.namePlaceholder"));
       return;
     }
 
@@ -36,26 +38,33 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
       await createNewProfile(name.trim(), selectedAvatar, isKids);
       router.push("/");
     } catch {
-      setError("Errore nella creazione del profilo");
+      setError(t("common.error"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 rounded-xl p-8 max-w-lg w-full mx-4 border border-zinc-800">
-        <h2 className="text-2xl font-semibold text-white mb-6">
-          Crea nuovo profilo
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div
+        className="rounded-2xl p-6 max-w-md w-full shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
+        style={{
+          backgroundColor: "rgba(10,10,10,0.8)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <h2 className="text-xl font-semibold text-white mb-6">
+          {t("profiles.create.title")}
         </h2>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           {/* Avatar Selection */}
-          <div className="mb-6">
-            <label className="block text-sm text-zinc-400 mb-3">
-              Scegli un avatar
+          <div>
+            <label className="block text-sm text-white/70 mb-3">
+              {t("profiles.create.chooseAvatar")}
             </label>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-5 gap-2">
               {PROFILE_AVATARS.map((avatar) => (
                 <ProfileAvatar
                   key={avatar.id}
@@ -70,55 +79,60 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
           </div>
 
           {/* Name Input */}
-          <div className="mb-6">
-            <label className="block text-sm text-zinc-400 mb-2">
-              Nome del profilo
-            </label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-white/70">{t("profiles.create.nameLabel")}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Es. Mario"
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-plex-orange"
+              className="h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#e5a00d] transition-colors"
               maxLength={20}
               autoFocus
             />
           </div>
 
-          {/* Kids Profile Toggle */}
-          <div className="mb-6">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isKids}
-                onChange={(e) => setIsKids(e.target.checked)}
-                className="w-5 h-5 rounded border-zinc-600 bg-zinc-800 text-plex-orange focus:ring-plex-orange"
-              />
-              <span className="text-white">Profilo per bambini</span>
-            </label>
-            <p className="text-sm text-zinc-500 mt-1 ml-8">
-              Mostra solo contenuti adatti ai minori
-            </p>
-          </div>
+          {/* Kids toggle */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setIsKids(!isKids)}
+              className={`w-5 h-5 rounded flex items-center justify-center transition-colors border ${
+                isKids
+                  ? "bg-[#e5a00d] border-[#e5a00d]"
+                  : "bg-white/5 border-white/20"
+              }`}
+            >
+              {isKids && (
+                <span className="text-[10px] font-bold text-black">✓</span>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-white">{t("profiles.create.kidsProfile")}</span>
+              <p className="text-xs text-[#71717a]">
+                {t("profiles.create.kidsDescription")}
+              </p>
+            </div>
+          </label>
 
-          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
           {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
               disabled={isSubmitting}
+              className="flex-1 h-10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/[0.08] transition-colors"
+              style={{ border: "1px solid rgba(255,255,255,0.1)" }}
             >
-              Annulla
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !name.trim()}
-              className="flex-1 px-4 py-3 rounded-lg bg-plex-orange text-black font-medium hover:bg-plex-orange/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 h-10 rounded-lg bg-[#e5a00d] hover:bg-[#f0b429] text-black text-sm font-semibold transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? "Creazione..." : "Crea profilo"}
+              {isSubmitting ? t("profiles.create.loading") : t("profiles.create.submit")}
             </button>
           </div>
         </form>

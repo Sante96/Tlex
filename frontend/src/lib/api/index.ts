@@ -20,6 +20,7 @@ export {
   deleteMedia,
   refreshMetadata,
   getMediaCast,
+  getMediaTrailer,
   getMediaEpisodes,
   getNextEpisode,
   updateMediaItem,
@@ -39,12 +40,17 @@ export type {
   MediaUpdateBody,
 } from "./media";
 
+// People
+export { getPersonDetails } from "./people";
+export type { PersonDetails, PersonWork } from "./people";
+
 // Series
 export {
   getSeriesList,
   getSeriesDetails,
   refreshSeriesMetadata,
   getSeriesCast,
+  getSeriesTrailer,
   updateSeries,
   getSeriesTmdbImages,
   updateSeasonPoster,

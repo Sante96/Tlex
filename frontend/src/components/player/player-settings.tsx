@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Volume2, Subtitles, Clock } from "lucide-react";
 import { AnimatedSettings } from "./animated-icons";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export function PlayerSettingsDropdown({
   onSubtitleOffsetChange,
   onOpenChange,
 }: PlayerSettingsProps) {
+  const t = useTranslations();
   const [view, setView] = useState<MenuView>("main");
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -103,7 +105,7 @@ export function PlayerSettingsDropdown({
   const goBack = () => setView("main");
 
   const selectedAudioLabel =
-    audioTracks[selectedAudio]?.language || `Traccia ${selectedAudio + 1}`;
+    audioTracks[selectedAudio]?.language || `${t("player.track")} ${selectedAudio + 1}`;
 
   const selectedSubLabel =
     selectedSubtitle !== null
@@ -164,7 +166,7 @@ export function PlayerSettingsDropdown({
                 {/* Subtitles */}
                 <MenuItem
                   icon={<Subtitles className="h-5 w-5" />}
-                  label="Sottotitoli"
+                  label={t("player.subtitles")}
                   value={selectedSubLabel}
                   onClick={() => setView("subtitle")}
                   hasSubmenu
@@ -174,7 +176,7 @@ export function PlayerSettingsDropdown({
                 {selectedSubtitle !== null && (
                   <MenuItem
                     icon={<Clock className="h-5 w-5" />}
-                    label="Sync sottotitoli"
+                    label={t("player.syncSubtitles")}
                     value={
                       subtitleOffset === 0
                         ? "0"
@@ -202,7 +204,7 @@ export function PlayerSettingsDropdown({
                 {audioTracks.map((track, idx) => (
                   <SelectItem
                     key={track.id}
-                    label={track.language || `Traccia ${idx + 1}`}
+                    label={track.language || `${t("player.track")} ${idx + 1}`}
                     detail={track.title}
                     selected={selectedAudio === idx}
                     onClick={() => {
@@ -224,10 +226,10 @@ export function PlayerSettingsDropdown({
                   : "translate-x-full opacity-0 absolute top-0 left-0",
               )}
             >
-              <SubMenuHeader label="Sottotitoli" onBack={goBack} />
+              <SubMenuHeader label={t("player.subtitles")} onBack={goBack} />
               <div className="py-2 max-h-[320px] overflow-y-auto">
                 <SelectItem
-                  label="Disattivati"
+                  label={t("player.disabledSubtitles")}
                   selected={selectedSubtitle === null}
                   onClick={() => {
                     onSubtitleChange(null);
@@ -237,7 +239,7 @@ export function PlayerSettingsDropdown({
                 {subtitleTracks.map((track, idx) => (
                   <SelectItem
                     key={track.id}
-                    label={track.language || `Traccia ${idx + 1}`}
+                    label={track.language || `${t("player.track")} ${idx + 1}`}
                     detail={track.title}
                     selected={selectedSubtitle === track.stream_index}
                     onClick={() => {

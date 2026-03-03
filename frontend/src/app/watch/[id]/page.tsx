@@ -11,6 +11,7 @@ import {
   releaseStream,
   type MediaDetails,
 } from "@/lib/api";
+import { cleanEpisodeTitle } from "@/lib/format";
 
 export default function WatchPage() {
   const params = useParams();
@@ -97,7 +98,7 @@ export default function WatchPage() {
     <div className="fixed inset-0 bg-black">
       <VideoPlayer
         mediaId={mediaId}
-        title={media.title}
+        title={isEpisode ? cleanEpisodeTitle(media.title) : media.title}
         subtitle={episodeSubtitle}
         audioTracks={audioTracks}
         subtitleTracks={subtitleTracks}

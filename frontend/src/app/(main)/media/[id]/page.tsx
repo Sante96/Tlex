@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Play, Plus, Check, Pencil, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ExpandableOverview } from "@/components/ui/expandable-overview";
+import {
+  Play,
+  Plus,
+  Check,
+  Pencil,
+  RefreshCw,
+  Clapperboard,
+} from "lucide-react";
 import {
   HeroBanner,
   ActionButton,
@@ -11,11 +20,13 @@ import {
   CastSection,
   DetailPageLayout,
   EditMediaModal,
+  TrailerModal,
 } from "@/components/ds";
 import {
   getMediaDetails,
   getMediaList,
   getMediaCast,
+  getMediaTrailer,
   refreshMetadata,
   addToWatchlist,
   removeFromWatchlist,
@@ -25,6 +36,7 @@ import {
   type CastMember,
 } from "@/lib/api";
 import { formatDuration, getTmdbImageUrl } from "@/lib/format";
+import { useToast } from "@/components/ui/toast";
 
 export default function MediaDetailPage() {
   const params = useParams();
@@ -38,6 +50,10 @@ export default function MediaDetailPage() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [trailerKey, setTrailerKey] = useState<string | null>(null);
+  const [showTrailer, setShowTrailer] = useState(false);
+  const toast = useToast();
+  const t = useTranslations();
 
   const handleRefreshMetadata = async () => {
     if (!media || refreshing) return;
@@ -58,11 +74,15 @@ export default function MediaDetailPage() {
       if (inWatchlist) {
         await removeFromWatchlist(media.id);
         setInWatchlist(false);
+        toast(t("media.removedWatchlist"), "info");
       } else {
         await addToWatchlist(media.id);
         setInWatchlist(true);
+        toast(t("media.addedWatchlist"), "success");
       }
-    } catch {}
+    } catch {
+      toast(t("media.watchlistError"), "error");
+    }
   };
 
   useEffect(() => {
@@ -90,10 +110,12 @@ export default function MediaDetailPage() {
         }
         try {
           const castData = await getMediaCast(mediaId);
-          setCast(castData.slice(0, 20));
-        } catch {
-          // Similar media not available
-        }
+          setCast(castData);
+        } catch {}
+        try {
+          const key = await getMediaTrailer(mediaId);
+          setTrailerKey(key);
+        } catch {}
       } catch {
       } finally {
         setLoading(false);
@@ -108,12 +130,12 @@ export default function MediaDetailPage() {
   if (!media) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-[#a1a1aa]">Media non trovato</p>
+        <p className="text-[#a1a1aa]">{t("media.notFound")}</p>
         <button
           onClick={() => router.back()}
           className="text-[#e5a00d] text-sm mt-2 hover:underline"
         >
-          Torna indietro
+          {t("media.goBack")}
         </button>
       </div>
     );
@@ -132,33 +154,43 @@ export default function MediaDetailPage() {
   return (
     <DetailPageLayout backdropUrl={backdropUrl}>
       <HeroBanner
-        height={374}
+        height={432}
         posterUrl={posterUrl}
         posterAlt={media.title}
-        posterWidth={180}
-        posterHeight={270}
+        posterWidth={200}
+        posterHeight={300}
+        mobileInfoSlot={
+          <>
+            <h1 className="text-xl md:text-4xl font-bold text-[#fafafa] leading-tight">
+              {media.title}
+            </h1>
+            <div className="flex flex-col gap-1">
+              {year && (
+                <span className="text-xs md:text-sm text-[#d4d4d8]">
+                  {year}
+                </span>
+              )}
+              {genresText && (
+                <span className="text-xs md:text-sm text-[#d4d4d8] line-clamp-2">
+                  {genresText}
+                </span>
+              )}
+              <MetaRow
+                voteAverage={media.vote_average}
+                contentRating={media.content_rating}
+                items={duration ? [{ text: duration }] : []}
+              />
+            </div>
+          </>
+        }
       >
-        <h1 className="text-4xl font-bold text-[#fafafa]">{media.title}</h1>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-[#d4d4d8]">
-            {[year, duration].filter(Boolean).join(" · ")}
-          </span>
-          {genresText && (
-            <span className="text-sm text-[#d4d4d8]">{genresText}</span>
-          )}
-          <MetaRow
-            voteAverage={media.vote_average}
-            contentRating={media.content_rating}
-            items={[]}
-          />
-        </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <ActionButton
             variant="primary"
             icon={<Play className="h-5 w-5 fill-black" />}
             onClick={() => router.push(`/watch/${media.id}`)}
           >
-            Riproduci
+            {t("media.play")}
           </ActionButton>
           <ActionButton
             variant="secondary"
@@ -171,14 +203,23 @@ export default function MediaDetailPage() {
             }
             onClick={handleToggleWatchlist}
           >
-            {inWatchlist ? "In Watchlist" : "Watchlist"}
+            {inWatchlist ? t("media.inWatchlist") : t("media.addWatchlist")}
           </ActionButton>
+          {trailerKey && (
+            <ActionButton
+              variant="secondary"
+              icon={<Clapperboard className="h-4 w-4" />}
+              onClick={() => setShowTrailer(true)}
+            >
+              {t("media.trailer")}
+            </ActionButton>
+          )}
           <ActionButton
             variant="secondary"
             icon={<Pencil className="h-4 w-4" />}
             onClick={() => setEditing(true)}
           >
-            Modifica
+            {t("media.edit")}
           </ActionButton>
           <ActionButton
             variant="secondary"
@@ -189,21 +230,26 @@ export default function MediaDetailPage() {
             }
             onClick={handleRefreshMetadata}
           >
-            {refreshing ? "Aggiornamento..." : "Aggiorna Metadati"}
+            {refreshing ? t("media.refreshing") : t("media.refresh")}
           </ActionButton>
         </div>
         {media.overview && (
-          <p className="text-sm text-[#d4d4d8] leading-relaxed max-w-3xl">
-            {media.overview}
-          </p>
+          <ExpandableOverview text={media.overview} />
         )}
       </HeroBanner>
 
+      {showTrailer && trailerKey && (
+        <TrailerModal
+          youtubeKey={trailerKey}
+          onClose={() => setShowTrailer(false)}
+        />
+      )}
+
       {/* Similar Movies */}
       {similar.length > 0 && (
-        <div className="flex flex-col gap-6 px-12 py-8">
-          <h2 className="text-2xl font-semibold text-[#fafafa]">Film simili</h2>
-          <div className="flex flex-wrap gap-5">
+        <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
+          <h2 className="text-2xl font-semibold text-[#fafafa]">{t("media.similarMovies")}</h2>
+          <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
             {similar.map((item) => (
               <PosterCard
                 key={item.id}
@@ -215,8 +261,7 @@ export default function MediaDetailPage() {
                     ? new Date(item.release_date).getFullYear().toString()
                     : ""
                 }
-                width={160}
-                height={240}
+                className="shrink-0 w-[120px] md:w-full"
               />
             ))}
           </div>
@@ -225,7 +270,7 @@ export default function MediaDetailPage() {
 
       {/* Cast */}
       {cast.length > 0 && (
-        <div className="px-12 pb-8">
+        <div className="px-4 md:px-12 pb-4 md:pb-8">
           <CastSection cast={cast} />
         </div>
       )}
@@ -236,6 +281,7 @@ export default function MediaDetailPage() {
           title={media.title}
           overview={media.overview}
           posterPath={media.poster_path}
+          backdropPath={media.backdrop_path}
           releaseDate={media.release_date}
           onClose={() => setEditing(false)}
           onSaved={async () => {
@@ -251,8 +297,8 @@ export default function MediaDetailPage() {
 function DetailSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="flex items-end gap-8 h-[374px] px-12 pb-8">
-        <div className="w-[180px] h-[270px] bg-[#27272a] rounded-xl" />
+      <div className="flex items-end gap-8 h-[374px] px-4 md:px-12 pb-8">
+        <div className="w-[180px] h-[270px] bg-[#27272a] rounded-xl hidden md:block" />
         <div className="flex-1 space-y-4">
           <div className="h-10 w-72 bg-[#27272a] rounded" />
           <div className="h-5 w-48 bg-[#27272a] rounded" />

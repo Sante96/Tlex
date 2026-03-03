@@ -43,14 +43,20 @@ export function DSDropdownMenu({
       {open && (
         <div
           className={cn(
-            "absolute top-full mt-2 z-50 rounded-xl border border-[#27272a] bg-[#18181b] p-1 w-[200px]",
+            "absolute top-full mt-2 z-50 rounded-xl p-1 w-[200px]",
             "flex flex-col gap-0.5",
+            "shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
             align === "right" ? "right-0" : "left-0",
           )}
+          style={{
+            backgroundColor: "rgba(10,10,10,0.75)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
         >
           {items.map((item, i) =>
             item.separator ? (
-              <div key={i} className="h-px bg-[#27272a] my-0.5" />
+              <div key={i} className="h-px bg-white/[0.06] my-0.5" />
             ) : (
               <button
                 key={i}
@@ -61,8 +67,8 @@ export function DSDropdownMenu({
                 className={cn(
                   "flex items-center gap-3 h-9 px-3 rounded-lg text-sm transition-colors w-full text-left",
                   item.destructive
-                    ? "text-[#ef4444] hover:bg-[#ef444420]"
-                    : "text-[#fafafa] hover:bg-[#e5a00d40]",
+                    ? "text-[#ef4444] hover:bg-red-500/10"
+                    : "text-white/80 hover:bg-white/[0.08]",
                 )}
               >
                 {item.icon && (

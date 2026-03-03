@@ -76,6 +76,13 @@ export async function getSeriesCast(id: number): Promise<CastMember[]> {
   return response.data;
 }
 
+export async function getSeriesTrailer(id: number): Promise<string | null> {
+  const response = await api.get<{ key: string | null }>(
+    `/api/v1/series/${id}/trailer`,
+  );
+  return response.data.key;
+}
+
 export interface SeriesUpdateBody {
   title?: string;
   overview?: string;

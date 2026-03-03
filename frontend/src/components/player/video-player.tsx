@@ -20,6 +20,7 @@ import { PoolWarningOverlay } from "./pool-warning";
 import { EpisodePicker } from "./episode-picker";
 import { NextEpisodeOverlay } from "./next-episode-overlay";
 import { useNextEpisode } from "@/hooks/player/use-next-episode";
+import { useIsMobile } from "@/lib/breakpoints";
 
 interface VideoPlayerProps {
   mediaId: number;
@@ -231,6 +232,18 @@ export function VideoPlayer({
     skip,
   });
 
+  const isMobile = useIsMobile();
+
+  const togglePiP = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+    } else if (document.pictureInPictureEnabled) {
+      await video.requestPictureInPicture();
+    }
+  }, []);
+
   // Next episode auto-play
   const { nextEpisode, showNextOverlay, cancelNextOverlay } = useNextEpisode({
     mediaId,
@@ -245,12 +258,37 @@ export function VideoPlayer({
     }
   }, [nextEpisode, onEpisodeSelect]);
 
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const start = touchStartRef.current;
+      if (!start) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - start.x;
+      const dy = Math.abs(t.clientY - start.y);
+      // Swipe right ≥80px starting from left edge (first 40px) and mostly horizontal
+      if (dx >= 80 && dy < 60 && start.x < 40) {
+        router.back();
+      }
+      touchStartRef.current = null;
+    },
+    [router],
+  );
+
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black"
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && !settingsOpen && setShowControls(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{ cursor: showControls ? "default" : "none" }}
     >
       {seriesId && onEpisodeSelect && (
@@ -275,13 +313,13 @@ export function VideoPlayer({
         className="absolute top-0 left-0 bottom-0 flex items-center overflow-hidden"
         initial={false}
         animate={{
-          width: showNextOverlay ? "62%" : "100%",
-          borderRadius: showNextOverlay ? "8px" : "0px",
+          width: showNextOverlay && !isMobile ? "62%" : "100%",
+          borderRadius: showNextOverlay && !isMobile ? "8px" : "0px",
         }}
         transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
       >
         <div
-          className={`relative w-full overflow-hidden ${showNextOverlay ? "aspect-video" : "h-full"}`}
+          className={`relative w-full overflow-hidden ${showNextOverlay && !isMobile ? "aspect-video" : "h-full"}`}
         >
           <video
             ref={videoRef}
@@ -345,6 +383,11 @@ export function VideoPlayer({
         episodePickerOpen={episodePickerOpen}
         onToggleEpisodes={() => setEpisodePickerOpen((v) => !v)}
         episodesButtonRef={episodesButtonRef}
+        onTogglePiP={
+          typeof document !== "undefined" && document.pictureInPictureEnabled
+            ? togglePiP
+            : undefined
+        }
       />
     </div>
   );

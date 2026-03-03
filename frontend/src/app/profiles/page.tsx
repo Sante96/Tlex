@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { MeshGradient } from "@paper-design/shaders-react";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { CreateProfileModal, EditProfileModal } from "@/components/profiles";
 import { useProfile } from "@/contexts/profile-context";
@@ -13,22 +15,21 @@ export default function ProfilesPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { profiles, selectProfile, hasProfiles, isLoading } = useProfile();
+  const t = useTranslations();
 
   const [isEditing, setIsEditing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
 
-  // Redirect to login if not authenticated
   if (!authLoading && !isAuthenticated) {
     router.replace("/login");
     return null;
   }
 
-  // Show loading state
   if (isLoading || authLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-plex-orange border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
+        <div className="w-10 h-10 border-2 border-[#e5a00d] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -42,85 +43,141 @@ export default function ProfilesPage() {
     router.push("/");
   };
 
-  const handleCreateProfile = () => {
-    setShowCreateModal(true);
-  };
-
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
-      <h1 className="text-3xl md:text-4xl font-medium text-white mb-2">
-        Chi sta guardando?
-      </h1>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="fixed inset-0 z-0">
+        <MeshGradient
+          style={{ width: "100%", height: "100%" }}
+          colors={["#09090b", "#1c1500", "#09090b"]}
+          distortion={1}
+          swirl={0.1}
+          grainMixer={0}
+          grainOverlay={0}
+          speed={0.3}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
+        />
+      </div>
 
-      {isEditing && (
-        <p className="text-zinc-400 mb-8">Seleziona un profilo da modificare</p>
-      )}
+      <div className="relative z-10 flex flex-col items-center w-full">
+        {/* Heading */}
+        <div className="text-center mb-10">
+          <span className="text-2xl font-bold tracking-tight text-[#e5a00d]">
+            TLEX
+          </span>
+          <h1 className="text-3xl md:text-4xl font-semibold text-white mt-3">
+            {isEditing ? t("profiles.editProfile") : t("profiles.whoIsWatching")}
+          </h1>
+          {isEditing && (
+            <p className="text-sm text-[#71717a] mt-2">
+              {t("profiles.selectToEdit")}
+            </p>
+          )}
+        </div>
 
-      <div className="flex flex-wrap justify-center gap-6 mt-8 max-w-3xl">
-        {profiles.map((profile) => (
-          <div
-            key={profile.id}
-            className="flex flex-col items-center gap-3 group"
-          >
-            <div className="relative">
-              <ProfileAvatar
-                src={profile.avatar_url || PROFILE_AVATARS[0].src}
-                name={profile.name}
-                size="xl"
-                onClick={() => handleSelectProfile(profile)}
-                selected={false}
-                borderColor={isEditing ? "ring-zinc-500" : "ring-plex-orange"}
-              />
-              {isEditing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-                  <Pencil className="w-8 h-8 text-white" />
-                </div>
-              )}
-              {!profile.has_worker && (
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-black">!</span>
-                </div>
-              )}
-            </div>
-            <span className="text-zinc-400 group-hover:text-white transition-colors text-lg">
-              {profile.name}
-            </span>
-            {profile.is_kids && (
-              <span className="text-xs text-blue-400 -mt-2">KIDS</span>
-            )}
-          </div>
-        ))}
-
-        {/* Add Profile Button */}
-        {profiles.length < 5 && (
-          <div className="flex flex-col items-center gap-3">
+        {/* Profile grid */}
+        <div className="flex flex-wrap justify-center gap-5 md:gap-8 max-w-2xl">
+          {profiles.map((profile) => (
             <button
-              onClick={handleCreateProfile}
-              className="w-32 h-32 rounded-full bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-zinc-500 flex items-center justify-center transition-all"
+              key={profile.id}
+              onClick={() => handleSelectProfile(profile)}
+              className="flex flex-col items-center gap-3 group outline-none"
             >
-              <Plus className="w-12 h-12 text-zinc-400" />
+              <div className="relative">
+                {/* Avatar wrapper with hover ring */}
+                <div
+                  className={`
+                  relative w-32 h-32 rounded-full transition-all duration-200
+                  ring-2 ring-transparent group-hover:ring-[#e5a00d] group-hover:ring-offset-2
+                  group-hover:scale-105
+                  ${isEditing ? "ring-white/20" : ""}
+                `}
+                  style={
+                    {
+                      "--tw-ring-offset-color": "#09090b",
+                    } as React.CSSProperties
+                  }
+                >
+                  <ProfileAvatar
+                    src={profile.avatar_url || PROFILE_AVATARS[0].src}
+                    name={profile.name}
+                    size="xl"
+                    selected={false}
+                  />
+                  {/* Edit overlay */}
+                  {isEditing && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
+                      <Pencil className="w-7 h-7 text-white" />
+                    </div>
+                  )}
+                </div>
+                {/* Worker warning badge */}
+                {!profile.has_worker && (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#09090b]">
+                    <span className="text-[10px] font-bold text-black">!</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[#a1a1aa] group-hover:text-white transition-colors text-sm font-medium">
+                  {profile.name}
+                </span>
+                {profile.is_kids && (
+                  <span className="text-[10px] font-semibold text-blue-400 tracking-wider uppercase">
+                    {t("profiles.kids")}
+                  </span>
+                )}
+              </div>
             </button>
-            <span className="text-zinc-400 text-lg">Aggiungi profilo</span>
-          </div>
+          ))}
+
+          {/* Add profile */}
+          {profiles.length < 5 && !isEditing && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex flex-col items-center gap-3 group outline-none"
+            >
+              <div className="w-32 h-32 rounded-full border-2 border-dashed border-white/20 group-hover:border-[#e5a00d]/60 flex items-center justify-center transition-all duration-200 group-hover:scale-105 bg-white/[0.03]">
+                <Plus className="w-9 h-9 text-white/30 group-hover:text-[#e5a00d]/70 transition-colors duration-200" />
+              </div>
+              <span className="text-[#52525b] group-hover:text-[#a1a1aa] transition-colors text-sm font-medium">
+                {t("profiles.addProfile")}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* Manage / Done button */}
+        {hasProfiles && (
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className={`mt-12 flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              isEditing
+                ? "bg-[#e5a00d]/15 border border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/25"
+                : "bg-white/[0.06] border border-white/10 text-[#a1a1aa] hover:bg-white/[0.12] hover:text-white"
+            }`}
+          >
+            {isEditing ? (
+              <>
+                <Check className="w-4 h-4" />
+                {t("profiles.done")}
+              </>
+            ) : (
+              <>
+                <Pencil className="w-3.5 h-3.5" />
+                {t("profiles.manage")}
+              </>
+            )}
+          </button>
         )}
       </div>
 
-      {/* Manage Profiles Button */}
-      {hasProfiles && (
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="mt-12 px-6 py-2 border border-zinc-600 text-zinc-400 hover:text-white hover:border-white transition-colors"
-        >
-          {isEditing ? "Fatto" : "Gestisci profili"}
-        </button>
-      )}
-
-      {/* Create Profile Modal */}
       {showCreateModal && (
         <CreateProfileModal onClose={() => setShowCreateModal(false)} />
       )}
-
-      {/* Edit Profile Modal */}
       {editingProfile && (
         <EditProfileModal
           profile={editingProfile}

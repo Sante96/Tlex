@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw, Play } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { DSButton, PosterCard, SectionHeader } from "@/components/ds";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
 import {
@@ -16,6 +17,7 @@ import {
 import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
 
 export default function HomePage() {
+  const t = useTranslations();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<
@@ -62,11 +64,11 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="flex flex-wrap gap-5">
+      <div className="px-4 md:px-8 py-6 md:py-8">
+        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="w-[180px] animate-pulse">
-              <div className="h-[270px] bg-[#27272a] rounded-lg" />
+            <div key={i} className="animate-pulse shrink-0 w-[130px] md:w-auto">
+              <div className="aspect-[2/3] bg-[#27272a] rounded-lg" />
               <div className="h-4 w-3/4 bg-[#27272a] rounded mt-2" />
               <div className="h-3 w-1/2 bg-[#27272a] rounded mt-1" />
             </div>
@@ -80,11 +82,10 @@ export default function HomePage() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <h1 className="text-2xl font-bold text-[#fafafa] mb-4">
-          Benvenuto in TLEX
+          {t("home.welcome")}
         </h1>
         <p className="text-[#a1a1aa] mb-6">
-          La tua libreria è vuota. Scansiona i tuoi canali Telegram per
-          iniziare.
+          {t("home.emptyLibrary")}
         </p>
         <DSButton
           onClick={handleScan}
@@ -95,19 +96,19 @@ export default function HomePage() {
             />
           }
         >
-          {scanning ? "Scansione..." : "Scansiona Canali"}
+          {scanning ? t("home.scanning") : t("home.scan")}
         </DSButton>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 px-4 md:px-8 py-6 md:py-8">
       {/* Continue Watching */}
       {continueWatching.length > 0 && (
         <section>
-          <SectionHeader title="Continua a guardare" />
-          <StaggerGrid className="flex flex-wrap gap-5">
+          <SectionHeader title={t("home.continueWatching")} />
+          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
             {continueWatching.map((item) => (
               <ContinueWatchingCard key={item.id} item={item} />
             ))}
@@ -118,8 +119,8 @@ export default function HomePage() {
       {/* Film */}
       {media.length > 0 && (
         <section>
-          <SectionHeader title="Film" href="/movies" />
-          <StaggerGrid className="flex flex-wrap gap-5">
+          <SectionHeader title={t("home.movies")} href="/movies" />
+          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
             {media.slice(0, 7).map((m) => (
               <PosterCard
                 key={m.id}
@@ -131,6 +132,7 @@ export default function HomePage() {
                     ? new Date(m.release_date).getFullYear().toString()
                     : ""
                 }
+                className="shrink-0 w-[130px] md:w-full"
               />
             ))}
           </StaggerGrid>
@@ -140,8 +142,8 @@ export default function HomePage() {
       {/* Serie TV */}
       {series.length > 0 && (
         <section>
-          <SectionHeader title="Serie TV" href="/series" />
-          <StaggerGrid className="flex flex-wrap gap-5">
+          <SectionHeader title={t("home.series")} href="/series" />
+          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
             {series.slice(0, 7).map((s) => (
               <PosterCard
                 key={s.id}
@@ -150,9 +152,10 @@ export default function HomePage() {
                 title={s.title}
                 subtitle={
                   s.seasons_count === 1
-                    ? "1 Stagione"
-                    : `${s.seasons_count} Stagioni`
+                    ? `1 ${t("home.season")}`
+                    : `${s.seasons_count} ${t("home.seasons")}`
                 }
+                className="shrink-0 w-[130px] md:w-full"
               />
             ))}
           </StaggerGrid>
@@ -186,6 +189,7 @@ function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
       title={title}
       subtitle={combinedSubtitle || undefined}
       progress={item.progress_percent}
+      className="shrink-0 w-[130px] md:w-full"
     >
       {/* Play overlay */}
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

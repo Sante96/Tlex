@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Pencil } from "lucide-react";
 import {
   HeroBanner,
@@ -24,17 +25,15 @@ import {
   cleanEpisodeTitle,
   getTmdbImageUrl,
 } from "@/lib/format";
-
-function getSeasonName(seasonNumber: number): string {
-  return seasonNumber === 0 ? "Specials" : `Stagione ${seasonNumber}`;
-}
+import { ExpandableOverview } from "@/components/ui/expandable-overview";
 
 export default function SeasonDetailPage() {
+  const t = useTranslations();
   const params = useParams();
   const router = useRouter();
   const seriesId = Number(params.id);
   const seasonNumber = Number(params.season);
-  const seasonName = getSeasonName(seasonNumber);
+  const seasonName = seasonNumber === 0 ? t("media.specials") : `${t("media.season")} ${seasonNumber}`;
 
   const [series, setSeries] = useState<SeriesDetails | null>(null);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
@@ -80,12 +79,12 @@ export default function SeasonDetailPage() {
   if (!series || !season) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-[#a1a1aa]">Stagione non trovata</p>
+        <p className="text-[#a1a1aa]">{t("media.seasonNotFound")}</p>
         <button
           onClick={() => router.back()}
           className="text-[#e5a00d] text-sm mt-2 hover:underline"
         >
-          Torna indietro
+          {t("media.goBack")}
         </button>
       </div>
     );
@@ -109,50 +108,56 @@ export default function SeasonDetailPage() {
         posterAlt={series.title}
         posterWidth={200}
         posterHeight={300}
+        mobileInfoSlot={
+          <>
+            <h1 className="text-xl md:text-4xl font-bold text-[#fafafa] leading-tight">
+              {series.title}
+            </h1>
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-semibold text-[#d4d4d8]">
+                {seasonName}
+              </span>
+              <span className="text-xs text-[#d4d4d8]">
+                {season.episodes_count} {t("media.episodes")}
+              </span>
+              {genresText && (
+                <span className="text-xs text-[#d4d4d8] line-clamp-1">
+                  {genresText}
+                </span>
+              )}
+              <MetaRow
+                voteAverage={series.vote_average}
+                contentRating={series.content_rating}
+                items={year ? [{ text: String(year) }] : []}
+              />
+            </div>
+          </>
+        }
       >
-        <h1 className="text-4xl font-bold text-[#fafafa]">{series.title}</h1>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-lg font-semibold text-[#d4d4d8]">
-            {seasonName}
-          </span>
-          <span className="text-sm text-[#d4d4d8]">
-            {season.episodes_count} Episodi
-          </span>
-          <MetaRow
-            voteAverage={series.vote_average}
-            contentRating={series.content_rating}
-            items={[
-              ...(year ? [{ text: String(year) }] : []),
-              ...(genresText ? [{ text: genresText }] : []),
-            ]}
-          />
-        </div>
         <div className="flex">
           <ActionButton
             variant="secondary"
             icon={<Pencil className="h-4 w-4" />}
             onClick={() => setEditingSeason(true)}
           >
-            Modifica Stagione
+            {t("media.editSeason")}
           </ActionButton>
         </div>
         {series.overview && (
-          <p className="text-sm text-[#d4d4d8] leading-relaxed line-clamp-3 max-w-3xl text-shadow-sm">
-            {series.overview}
-          </p>
+          <ExpandableOverview text={series.overview} />
         )}
       </HeroBanner>
 
       {/* Episodes */}
-      <div className="flex flex-col gap-6 px-12 py-8">
+      <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-[#fafafa]">Episodi</h2>
+          <h2 className="text-2xl font-semibold text-[#fafafa]">{t("media.episodes")}</h2>
           <span className="text-sm text-[#a1a1aa]">
-            {season.episodes_count} episodi
+            {season.episodes_count} {t("media.episodes").toLowerCase()}
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {season.episodes.map((ep) => {
             const progressPercent = ep.watch_progress?.progress_percent ?? 0;
             const isWatched = ep.watch_progress?.is_completed ?? false;
@@ -190,7 +195,7 @@ export default function SeasonDetailPage() {
 
       {/* Cast */}
       {cast.length > 0 && (
-        <div className="px-12 pb-8">
+        <div className="px-4 md:px-12 pb-4 md:pb-8">
           <CastSection cast={cast} />
         </div>
       )}
@@ -246,15 +251,15 @@ export default function SeasonDetailPage() {
 function SeasonSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="flex items-center gap-6 h-[200px] px-12">
-        <div className="w-[100px] h-[150px] bg-[#27272a] rounded-lg" />
+      <div className="flex items-center gap-6 h-[200px] px-4 md:px-12">
+        <div className="w-[100px] h-[150px] bg-[#27272a] rounded-lg hidden md:block" />
         <div className="flex-1 space-y-3">
           <div className="h-8 w-48 bg-[#27272a] rounded" />
           <div className="h-5 w-32 bg-[#27272a] rounded" />
           <div className="h-4 w-full max-w-md bg-[#27272a] rounded" />
         </div>
       </div>
-      <div className="px-12 py-8">
+      <div className="px-4 md:px-12 py-4 md:py-8">
         <div className="h-7 w-20 bg-[#27272a] rounded mb-6" />
         <div className="flex flex-col gap-3">
           {[1, 2, 3].map((i) => (
