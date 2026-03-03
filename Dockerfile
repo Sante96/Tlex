@@ -1,39 +1,23 @@
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
-
-WORKDIR /app
-
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-# Use copy mode so .venv can be copied between stages (hardlinks don't survive COPY --from)
-ENV UV_LINK_MODE=copy
-
-# Install build tools (needed for tgcrypto on Python 3.13)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy dependencies
-COPY pyproject.toml uv.lock ./
-
-# Install dependencies interactively (to ensure lock file is respected)
-RUN uv sync --frozen --no-install-project
-
-# ============================================
-# Final Image
-# ============================================
 FROM python:3.13-slim-bookworm
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for remuxing, mkvtoolnix for font extraction)
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /usr/local/bin/uv /usr/local/bin/uv
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     mkvtoolnix \
+    gcc \
+    libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy dependencies and install into .venv
+COPY pyproject.toml uv.lock ./
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+RUN uv sync --frozen --no-install-project
 
 # Copy application code
 COPY . .
