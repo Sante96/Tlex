@@ -23,6 +23,10 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# rewrites() in next.config.ts are evaluated at build time in standalone mode
+ARG BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=$BACKEND_URL
+
 RUN npm run build
 
 # Production image, copy all the files and run next
