@@ -28,6 +28,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "wrapper"
           cache-read-only: false
 
       - name: Extract version from package.json
@@ -47,14 +48,10 @@ jobs:
         run: |
           echo "DEFAULT_SERVER_URL=${{ secrets.DEFAULT_SERVER_URL || '' }}" > local.properties
 
-      - name: Grant execute permission for gradlew
-        working-directory: android-tv
-        run: chmod +x gradlew
-
       - name: Build Release APK
         working-directory: android-tv
         run: |
-          ./gradlew assembleRelease --no-daemon \
+          gradle assembleRelease --no-daemon \
             -PversionName=${{ steps.version.outputs.name }} \
             -PversionCode=${{ steps.version.outputs.code }}
 
