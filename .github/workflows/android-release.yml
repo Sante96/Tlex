@@ -14,6 +14,8 @@ jobs:
   build:
     name: Build & Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -56,24 +58,19 @@ jobs:
             -PversionCode=${{ steps.version.outputs.code }}
 
       - name: Sign APK
-        uses: r0adkll/sign-android-release@v1
-        id: sign_apk
-        with:
-          releaseDirectory: android-tv/app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-
-      - name: Rename APK
         run: |
-          mv "${{ steps.sign_apk.outputs.signedReleaseFile }}" \
-             "tlex-tv-${{ steps.version.outputs.tag }}.apk"
-
-          # Also create a latest symlink for convenience
-          cp "tlex-tv-${{ steps.version.outputs.tag }}.apk" "tlex-tv-latest.apk"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          BUILD_TOOLS=$(ls /usr/local/lib/android/sdk/build-tools/ | sort -V | tail -1)
+          UNSIGNED="android-tv/app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED="tlex-tv-${{ steps.version.outputs.tag }}.apk"
+          /usr/local/lib/android/sdk/build-tools/$BUILD_TOOLS/zipalign -v 4 "$UNSIGNED" aligned.apk
+          /usr/local/lib/android/sdk/build-tools/$BUILD_TOOLS/apksigner sign \
+            --ks keystore.jks \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            --out "$SIGNED" aligned.apk
+          rm keystore.jks aligned.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
