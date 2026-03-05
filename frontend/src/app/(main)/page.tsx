@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { DSButton, PosterCard, SectionHeader } from "@/components/ds";
+import { DSButton, TVButton, PosterCard, SectionHeader } from "@/components/ds";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
+import { useIsTV } from "@/hooks/use-platform";
 import {
   getMediaList,
   getContinueWatching,
@@ -19,6 +20,7 @@ import { PosterCardSkeleton } from "@/components/ui/skeleton";
 
 export default function HomePage() {
   const t = useTranslations();
+  const isTV = useIsTV();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<
@@ -26,6 +28,12 @@ export default function HomePage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+
+  const gridClass = isTV
+    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5"
+    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
+
+  const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
 
   useEffect(() => {
     loadMedia();
@@ -65,10 +73,10 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="px-4 md:px-8 py-6 md:py-8">
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <PosterCardSkeleton key={i} className="w-[130px] md:w-auto" />
+      <div className={isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}>
+        <div className={isTV ? gridClass : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0"}>
+          {Array.from({ length: isTV ? 8 : 6 }).map((_, i) => (
+            <PosterCardSkeleton key={i} className={isTV ? "" : "w-[130px] md:w-auto"} />
           ))}
         </div>
       </div>
@@ -82,30 +90,36 @@ export default function HomePage() {
           {t("home.welcome")}
         </h1>
         <p className="text-[#a1a1aa] mb-6">{t("home.emptyLibrary")}</p>
-        <DSButton
-          onClick={handleScan}
-          disabled={scanning}
-          icon={
-            <RefreshCw
-              className={`h-5 w-5 ${scanning ? "animate-spin" : ""}`}
-            />
-          }
-        >
-          {scanning ? t("home.scanning") : t("home.scan")}
-        </DSButton>
+        {isTV ? (
+          <TVButton
+            onClick={handleScan}
+            disabled={scanning}
+            icon={<RefreshCw className={`h-5 w-5 ${scanning ? "animate-spin" : ""}`} />}
+          >
+            {scanning ? t("home.scanning") : t("home.scan")}
+          </TVButton>
+        ) : (
+          <DSButton
+            onClick={handleScan}
+            disabled={scanning}
+            icon={<RefreshCw className={`h-5 w-5 ${scanning ? "animate-spin" : ""}`} />}
+          >
+            {scanning ? t("home.scanning") : t("home.scan")}
+          </DSButton>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8 px-4 md:px-8 py-6 md:py-8">
+    <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
       {/* Continue Watching */}
       {continueWatching.length > 0 && (
         <section>
           <SectionHeader title={t("home.continueWatching")} />
-          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+          <StaggerGrid className={gridClass}>
             {continueWatching.map((item) => (
-              <ContinueWatchingCard key={item.id} item={item} />
+              <ContinueWatchingCard key={item.id} item={item} isTV={isTV} className={cardClass} />
             ))}
           </StaggerGrid>
         </section>
@@ -115,7 +129,7 @@ export default function HomePage() {
       {media.length > 0 && (
         <section>
           <SectionHeader title={t("home.movies")} href="/movies" />
-          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+          <StaggerGrid className={gridClass}>
             {media.slice(0, 7).map((m) => (
               <PosterCard
                 key={m.id}
@@ -127,7 +141,7 @@ export default function HomePage() {
                     ? new Date(m.release_date).getFullYear().toString()
                     : ""
                 }
-                className="shrink-0 w-[130px] md:w-full"
+                className={cardClass}
               />
             ))}
           </StaggerGrid>
@@ -138,7 +152,7 @@ export default function HomePage() {
       {series.length > 0 && (
         <section>
           <SectionHeader title={t("home.series")} href="/series" />
-          <StaggerGrid className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+          <StaggerGrid className={gridClass}>
             {series.slice(0, 7).map((s) => (
               <PosterCard
                 key={s.id}
@@ -150,7 +164,7 @@ export default function HomePage() {
                     ? `1 ${t("home.season")}`
                     : `${s.seasons_count} ${t("home.seasons")}`
                 }
-                className="shrink-0 w-[130px] md:w-full"
+                className={cardClass}
               />
             ))}
           </StaggerGrid>
@@ -160,7 +174,15 @@ export default function HomePage() {
   );
 }
 
-function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
+function ContinueWatchingCard({
+  item,
+  isTV,
+  className,
+}: {
+  item: ContinueWatchingItem;
+  isTV?: boolean;
+  className?: string;
+}) {
   const imageUrl = item.series_id
     ? getTmdbImageUrl(item.series_poster_path ?? null, "w300") ||
       getTmdbImageUrl(item.poster_path, "w300")
@@ -184,10 +206,10 @@ function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
       title={title}
       subtitle={combinedSubtitle || undefined}
       progress={item.progress_percent}
-      className="shrink-0 w-[130px] md:w-full"
+      className={className}
     >
-      {/* Play overlay */}
-      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+      {/* Play overlay — visible on hover (mouse) and focus-visible (D-pad) */}
+      <div className={`absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center ${isTV ? "opacity-0 group-focus-visible:opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
         <Play className="h-10 w-10 text-white fill-white" />
       </div>
     </PosterCard>

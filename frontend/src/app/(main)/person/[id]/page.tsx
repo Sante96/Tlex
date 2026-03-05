@@ -9,6 +9,7 @@ import { getPersonDetails, type PersonDetails } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 import { PosterCard } from "@/components/ds";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsTV } from "@/hooks/use-platform";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -35,6 +36,7 @@ export default function PersonPage() {
   const [person, setPerson] = useState<PersonDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const isTV = useIsTV();
 
   useEffect(() => {
     const load = async () => {
@@ -58,7 +60,7 @@ export default function PersonPage() {
         <p className="text-[#a1a1aa]">{t("person.notFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline"
+          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
         >
           {t("media.goBack")}
         </button>
@@ -79,11 +81,11 @@ export default function PersonPage() {
   const bioIsTruncatable = (person.biography?.length ?? 0) > 400;
 
   return (
-    <div className="px-4 md:px-12 py-6 md:py-10">
+    <div className={isTV ? "px-8 py-8" : "px-4 md:px-12 py-6 md:py-10"}>
       {/* Back */}
       <button
         onClick={() => router.back()}
-        className="flex items-center gap-2 text-[#a1a1aa] hover:text-white transition-colors mb-8 group"
+        className="flex items-center gap-2 text-[#a1a1aa] hover:text-white transition-colors mb-8 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
       >
         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
         <span className="text-sm">{t("common.back")}</span>
@@ -131,8 +133,8 @@ export default function PersonPage() {
             )}
           </div>
 
-          {/* Social links */}
-          {(person.imdb_id || person.instagram_id || person.twitter_id) && (
+          {/* Social links — hidden on TV (external browser links) */}
+          {!isTV && (person.imdb_id || person.instagram_id || person.twitter_id) && (
             <div className="flex items-center gap-3">
               {person.imdb_id && (
                 <a
@@ -180,7 +182,7 @@ export default function PersonPage() {
               {bioIsTruncatable && (
                 <button
                   onClick={() => setBioExpanded((v) => !v)}
-                  className="text-xs text-[#e5a00d] hover:underline self-start"
+                  className="text-xs text-[#e5a00d] hover:underline self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
                 >
                   {bioExpanded ? t("common.readLess") : t("common.readMore")}
                 </button>
@@ -200,7 +202,10 @@ export default function PersonPage() {
               {t("person.inCatalog")})
             </span>
           </h2>
-          <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4">
+          <div className={isTV
+            ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4"
+            : "grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4"
+          }>
             {person.works.map((work) => {
               const year = work.release_date
                 ? new Date(work.release_date).getFullYear().toString()

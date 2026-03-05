@@ -40,13 +40,14 @@ export function PosterCard({
   return (
     <motion.div
       whileHover={{ scale: 1.05, y: -4 }}
+      whileFocus={{ scale: 1.05, y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       className={outerClass || undefined}
       style={isFluid ? undefined : { width: fixedW }}
     >
-      <Link href={href} className="group block">
+      <Link href={href} className="group block outline-none focus-visible:outline-none">
         <div
-          className={`relative bg-[#27272a] rounded-lg overflow-hidden${isFluid ? " aspect-[2/3] w-full" : ""}`}
+          className={`relative bg-[#27272a] rounded-lg overflow-hidden ring-2 ring-transparent group-focus-visible:ring-[#e5a00d] transition-shadow${isFluid ? " aspect-[2/3] w-full" : ""}`}
           style={isFluid ? undefined : { width: fixedW, height: fixedH }}
         >
           {imageUrl ? (
@@ -68,10 +69,10 @@ export function PosterCard({
             </div>
           )}
         </div>
-        <p className="mt-2 text-sm font-medium text-[#fafafa] truncate">
+        <p className="mt-2 text-sm font-medium text-[#fafafa] truncate leading-snug">
           {title}
         </p>
-        {subtitle && <p className="text-xs text-[#a1a1aa]">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-[#71717a] truncate">{subtitle}</p>}
       </Link>
     </motion.div>
   );

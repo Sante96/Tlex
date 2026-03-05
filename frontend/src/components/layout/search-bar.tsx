@@ -24,14 +24,17 @@ const PANEL_STYLE: React.CSSProperties = {
 function ResultRow({
   result,
   onSelect,
+  onKeyDown,
 }: {
   result: SearchResult;
   onSelect: (r: SearchResult) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <button
       onClick={() => onSelect(result)}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.07] transition-colors text-left group"
+      onKeyDown={onKeyDown}
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.07] focus-visible:outline-none focus-visible:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-inset transition-colors text-left group"
     >
       <div className="w-10 h-[60px] rounded-md overflow-hidden shrink-0 bg-white/[0.04] border border-white/[0.06]">
         {result.poster_path ? (
@@ -74,6 +77,8 @@ export function SearchBar({ className }: { className?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasResults = movies.length > 0 || series.length > 0;
@@ -133,7 +138,33 @@ export function SearchBar({ className }: { className?: string }) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       search(query.trim());
     }
-    if (e.key === "Escape") setIsOpen(false);
+    if (e.key === "Escape") {
+      setIsOpen(false);
+      inputRef.current?.focus();
+    }
+    if (e.key === "ArrowDown" && isOpen && panelRef.current) {
+      e.preventDefault();
+      const first = panelRef.current.querySelector<HTMLButtonElement>("button");
+      first?.focus();
+    }
+  };
+
+  const handleResultKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const buttons = Array.from(
+      panelRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    );
+    const idx = buttons.indexOf(e.currentTarget);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      buttons[idx + 1]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (idx === 0) inputRef.current?.focus();
+      else buttons[idx - 1]?.focus();
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+      inputRef.current?.focus();
+    }
   };
 
   const handleSelect = (result: SearchResult) => {
@@ -177,6 +208,7 @@ export function SearchBar({ className }: { className?: string }) {
           <Search className="h-4 w-4 shrink-0 text-[#71717a] group-hover:text-[#a1a1aa] group-focus-within:text-[#e5a00d] transition-colors" />
         )}
         <input
+          ref={inputRef}
           type="search"
           placeholder={t("search.placeholder")}
           value={query}
@@ -190,6 +222,7 @@ export function SearchBar({ className }: { className?: string }) {
       {/* Results panel */}
       {showPanel && (
         <div
+          ref={panelRef}
           className="absolute top-full mt-2 z-50 rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.6)] backdrop-blur-xl"
           style={{
             ...PANEL_STYLE,
@@ -215,6 +248,7 @@ export function SearchBar({ className }: { className?: string }) {
                         key={`movie-${m.id}`}
                         result={m}
                         onSelect={handleSelect}
+                        onKeyDown={handleResultKeyDown}
                       />
                     ))}
                   </div>
@@ -237,6 +271,7 @@ export function SearchBar({ className }: { className?: string }) {
                         key={`series-${s.id}`}
                         result={s}
                         onSelect={handleSelect}
+                        onKeyDown={handleResultKeyDown}
                       />
                     ))}
                   </div>

@@ -29,7 +29,7 @@ export function ExpandableOverview({
       {isLong && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mt-1 flex items-center gap-1 text-sm font-medium text-[#e5a00d] hover:text-[#d4940c] transition-colors"
+          className="mt-1 flex items-center gap-1 text-sm font-medium text-[#e5a00d] hover:text-[#d4940c] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
         >
           {expanded ? (
             <>

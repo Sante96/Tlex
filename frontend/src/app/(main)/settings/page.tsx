@@ -34,6 +34,8 @@ import { ChangePasswordModal } from "@/components/settings/change-password-modal
 import { AddWorkerCard } from "@/components/settings/add-worker-card";
 import { DSCard, DSButton } from "@/components/ds";
 import { useSettingsData } from "@/hooks/use-settings-data";
+import { useIsTV } from "@/hooks/use-platform";
+import { TVSettings } from "./tv-settings";
 
 interface UserPreferences {
   default_audio: string;
@@ -43,6 +45,12 @@ interface UserPreferences {
 }
 
 export default function SettingsPage() {
+  const isTV = useIsTV();
+  if (isTV) return <TVSettings />;
+  return <WebSettings />;
+}
+
+function WebSettings() {
   const { user } = useAuth();
   const { profile } = useProfile();
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -120,7 +128,6 @@ export default function SettingsPage() {
 
   return (
     <div className="px-4 md:px-12 py-6 md:py-8">
-      {/* 2-column grid layout matching design */}
       <div className="flex flex-col md:flex-row gap-6">
         {/* Left Column */}
         <div className="flex-1 flex flex-col gap-6">

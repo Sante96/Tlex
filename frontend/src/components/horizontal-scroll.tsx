@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DSIconButton } from "@/components/ds";
+import { useIsTV } from "@/hooks/use-platform";
 
 interface HorizontalScrollProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ export function HorizontalScroll({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isTV = useIsTV();
 
   const checkScroll = () => {
     const el = scrollRef.current;
@@ -58,22 +60,24 @@ export function HorizontalScroll({
       {title && (
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <div className="flex items-center gap-1">
-            {canScrollLeft && (
-              <DSIconButton
-                onClick={() => scroll("left")}
-                className="rounded-full hover:bg-zinc-800"
-                icon={<ChevronLeft className="w-5 h-5 text-zinc-400" />}
-              />
-            )}
-            {canScrollRight && (
-              <DSIconButton
-                onClick={() => scroll("right")}
-                className="rounded-full hover:bg-zinc-800"
-                icon={<ChevronRight className="w-5 h-5 text-zinc-400" />}
-              />
-            )}
-          </div>
+          {!isTV && (
+            <div className="flex items-center gap-1">
+              {canScrollLeft && (
+                <DSIconButton
+                  onClick={() => scroll("left")}
+                  className="rounded-full hover:bg-zinc-800"
+                  icon={<ChevronLeft className="w-5 h-5 text-zinc-400" />}
+                />
+              )}
+              {canScrollRight && (
+                <DSIconButton
+                  onClick={() => scroll("right")}
+                  className="rounded-full hover:bg-zinc-800"
+                  icon={<ChevronRight className="w-5 h-5 text-zinc-400" />}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -12,6 +12,12 @@ export {
 } from "./auth";
 export type { LoginResponse, UserResponse, UserInfo } from "./auth";
 export { listUsers, toggleUserAdmin, deleteUser } from "./auth";
+export {
+  requestDeviceCode,
+  confirmDeviceCode,
+  pollDeviceCode,
+} from "./auth";
+export type { DeviceCodeResponse, DevicePollResponse } from "./auth";
 
 // Media
 export {
@@ -79,6 +85,7 @@ export {
   createProfile,
   updateProfile,
   deleteProfile,
+  assignWorkerToProfile,
 } from "./profiles";
 export type { Profile, ProfileListResponse } from "./profiles";
 

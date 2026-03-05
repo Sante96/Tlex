@@ -58,3 +58,8 @@ export async function updateProfile(
 export async function deleteProfile(profileId: number): Promise<void> {
   await api.delete(`/api/v1/profiles/${profileId}`);
 }
+
+export async function assignWorkerToProfile(profileId: number): Promise<Profile> {
+  const response = await api.post<Profile>(`/api/v1/profiles/${profileId}/assign-worker`);
+  return response.data;
+}

@@ -43,11 +43,13 @@ export const DSButton = forwardRef<HTMLButtonElement, DSButtonProps>(
       <motion.button
         ref={ref}
         disabled={disabled}
+        suppressHydrationWarning
         whileHover={disabled ? undefined : { scale: 1.02 }}
         whileTap={disabled ? undefined : { scale: 0.98 }}
         transition={{ duration: 0.15 }}
         className={cn(
           "inline-flex items-center justify-center gap-2 h-10 rounded-lg px-4 text-sm font-medium transition-colors cursor-pointer",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-offset-2 focus-visible:ring-offset-black",
           "disabled:cursor-not-allowed",
           disabled ? v.disabled : v.base,
           className,

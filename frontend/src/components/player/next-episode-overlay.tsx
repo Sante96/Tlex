@@ -117,7 +117,7 @@ export function NextEpisodeOverlay({
             <div className="absolute left-0 top-0 bottom-0 w-px bg-white/5" />
             <button
               onClick={handleCancel}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
               <X className="h-4 w-4 text-white/60" />
             </button>
@@ -126,7 +126,7 @@ export function NextEpisodeOverlay({
             </p>
             <button
               onClick={onPlay}
-              className="w-full rounded-xl overflow-hidden aspect-video relative group"
+              className="w-full rounded-xl overflow-hidden aspect-video relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
             >
               {thumbUrl ? (
                 <Image
@@ -159,7 +159,7 @@ export function NextEpisodeOverlay({
             </div>
             <button
               onClick={onPlay}
-              className="relative flex items-center justify-center w-[72px] h-[72px] group"
+              className="relative flex items-center justify-center w-[72px] h-[72px] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded-full"
             >
               <svg
                 width="72"

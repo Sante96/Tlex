@@ -1,6 +1,6 @@
 """Pydantic schemas for API request/response models."""
 
-from app.schemas.auth import ChangePassword, RefreshRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas.auth import ChangePassword, DeviceCodeResponse, DeviceConfirmRequest, DevicePollResponse, RefreshRequest, TokenResponse, UserCreate, UserResponse
 from app.schemas.media import (
     MediaItemDetailResponse,
     MediaItemResponse,
@@ -28,6 +28,9 @@ __all__ = [
     "TokenResponse",
     "RefreshRequest",
     "ChangePassword",
+    "DeviceCodeResponse",
+    "DeviceConfirmRequest",
+    "DevicePollResponse",
     # Media
     "MediaPartResponse",
     "MediaStreamResponse",

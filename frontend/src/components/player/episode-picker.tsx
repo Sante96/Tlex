@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useIsMobile } from "@/lib/breakpoints";
+import { useIsTV } from "@/hooks/use-platform";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -46,6 +47,7 @@ export function EpisodePicker({
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isMobile = useIsMobile();
+  const isTV = useIsTV();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -90,7 +92,7 @@ export function EpisodePicker({
     };
   }, [checkScroll, loading, activeSeason]);
 
-  // Scroll current episode into center view when picker opens or season changes
+  // Scroll + focus current episode when picker opens or season changes
   useEffect(() => {
     if (loading || !open) return;
     const el = scrollRef.current;
@@ -103,6 +105,8 @@ export function EpisodePicker({
       currentEl.offsetLeft - el.clientWidth / 2 + currentEl.offsetWidth / 2;
     el.scrollLeft = Math.max(0, scrollLeft);
     checkScroll();
+    // Move keyboard focus to current episode for D-pad navigation
+    currentEl.focus({ preventScroll: true });
   }, [loading, open, activeSeason, checkScroll]);
 
   const scroll = (direction: "left" | "right") => {
@@ -213,7 +217,7 @@ export function EpisodePicker({
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen((v) => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   {t("media.season")} {activeSeason}
                   <ChevronDown
@@ -237,7 +241,7 @@ export function EpisodePicker({
                           setDropdownOpen(false);
                         }}
                         className={cn(
-                          "flex items-center w-full px-4 py-2.5 text-[13px] transition-colors",
+                          "flex items-center w-full px-4 py-2.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-inset",
                           activeSeason === season.season_number
                             ? "text-plex-orange bg-plex-orange/10"
                             : "text-white hover:bg-white/[0.08]",
@@ -253,8 +257,8 @@ export function EpisodePicker({
                 )}
               </div>
 
-              {/* Scroll chevrons — desktop only */}
-              <div className="hidden md:flex items-center gap-1">
+              {/* Scroll chevrons — desktop only, hidden on TV */}
+              {!isTV && <div className="hidden md:flex items-center gap-1">
                 <DSIconButton
                   onClick={() => scroll("left")}
                   disabled={!canScrollLeft}
@@ -277,7 +281,7 @@ export function EpisodePicker({
                   )}
                   icon={<ChevronRight className="w-5 h-5" />}
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Horizontal episode strip with edge fade masks */}
@@ -371,7 +375,7 @@ function EpisodeThumb({
       data-current={isCurrent ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "flex-shrink-0 w-44 md:w-80 rounded-xl overflow-hidden transition-all group cursor-pointer",
+        "flex-shrink-0 w-44 md:w-80 rounded-xl overflow-hidden transition-all group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/80",
         isCurrent && "ring-2 ring-plex-orange",
       )}
     >
@@ -424,7 +428,7 @@ function EpisodeThumb({
 
         {/* Play hover overlay */}
         {!isCurrent && (
-          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
             <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
               <Play className="h-5 w-5 text-white fill-white ml-0.5" />
             </div>

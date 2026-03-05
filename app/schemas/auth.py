@@ -40,3 +40,29 @@ class ChangePassword(BaseModel):
 
     current_password: str
     new_password: str
+
+
+class DeviceCodeResponse(BaseModel):
+    """Response when a TV requests a device code."""
+
+    user_code: str
+    device_code: str
+    expires_in: int
+    interval: int = 5
+
+
+class DeviceConfirmRequest(BaseModel):
+    """Request from browser to confirm a device code."""
+
+    user_code: str
+    email: EmailStr
+    password: str
+
+
+class DevicePollResponse(BaseModel):
+    """Response when TV polls for auth status."""
+
+    status: str  # "pending" | "confirmed" | "expired"
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"

@@ -163,6 +163,21 @@ Tutte le fasi principali sono completate! 🎉
 
 ---
 
+## ✅ Android TV App (Phase 17 — WebView approach)
+
+---
+
+- [x] Build files: `settings.gradle.kts`, `build.gradle.kts`, `app/build.gradle.kts`, `gradle.properties`, Gradle wrapper
+- [x] `AndroidManifest.xml` + risorse (`strings.xml`, `themes.xml`, `drawable/ic_launcher.xml`) — `usesCleartextTraffic=true`
+- [x] `AppPreferences.kt` (DataStore per server URL) + `AppModule` (Hilt DI)
+- [x] `ServerSetupScreen` + `ServerSetupViewModel` — inserimento URL al primo avvio
+- [x] `TvWebView.kt` — WebView fullscreen con JS, cookie, mediaPlayback, BackHandler
+- [x] `TlexNavGraph.kt` semplificato: Setup → WebView (nessun login/player nativo)
+- [x] Frontend: `use-platform.ts` — hook `useIsTV()` con `useSyncExternalStore` + persistenza `sessionStorage`
+- [x] Frontend: `(main)/layout.tsx` — TV mode nasconde Sidebar, TopBar, BottomNav
+
+---
+
 ## 🟢 BACKLOG
 
 ---

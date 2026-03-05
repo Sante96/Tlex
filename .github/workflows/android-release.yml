@@ -1,0 +1,101 @@
+name: Android TV — Build & Release APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "android-tv/**"
+      - "frontend/package.json"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android-tv/**/*.gradle*', 'android-tv/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(jq -r .version frontend/package.json)
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "name=$VERSION" >> $GITHUB_OUTPUT
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create local.properties
+        working-directory: android-tv
+        run: |
+          echo "DEFAULT_SERVER_URL=${{ secrets.DEFAULT_SERVER_URL || '' }}" > local.properties
+
+      - name: Make Gradlew executable
+        working-directory: android-tv
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        working-directory: android-tv
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PversionName=${{ steps.version.outputs.name }} \
+            -PversionCode=${{ steps.version.outputs.code }}
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_apk
+        with:
+          releaseDirectory: android-tv/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: Rename APK
+        run: |
+          mv "${{ steps.sign_apk.outputs.signedReleaseFile }}" \
+             "tlex-tv-${{ steps.version.outputs.tag }}.apk"
+
+          # Also create a latest symlink for convenience
+          cp "tlex-tv-${{ steps.version.outputs.tag }}.apk" "tlex-tv-latest.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "TLEX Android TV v${{ steps.version.outputs.name }}"
+          body: |
+            ## TLEX Android TV ${{ steps.version.outputs.tag }}
+
+            ### Installazione
+            1. Abilita "Origini sconosciute" sul tuo Android TV
+            2. Trasferisci l'APK via ADB: `adb install tlex-tv-${{ steps.version.outputs.tag }}.apk`
+            3. Oppure usa un file manager per installarlo direttamente
+          files: "tlex-tv-${{ steps.version.outputs.tag }}.apk"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

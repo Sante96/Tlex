@@ -21,6 +21,7 @@ import { EpisodePicker } from "./episode-picker";
 import { NextEpisodeOverlay } from "./next-episode-overlay";
 import { useNextEpisode } from "@/hooks/player/use-next-episode";
 import { useIsMobile } from "@/lib/breakpoints";
+import { useIsTV } from "@/hooks/use-platform";
 
 interface VideoPlayerProps {
   mediaId: number;
@@ -230,9 +231,11 @@ export function VideoPlayer({
     toggleFullscreen,
     toggleMute,
     skip,
+    onActivity: handleMouseMove,
   });
 
   const isMobile = useIsMobile();
+  const isTV = useIsTV();
 
   const togglePiP = useCallback(async () => {
     const video = videoRef.current;
@@ -378,16 +381,18 @@ export function VideoPlayer({
         onSubtitleChange={setSelectedSubtitle}
         onSubtitleOffsetChange={setSubtitleOffset}
         onSkip={skip}
+        onActivity={handleMouseMove}
         onSettingsOpenChange={setSettingsOpen}
         hasEpisodes={!!seriesId && !!onEpisodeSelect}
         episodePickerOpen={episodePickerOpen}
         onToggleEpisodes={() => setEpisodePickerOpen((v) => !v)}
         episodesButtonRef={episodesButtonRef}
         onTogglePiP={
-          typeof document !== "undefined" && document.pictureInPictureEnabled
+          !isTV && typeof document !== "undefined" && document.pictureInPictureEnabled
             ? togglePiP
             : undefined
         }
+        isTV={isTV}
       />
     </div>
   );

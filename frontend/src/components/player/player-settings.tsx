@@ -12,6 +12,7 @@ import {
   SelectItem,
   SyncSubmenu,
 } from "./settings-items";
+import { useIsTV } from "@/hooks/use-platform";
 
 interface PlayerSettingsProps {
   audioTracks: MediaStream[];
@@ -44,6 +45,7 @@ export function PlayerSettingsDropdown({
   onOpenChange,
 }: PlayerSettingsProps) {
   const t = useTranslations();
+  const isTV = useIsTV();
   const [view, setView] = useState<MenuView>("main");
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -63,6 +65,21 @@ export function PlayerSettingsDropdown({
     if (!next) {
       setTimeout(() => setView("main"), 200); // Wait for close animation before resetting view
     }
+  }, [open, onOpenChange]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        onOpenChange?.(false);
+        setTimeout(() => setView("main"), 200);
+        buttonRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
   // Close on click outside
@@ -120,7 +137,7 @@ export function PlayerSettingsDropdown({
         ref={buttonRef}
         onClick={toggle}
         className={cn(
-          "p-2 rounded-full transition-colors",
+          "p-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
           open ? "bg-white/10" : "hover:bg-white/10",
         )}
       >
@@ -173,8 +190,8 @@ export function PlayerSettingsDropdown({
                   hasSubmenu
                 />
 
-                {/* Subtitle Sync */}
-                {selectedSubtitle !== null && (
+                {/* Subtitle Sync — hidden on TV (requires keyboard input) */}
+                {!isTV && selectedSubtitle !== null && (
                   <MenuItem
                     icon={<Clock className="h-5 w-5" />}
                     label={t("player.syncSubtitles")}

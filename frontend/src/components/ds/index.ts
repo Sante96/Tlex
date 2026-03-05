@@ -1,5 +1,8 @@
 // Primitives
 export { DSButton } from "./button";
+export { TVButton } from "./tv-button";
+export { TVInput } from "./tv-input";
+export { TVBackground } from "./tv-background";
 export { DSCard } from "./card";
 export { DSInput } from "./input";
 export { DSDatePicker } from "./date-picker";

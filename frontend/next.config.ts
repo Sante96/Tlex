@@ -3,6 +3,8 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
+const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
@@ -23,15 +25,15 @@ const nextConfig: NextConfig = {
       afterFiles: [
         {
           source: "/api/v1/:path*",
-          destination: "http://backend:8000/api/v1/:path*",
+          destination: `${backendUrl}/api/v1/:path*`,
         },
         {
           source: "/docs",
-          destination: "http://backend:8000/docs",
+          destination: `${backendUrl}/docs`,
         },
         {
           source: "/openapi.json",
-          destination: "http://backend:8000/openapi.json",
+          destination: `${backendUrl}/openapi.json`,
         },
       ],
       fallback: [],

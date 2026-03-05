@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/tlex_logo.png" alt="TLEX Logo" width="400"/>
+  <img src="frontend/public/tlex-logo.svg" alt="TLEX Logo" width="400"/>
   <h1 align="center">TLEX - Telegram Media Server</h1>
 </p>
 

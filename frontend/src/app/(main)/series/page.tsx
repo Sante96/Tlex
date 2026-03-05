@@ -7,12 +7,19 @@ import { PosterCard, DSButton } from "@/components/ds";
 import { getSeriesList, triggerScan, type SeriesItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 import { PosterCardSkeleton } from "@/components/ui/skeleton";
+import { useIsTV } from "@/hooks/use-platform";
 
 export default function SeriesPage() {
   const t = useTranslations();
+  const isTV = useIsTV();
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const gridClass = isTV
+    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5"
+    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
+  const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
 
   useEffect(() => {
     loadSeries();
@@ -41,7 +48,7 @@ export default function SeriesPage() {
   };
 
   return (
-    <div className="px-4 md:px-12 py-6 md:py-8">
+    <div className={isTV ? "px-8 py-8" : "px-4 md:px-12 py-6 md:py-8"}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -52,26 +59,28 @@ export default function SeriesPage() {
             {series.length} {t("nav.series").toLowerCase()}
           </p>
         </div>
-        <DSButton
-          variant="secondary"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="!h-9"
-          icon={
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-          }
-        >
-          {t("common.refresh")}
-        </DSButton>
+        {!isTV && (
+          <DSButton
+            variant="secondary"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="!h-9"
+            icon={
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+            }
+          >
+            {t("common.refresh")}
+          </DSButton>
+        )}
       </div>
 
       {/* Grid */}
       {loading ? (
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+        <div className={gridClass}>
           {Array.from({ length: 12 }).map((_, i) => (
-            <PosterCardSkeleton key={i} className="w-[130px] md:w-auto" />
+            <PosterCardSkeleton key={i} className={cardClass || "w-[130px] md:w-auto"} />
           ))}
         </div>
       ) : series.length === 0 ? (
@@ -79,7 +88,7 @@ export default function SeriesPage() {
           {t("media.seriesEmpty")}
         </div>
       ) : (
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+        <div className={gridClass}>
           {series.map((s) => (
             <PosterCard
               key={s.id}
@@ -91,7 +100,7 @@ export default function SeriesPage() {
                   ? `1 ${t("media.season")}`
                   : `${s.seasons_count} ${t("media.seasons")}`
               }
-              className="shrink-0 w-[130px] md:w-full"
+              className={cardClass}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DSIconButton } from "@/components/ds";
+import { useIsTV } from "@/hooks/use-platform";
 import type { CastMember } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
@@ -22,6 +23,7 @@ function PeopleRow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isTV = useIsTV();
 
   const checkScroll = () => {
     const el = scrollRef.current;
@@ -52,28 +54,30 @@ function PeopleRow({
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-[#fafafa]">{title}</h2>
-        <div className="flex items-center gap-2">
-          <DSIconButton
-            onClick={() => scroll("left")}
-            disabled={!canScrollLeft}
-            className="rounded-full bg-[#27272a] disabled:opacity-30"
-            icon={
-              <ChevronLeft
-                className={`h-[18px] w-[18px] ${canScrollLeft ? "text-[#fafafa]" : "text-[#71717a]"}`}
-              />
-            }
-          />
-          <DSIconButton
-            onClick={() => scroll("right")}
-            disabled={!canScrollRight}
-            className="rounded-full bg-[#27272a] disabled:opacity-30"
-            icon={
-              <ChevronRight
-                className={`h-[18px] w-[18px] ${canScrollRight ? "text-[#fafafa]" : "text-[#71717a]"}`}
-              />
-            }
-          />
-        </div>
+        {!isTV && (
+          <div className="flex items-center gap-2">
+            <DSIconButton
+              onClick={() => scroll("left")}
+              disabled={!canScrollLeft}
+              className="rounded-full bg-[#27272a] disabled:opacity-30"
+              icon={
+                <ChevronLeft
+                  className={`h-[18px] w-[18px] ${canScrollLeft ? "text-[#fafafa]" : "text-[#71717a]"}`}
+                />
+              }
+            />
+            <DSIconButton
+              onClick={() => scroll("right")}
+              disabled={!canScrollRight}
+              className="rounded-full bg-[#27272a] disabled:opacity-30"
+              icon={
+                <ChevronRight
+                  className={`h-[18px] w-[18px] ${canScrollRight ? "text-[#fafafa]" : "text-[#71717a]"}`}
+                />
+              }
+            />
+          </div>
+        )}
       </div>
 
       <div
@@ -85,10 +89,10 @@ function PeopleRow({
           <Link
             key={`${member.id}-${member.character ?? member.job}`}
             href={`/person/${member.id}`}
-            className="flex flex-col items-center gap-2 shrink-0 w-[200px] group"
+            className="flex flex-col items-center gap-2 shrink-0 w-[200px] group outline-none"
           >
             <div
-              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-[#e5a00d] transition-all duration-200 group-hover:scale-105"
+              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-[#e5a00d] group-focus-visible:ring-[#e5a00d] transition-all duration-200 group-hover:scale-105 group-focus-visible:scale-105"
               style={{ boxShadow: "none" }}
             >
               {member.profile_path ? (

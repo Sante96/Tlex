@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Phone, Trash2, Plus, Loader2, Crown } from "lucide-react";
+import ReactCountryFlag from "react-country-flag";
 import { DSButton, DSCard, DSInput } from "@/components/ds";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import {
   sendWorkerCode,
   verifyWorkerCode,
@@ -11,6 +18,27 @@ import {
   type WorkerInfo,
 } from "@/lib/api";
 import { AxiosError } from "axios";
+
+const COUNTRY_PREFIXES = [
+  { dial: "+39", iso: "IT" },
+  { dial: "+32", iso: "BE" },
+  { dial: "+1",  iso: "US" },
+  { dial: "+44", iso: "GB" },
+  { dial: "+33", iso: "FR" },
+  { dial: "+49", iso: "DE" },
+  { dial: "+34", iso: "ES" },
+  { dial: "+31", iso: "NL" },
+  { dial: "+41", iso: "CH" },
+  { dial: "+43", iso: "AT" },
+  { dial: "+351", iso: "PT" },
+  { dial: "+48", iso: "PL" },
+  { dial: "+380", iso: "UA" },
+  { dial: "+7",  iso: "RU" },
+  { dial: "+81", iso: "JP" },
+  { dial: "+86", iso: "CN" },
+  { dial: "+91", iso: "IN" },
+  { dial: "+55", iso: "BR" },
+];
 
 type Step = "idle" | "sending" | "code" | "2fa" | "verifying" | "done";
 
@@ -25,8 +53,12 @@ export function AddWorkerCard({
 }: AddWorkerCardProps) {
   const t = useTranslations();
   const [step, setStep] = useState<Step>("idle");
-  const [phone, setPhone] = useState("");
+  const [prefix, setPrefix] = useState("+39");
+  const selectedCountry = COUNTRY_PREFIXES.find((p) => p.dial === prefix);
+  const [localNumber, setLocalNumber] = useState("");
   const [code, setCode] = useState("");
+
+  const fullPhone = `${prefix}${localNumber.replace(/\s/g, "")}`;
   const [password2fa, setPassword2fa] = useState("");
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -39,11 +71,11 @@ export function AddWorkerCard({
   };
 
   const handleSendCode = async () => {
-    if (!phone.trim()) return;
+    if (!localNumber.trim()) return;
     setError("");
     setStep("sending");
     try {
-      await sendWorkerCode(phone.trim());
+      await sendWorkerCode(fullPhone);
       setStep("code");
     } catch (err) {
       setError(getErrorMessage(err));
@@ -56,7 +88,7 @@ export function AddWorkerCard({
     setStep("verifying");
     try {
       const result = await verifyWorkerCode(
-        phone.trim(),
+        fullPhone,
         code.trim(),
         twoFaPassword,
       );
@@ -65,7 +97,7 @@ export function AddWorkerCard({
         return;
       }
       setStep("done");
-      setPhone("");
+      setLocalNumber("");
       setCode("");
       setPassword2fa("");
       onWorkersChanged();
@@ -149,11 +181,43 @@ export function AddWorkerCard({
           <div className="flex flex-col gap-3">
             {/* Phone input (always visible when not done) */}
             <div className="flex gap-2">
+              <Select
+                value={prefix}
+                onValueChange={setPrefix}
+                disabled={step !== "idle" && step !== "sending"}
+              >
+                <SelectTrigger className="w-[120px] shrink-0" style={{ height: "40px" }}>
+                  <div className="flex items-center gap-1.5 truncate">
+                    {selectedCountry && (
+                      <ReactCountryFlag
+                        countryCode={selectedCountry.iso}
+                        svg
+                        style={{ width: "1.2em", height: "1.2em" }}
+                      />
+                    )}
+                    <span className="text-sm">{prefix}</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent position="popper" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  {COUNTRY_PREFIXES.map((p) => (
+                    <SelectItem key={p.dial} value={p.dial}>
+                      <span className="flex items-center gap-2">
+                        <ReactCountryFlag
+                          countryCode={p.iso}
+                          svg
+                          style={{ width: "1.2em", height: "1.2em" }}
+                        />
+                        <span>{p.iso} {p.dial}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <DSInput
                 type="tel"
-                placeholder="+39 123 456 7890"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                placeholder="460 20 58 06"
+                value={localNumber}
+                onChange={(e) => setLocalNumber(e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, handleSendCode)}
                 disabled={step !== "idle" && step !== "sending"}
                 className="flex-1"
@@ -161,7 +225,7 @@ export function AddWorkerCard({
               {step === "idle" && (
                 <DSButton
                   onClick={handleSendCode}
-                  disabled={!phone.trim()}
+                  disabled={!localNumber.trim()}
                   icon={<Plus className="w-4 h-4" />}
                 >
                   {t("workers.sendCode")}

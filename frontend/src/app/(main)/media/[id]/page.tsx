@@ -37,6 +37,7 @@ import {
 } from "@/lib/api";
 import { formatDuration, getTmdbImageUrl } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
+import { useIsTV } from "@/hooks/use-platform";
 
 export default function MediaDetailPage() {
   const params = useParams();
@@ -54,6 +55,7 @@ export default function MediaDetailPage() {
   const [showTrailer, setShowTrailer] = useState(false);
   const toast = useToast();
   const t = useTranslations();
+  const isTV = useIsTV();
 
   const handleRefreshMetadata = async () => {
     if (!media || refreshing) return;
@@ -133,7 +135,7 @@ export default function MediaDetailPage() {
         <p className="text-[#a1a1aa]">{t("media.notFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline"
+          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
         >
           {t("media.goBack")}
         </button>
@@ -205,7 +207,7 @@ export default function MediaDetailPage() {
           >
             {inWatchlist ? t("media.inWatchlist") : t("media.addWatchlist")}
           </ActionButton>
-          {trailerKey && (
+          {trailerKey && !isTV && (
             <ActionButton
               variant="secondary"
               icon={<Clapperboard className="h-4 w-4" />}
@@ -214,13 +216,15 @@ export default function MediaDetailPage() {
               {t("media.trailer")}
             </ActionButton>
           )}
-          <ActionButton
-            variant="secondary"
-            icon={<Pencil className="h-4 w-4" />}
-            onClick={() => setEditing(true)}
-          >
-            {t("media.edit")}
-          </ActionButton>
+          {!isTV && (
+            <ActionButton
+              variant="secondary"
+              icon={<Pencil className="h-4 w-4" />}
+              onClick={() => setEditing(true)}
+            >
+              {t("media.edit")}
+            </ActionButton>
+          )}
           <ActionButton
             variant="secondary"
             icon={
@@ -245,11 +249,14 @@ export default function MediaDetailPage() {
 
       {/* Similar Movies */}
       {similar.length > 0 && (
-        <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
+        <div className={`flex flex-col gap-6 py-4 md:py-8 ${isTV ? "px-8" : "px-4 md:px-12"}`}>
           <h2 className="text-2xl font-semibold text-[#fafafa]">
             {t("media.similarMovies")}
           </h2>
-          <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+          <div className={isTV
+            ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4"
+            : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0"
+          }>
             {similar.map((item) => (
               <PosterCard
                 key={item.id}
@@ -261,7 +268,7 @@ export default function MediaDetailPage() {
                     ? new Date(item.release_date).getFullYear().toString()
                     : ""
                 }
-                className="shrink-0 w-[120px] md:w-full"
+                className={isTV ? "" : "shrink-0 w-[120px] md:w-full"}
               />
             ))}
           </div>
@@ -270,7 +277,7 @@ export default function MediaDetailPage() {
 
       {/* Cast */}
       {cast.length > 0 && (
-        <div className="px-4 md:px-12 pb-4 md:pb-8">
+        <div className={isTV ? "px-8 pb-8" : "px-4 md:px-12 pb-4 md:pb-8"}>
           <CastSection cast={cast} />
         </div>
       )}

@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ProfileProvider } from "@/contexts/profile-context";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "TLEX",
@@ -34,7 +31,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} className="dark">
       <body
-        className={`${inter.className} bg-zinc-950 text-white min-h-screen`}
+        className="font-sans bg-zinc-950 text-white min-h-screen"
       >
         <NextIntlClientProvider locale={locale} messages={messages}>
           <AuthProvider>
