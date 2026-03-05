@@ -64,6 +64,18 @@
       "passwordMismatch": "Passwords do not match",
       "emailTaken": "Email already registered",
       "failed": "Registration failed"
+    },
+    "activate": {
+      "title": "Activate TV device",
+      "subtitle": "Enter the code shown on your TV",
+      "code": "Code",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Authorize",
+      "loading": "Authorizing...",
+      "error": "Invalid code or wrong credentials",
+      "success": "TV authorized!",
+      "successSubtitle": "You can go back to your TV, it will sign in automatically."
     }
   },
   "profiles": {

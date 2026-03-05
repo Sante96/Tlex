@@ -28,8 +28,11 @@ export function EpisodeCard({
 
   return (
     <div
-      className="group cursor-pointer relative aspect-video rounded-lg overflow-hidden bg-[#27272a]"
+      className="group cursor-pointer relative aspect-video rounded-lg overflow-hidden bg-[#27272a] outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
       onClick={onClick}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
     >
       {/* Thumbnail */}
       {thumbnailUrl ? (
@@ -86,7 +89,7 @@ export function EpisodeCard({
       </div>
 
       {/* Play overlay on hover */}
-      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
         <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
           <Play className="h-5 w-5 text-white fill-white ml-0.5" />
         </div>

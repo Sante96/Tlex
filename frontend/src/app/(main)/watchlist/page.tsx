@@ -7,11 +7,18 @@ import { PosterCard } from "@/components/ds";
 import { getWatchlist, type WatchlistItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 import { PosterCardSkeleton } from "@/components/ui/skeleton";
+import { useIsTV } from "@/hooks/use-platform";
 
 export default function WatchlistPage() {
   const t = useTranslations();
+  const isTV = useIsTV();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const gridClass = isTV
+    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5"
+    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
+  const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
 
   useEffect(() => {
     loadWatchlist();
@@ -29,7 +36,7 @@ export default function WatchlistPage() {
   };
 
   return (
-    <div className="px-4 md:px-12 py-6 md:py-8">
+    <div className={isTV ? "px-8 py-8" : "px-4 md:px-12 py-6 md:py-8"}>
       <div className="flex items-center gap-3 mb-6">
         <Heart className="w-8 h-8 text-red-500" />
         <h1 className="text-[28px] font-bold text-[#fafafa]">
@@ -45,9 +52,9 @@ export default function WatchlistPage() {
       </div>
 
       {loading ? (
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+        <div className={gridClass}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <PosterCardSkeleton key={i} className="w-[130px] md:w-auto" />
+            <PosterCardSkeleton key={i} className={cardClass || "w-[130px] md:w-auto"} />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -59,7 +66,7 @@ export default function WatchlistPage() {
           </p>
         </div>
       ) : (
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+        <div className={gridClass}>
           {items.map((item) => {
             const href =
               item.item_type === "series"
@@ -77,7 +84,7 @@ export default function WatchlistPage() {
                 subtitle={
                   item.item_type === "series" ? t("home.series") : undefined
                 }
-                className="shrink-0 w-[130px] md:w-full"
+                className={cardClass}
               />
             );
           })}

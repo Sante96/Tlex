@@ -26,6 +26,7 @@ import {
   getTmdbImageUrl,
 } from "@/lib/format";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
+import { useIsTV } from "@/hooks/use-platform";
 
 export default function SeasonDetailPage() {
   const t = useTranslations();
@@ -42,6 +43,7 @@ export default function SeasonDetailPage() {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const isTV = useIsTV();
   const [editingSeason, setEditingSeason] = useState(false);
   const [editingEpisode, setEditingEpisode] = useState<{
     id: number;
@@ -85,7 +87,7 @@ export default function SeasonDetailPage() {
         <p className="text-[#a1a1aa]">{t("media.seasonNotFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline"
+          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
         >
           {t("media.goBack")}
         </button>
@@ -137,20 +139,22 @@ export default function SeasonDetailPage() {
           </>
         }
       >
-        <div className="flex">
-          <ActionButton
-            variant="secondary"
-            icon={<Pencil className="h-4 w-4" />}
-            onClick={() => setEditingSeason(true)}
-          >
-            {t("media.editSeason")}
-          </ActionButton>
-        </div>
+        {!isTV && (
+          <div className="flex">
+            <ActionButton
+              variant="secondary"
+              icon={<Pencil className="h-4 w-4" />}
+              onClick={() => setEditingSeason(true)}
+            >
+              {t("media.editSeason")}
+            </ActionButton>
+          </div>
+        )}
         {series.overview && <ExpandableOverview text={series.overview} />}
       </HeroBanner>
 
       {/* Episodes */}
-      <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
+      <div className={`flex flex-col gap-6 py-4 md:py-8 ${isTV ? "px-8" : "px-4 md:px-12"}`}>
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-semibold text-[#fafafa]">
             {t("media.episodes")}
@@ -160,7 +164,7 @@ export default function SeasonDetailPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className={isTV ? "grid grid-cols-2 xl:grid-cols-3 gap-5" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"}>
           {season.episodes.map((ep) => {
             const progressPercent = ep.watch_progress?.progress_percent ?? 0;
             const isWatched = ep.watch_progress?.is_completed ?? false;
@@ -180,7 +184,7 @@ export default function SeasonDetailPage() {
                 progress={!isWatched ? progressPercent : undefined}
                 isWatched={isWatched}
                 onClick={() => router.push(`/watch/${ep.id}`)}
-                onEdit={() =>
+                onEdit={!isTV ? () =>
                   setEditingEpisode({
                     id: ep.id,
                     title: ep.title,
@@ -188,7 +192,7 @@ export default function SeasonDetailPage() {
                     posterPath: ep.still_path,
                     episodeNumber: ep.episode_number,
                     releaseDate: ep.release_date,
-                  })
+                  }) : undefined
                 }
               />
             );
@@ -198,7 +202,7 @@ export default function SeasonDetailPage() {
 
       {/* Cast */}
       {cast.length > 0 && (
-        <div className="px-4 md:px-12 pb-4 md:pb-8">
+        <div className={isTV ? "px-8 pb-8" : "px-4 md:px-12 pb-4 md:pb-8"}>
           <CastSection cast={cast} />
         </div>
       )}

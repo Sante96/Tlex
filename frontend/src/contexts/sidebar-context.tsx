@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 interface SidebarContextValue {
   isCollapsed: boolean;
   toggleCollapsed: () => void;
+  tvExpanded: boolean;
+  setTvExpanded: (value: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -17,6 +19,7 @@ function getInitialCollapsed(): boolean {
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsed);
+  const [tvExpanded, setTvExpanded] = useState(false);
 
   const toggleCollapsed = useCallback(() => {
     setIsCollapsed((prev) => {
@@ -27,7 +30,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, toggleCollapsed }}>
+    <SidebarContext.Provider value={{ isCollapsed, toggleCollapsed, tvExpanded, setTvExpanded }}>
       {children}
     </SidebarContext.Provider>
   );

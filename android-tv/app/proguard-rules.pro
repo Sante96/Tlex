@@ -1,0 +1,3 @@
+-keep class com.tlex.tv.data.api.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*

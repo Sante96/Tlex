@@ -254,6 +254,42 @@ tlex/
 │ ├── redis/
 │ └── pgadmin/
 │
+├── 📁 android-tv/ # Native Android TV App (Kotlin + Compose)
+│ ├── app/
+│ │ ├── src/main/java/com/tlex/tv/
+│ │ │ ├── TlexApp.kt # Hilt application class
+│ │ │ ├── MainActivity.kt # Single activity entry point
+│ │ │ ├── 📁 data/
+│ │ │ │ ├── api/ # Retrofit interface + data classes
+│ │ │ │ │ ├── ApiModels.kt # TokenResponse, MediaItem, SeriesDetail, etc.
+│ │ │ │ │ └── TlexApi.kt # Retrofit endpoints (auth, media, series, progress, stream)
+│ │ │ │ ├── local/
+│ │ │ │ │ └── AppPreferences.kt # DataStore (server_url, tokens)
+│ │ │ │ ├── network/
+│ │ │ │ │ ├── AuthInterceptor.kt # Bearer token injection
+│ │ │ │ │ └── DynamicUrlInterceptor.kt # Dynamic base URL
+│ │ │ │ └── repository/
+│ │ │ │ ├── AuthRepository.kt # Login/logout/getMe
+│ │ │ │ └── MediaRepository.kt # Media/series/progress/stream
+│ │ │ ├── 📁 di/
+│ │ │ │ └── AppModule.kt # Hilt: OkHttpClient, Retrofit, TlexApi
+│ │ │ └── 📁 ui/
+│ │ │ ├── theme/ # Color.kt, Type.kt, Theme.kt
+│ │ │ ├── navigation/ # Screen.kt, TlexNavGraph.kt, NavViewModel.kt
+│ │ │ ├── components/ # MediaCard.kt
+│ │ │ └── screens/
+│ │ │ ├── setup/ # ServerSetupScreen + ViewModel
+│ │ │ ├── login/ # LoginScreen + ViewModel
+│ │ │ ├── main/ # MainScreen + ViewModel (side nav)
+│ │ │ ├── home/ # HomeContent + ViewModel (continue watching, rows)
+│ │ │ ├── library/ # LibraryContent + ViewModel (grid)
+│ │ │ ├── detail/ # DetailScreen + ViewModel (movie/series)
+│ │ │ └── player/ # PlayerScreen + PlayerViewModel (ExoPlayer/Media3)
+│ │ └── src/main/res/ # strings.xml, themes.xml, drawable
+│ ├── app/build.gradle.kts
+│ ├── build.gradle.kts
+│ └── settings.gradle.kts
+│
 ├── .env # Environment variables (gitignored)
 ├── .env.example # Environment template
 ├── .gitignore

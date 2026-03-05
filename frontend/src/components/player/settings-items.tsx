@@ -44,7 +44,7 @@ export function SyncSubmenu({
           {subtitleOffset !== 0 && (
             <button
               onClick={() => onSubtitleOffsetChange(0)}
-              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
               title="Reset"
             >
               <RotateCcw className="h-3.5 w-3.5 text-zinc-400" />
@@ -81,7 +81,7 @@ export function SubMenuHeader({
     <div className="border-b border-white/[0.06] mb-1.5">
       <button
         onClick={onBack}
-        className="flex items-center w-full px-4 h-[44px] text-[13px] text-white hover:bg-white/[0.08] transition-colors"
+        className="flex items-center w-full px-4 h-[44px] text-[13px] text-white hover:bg-white/[0.08] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-inset"
       >
         <ChevronLeft className="h-5 w-5 mr-3 text-zinc-400" />
         {label}
@@ -106,7 +106,7 @@ export function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="flex items-center mx-2 px-3 h-11 text-[13px] text-white hover:bg-white/[0.08] rounded-lg transition-colors"
+      className="flex items-center mx-2 px-3 h-11 text-[13px] text-white hover:bg-white/[0.08] rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
       style={{ width: "calc(100% - 16px)" }}
     >
       <span className="text-white/70 mr-4 flex-shrink-0">{icon}</span>
@@ -134,7 +134,7 @@ export function SelectItem({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center mx-2 px-3 h-11 text-[13px] rounded-lg transition-colors hover:bg-white/[0.08]",
+        "flex items-center mx-2 px-3 h-11 text-[13px] rounded-lg transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
         selected ? "text-plex-orange bg-plex-orange/10" : "text-white",
       )}
       style={{ width: "calc(100% - 16px)" }}

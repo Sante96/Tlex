@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -188,3 +188,24 @@ class UserSeriesOverride(Base):
 
     def __repr__(self) -> str:
         return f"<UserSeriesOverride(user={self.user_id}, series={self.series_id})>"
+
+
+class DeviceCode(Base):
+    """Device code for TV / set-top-box authorization flow."""
+
+    __tablename__ = "device_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    device_code: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<DeviceCode(user_code={self.user_code}, confirmed={self.confirmed})>"

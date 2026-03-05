@@ -17,8 +17,9 @@ from app.models.worker import Worker, WorkerStatus
 
 router = APIRouter()
 
-# Temporary storage for pending auth flows (phone -> Client)
-_pending_auth: dict[str, Client] = {}
+# Temporary storage for pending auth flows (phone -> (Client, phone_code_hash))
+# Client is kept alive so verify_code uses the same DC where send_code ran
+_pending_auth: dict[str, tuple[Client, str]] = {}
 
 
 # ============================================================================
@@ -95,12 +96,12 @@ async def send_code(
     _admin=Depends(get_admin_user),
 ) -> dict:
     """Step 1: Send verification code to phone number."""
-    phone = body.phone_number.strip()
+    phone = body.phone_number.strip().replace(" ", "")
 
     # Clean up any previous pending auth for this phone
     if phone in _pending_auth:
         try:
-            await _pending_auth[phone].stop()
+            await _pending_auth[phone][0].stop()
         except Exception:
             pass
         del _pending_auth[phone]
@@ -116,18 +117,18 @@ async def send_code(
     try:
         await client.connect()
         sent_code = await client.send_code(phone)
-        _pending_auth[phone] = client
+        _pending_auth[phone] = (client, sent_code.phone_code_hash)
         logger.info(f"Sent verification code to {phone}")
         return {
             "status": "code_sent",
             "phone_code_hash": sent_code.phone_code_hash,
         }
     except Exception as e:
+        logger.error(f"Failed to send code to {phone}: {e}")
         try:
             await client.stop()
         except Exception:
             pass
-        logger.error(f"Failed to send code to {phone}: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
@@ -138,15 +139,24 @@ async def verify_code(
     _admin=Depends(get_admin_user),
 ) -> dict:
     """Step 2: Verify code and create worker."""
-    phone = body.phone_number.strip()
+    phone = body.phone_number.strip().replace(" ", "")
 
     if phone not in _pending_auth:
         raise HTTPException(status_code=400, detail="No pending auth for this phone. Send code first.")
 
-    client = _pending_auth[phone]
+    client, phone_code_hash = _pending_auth[phone]
 
+    # Reconnect if TCP connection dropped while waiting for OTP
+    if not client.is_connected:
+        try:
+            await client.connect()
+        except Exception as e:
+            del _pending_auth[phone]
+            raise HTTPException(status_code=400, detail=f"Lost connection, please send code again: {e}") from None
+
+    signed_in_user = None
     try:
-        await client.sign_in(phone, body.code)
+        signed_in_user = await client.sign_in(phone, phone_code_hash, body.code)
     except PasswordHashInvalid:
         raise HTTPException(status_code=400, detail="Password 2FA errata") from None
     except SessionPasswordNeeded:
@@ -159,24 +169,42 @@ async def verify_code(
         except Exception as e2:
             raise HTTPException(status_code=400, detail=f"2FA failed: {e2}") from None
     except Exception as e:
-        del _pending_auth[phone]
-        try:
-            await client.stop()
-        except Exception:
-            pass
+        # Don't stop the client on sign_in failure — user may retry with a new code
+        # Only clean up on fatal auth errors
+        error_str = str(e)
+        if any(x in error_str for x in ("PHONE_CODE_INVALID", "PHONE_CODE_EXPIRED", "SESSION_PASSWORD_NEEDED")):
+            pass  # Keep client alive for retry
+        else:
+            del _pending_auth[phone]
+            try:
+                await client.stop()
+            except Exception:
+                pass
         raise HTTPException(status_code=400, detail=f"Verification failed: {e}") from None
 
     try:
-        # Get session string and user info
+        # export_session_string reads from in-memory storage — no active connection needed
         session_string = await client.export_session_string()
-        me = await client.get_me()
-        is_premium = bool(me.is_premium)
+
+        # get_me() gives accurate is_premium; sign_in() response may omit the flag
+        # Reconnect if DC migration terminated the connection
+        is_premium = bool(getattr(signed_in_user, "is_premium", False))
+        try:
+            if not client.is_connected:
+                await client.connect()
+            me = await client.get_me()
+            is_premium = bool(me.is_premium)
+        except Exception:
+            pass  # Fall back to sign_in value
 
         # Check if worker already exists
         existing = await db.execute(select(Worker).where(Worker.phone_number == phone))
         if existing.scalar_one_or_none():
             del _pending_auth[phone]
-            await client.stop()
+            try:
+                await client.stop()
+            except Exception:
+                pass
             raise HTTPException(status_code=400, detail="Worker with this phone already exists")
 
         # Save to DB
@@ -191,14 +219,16 @@ async def verify_code(
         await db.commit()
         await db.refresh(worker)
 
-        # Stop the temp client, it will be loaded properly by worker_manager
-        await client.stop()
+        # Stop the temp client — ignore if already terminated after DC migration
+        try:
+            await client.stop()
+        except Exception:
+            pass
         del _pending_auth[phone]
 
         # Reload workers to pick up the new one
         await worker_manager.shutdown()
-        async with db.begin():
-            await worker_manager.load_workers(db)
+        await worker_manager.load_workers(db)
 
         logger.info(f"Added new worker: {phone} (premium={is_premium})")
         return {
@@ -209,7 +239,7 @@ async def verify_code(
     except HTTPException:
         raise
     except Exception as e:
-        del _pending_auth[phone]
+        _pending_auth.pop(phone, None)
         try:
             await client.stop()
         except Exception:

@@ -4,27 +4,51 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { MeshGradient } from "@paper-design/shaders-react";
+import dynamic from "next/dynamic";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
+import { TVBackground } from "@/components/ds";
 import { CreateProfileModal, EditProfileModal } from "@/components/profiles";
 import { useProfile } from "@/contexts/profile-context";
 import { useAuth } from "@/contexts/auth-context";
+import { useIsTV } from "@/hooks/use-platform";
 import type { Profile } from "@/lib/api";
+import { assignWorkerToProfile } from "@/lib/api";
+
+const MeshGradient = dynamic(
+  () => import("@paper-design/shaders-react").then((m) => ({ default: m.MeshGradient })),
+  { ssr: false },
+);
 
 export default function ProfilesPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { profiles, selectProfile, hasProfiles, isLoading } = useProfile();
+  const { profiles, selectProfile, hasProfiles, isLoading, refreshProfiles } = useProfile();
   const t = useTranslations();
+  const isTV = useIsTV();
 
   const [isEditing, setIsEditing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [assigningId, setAssigningId] = useState<number | null>(null);
 
-  if (!authLoading && !isAuthenticated) {
-    router.replace("/login");
-    return null;
-  }
+  const handleAssignWorker = async (e: React.MouseEvent, profileId: number) => {
+    e.stopPropagation();
+    setAssigningId(profileId);
+    try {
+      await assignWorkerToProfile(profileId);
+      await refreshProfiles();
+    } catch { /* ignore */ } finally {
+      setAssigningId(null);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  if (!authLoading && !isAuthenticated) return null;
 
   if (isLoading || authLoading) {
     return (
@@ -42,6 +66,67 @@ export default function ProfilesPage() {
     selectProfile(profile);
     router.push("/");
   };
+
+  if (isTV) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+        <TVBackground />
+
+        <div className="relative z-10 flex flex-col items-center gap-12">
+          {/* Heading */}
+          <div className="text-center">
+            <h1 className="text-4xl font-semibold text-white">
+              {t("profiles.whoIsWatching")}
+            </h1>
+          </div>
+
+          {/* Profile grid */}
+          <div className="flex flex-wrap justify-center gap-10">
+            {profiles.map((profile) => (
+              <button
+                key={profile.id}
+                onClick={() => handleSelectProfile(profile)}
+                className="flex flex-col items-center gap-4 group outline-none"
+              >
+                <div className="relative">
+                  <div
+                    className="relative w-44 h-44 rounded-full transition-all duration-200 ring-4 ring-transparent focus-visible:ring-[#e5a00d] group-focus-visible:ring-[#e5a00d] group-focus-visible:scale-105 group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#09090b]"
+                    style={{ "--tw-ring-offset-color": "#09090b" } as React.CSSProperties}
+                  >
+                    <ProfileAvatar
+                      src={profile.avatar_url || PROFILE_AVATARS[0].src}
+                      name={profile.name}
+                      size="2xl"
+                      selected={false}
+                    />
+                  </div>
+                  {!profile.has_worker && (
+                    <div
+                      onClick={(e) => handleAssignWorker(e, profile.id)}
+                      role="button"
+                      tabIndex={0}
+                      title="Assegna worker"
+                      className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors cursor-pointer"
+                    >
+                      <span className="text-xs font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
+                    </div>
+                  )}
+                </div>
+                <span className="text-lg font-medium text-[#a1a1aa] group-focus-visible:text-white transition-colors">
+                  {profile.name}
+                  {profile.is_kids && (
+                    <span className="ml-2 text-sm font-semibold text-blue-400 uppercase tracking-wider">
+                      {t("profiles.kids")}
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -65,10 +150,7 @@ export default function ProfilesPage() {
       <div className="relative z-10 flex flex-col items-center w-full">
         {/* Heading */}
         <div className="text-center mb-10">
-          <span className="text-2xl font-bold tracking-tight text-[#e5a00d]">
-            TLEX
-          </span>
-          <h1 className="text-3xl md:text-4xl font-semibold text-white mt-3">
+          <h1 className="text-3xl md:text-4xl font-semibold text-white">
             {isEditing
               ? t("profiles.editProfile")
               : t("profiles.whoIsWatching")}
@@ -118,8 +200,14 @@ export default function ProfilesPage() {
                 </div>
                 {/* Worker warning badge */}
                 {!profile.has_worker && (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#09090b]">
-                    <span className="text-[10px] font-bold text-black">!</span>
+                  <div
+                    onClick={(e) => handleAssignWorker(e, profile.id)}
+                    role="button"
+                    tabIndex={0}
+                    title="Assegna worker"
+                    className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors cursor-pointer"
+                  >
+                    <span className="text-[10px] font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
                   </div>
                 )}
               </div>

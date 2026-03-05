@@ -35,6 +35,7 @@ import {
 } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
+import { useIsTV } from "@/hooks/use-platform";
 
 export default function SeriesDetailPage() {
   const params = useParams();
@@ -51,6 +52,7 @@ export default function SeriesDetailPage() {
   const [showTrailer, setShowTrailer] = useState(false);
   const toast = useToast();
   const t = useTranslations();
+  const isTV = useIsTV();
 
   const handleToggleWatchlist = async () => {
     if (!series) return;
@@ -117,7 +119,7 @@ export default function SeriesDetailPage() {
         <p className="text-[#a1a1aa]">{t("media.notFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline"
+          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
         >
           {t("media.goBack")}
         </button>
@@ -219,7 +221,7 @@ export default function SeriesDetailPage() {
           >
             {inWatchlist ? t("media.inWatchlist") : t("media.addWatchlist")}
           </ActionButton>
-          {trailerKey && (
+          {trailerKey && !isTV && (
             <ActionButton
               variant="secondary"
               icon={<Clapperboard className="h-4 w-4" />}
@@ -228,13 +230,15 @@ export default function SeriesDetailPage() {
               {t("media.trailer")}
             </ActionButton>
           )}
-          <ActionButton
-            variant="secondary"
-            icon={<Pencil className="h-4 w-4" />}
-            onClick={() => setEditing(true)}
-          >
-            {t("media.edit")}
-          </ActionButton>
+          {!isTV && (
+            <ActionButton
+              variant="secondary"
+              icon={<Pencil className="h-4 w-4" />}
+              onClick={() => setEditing(true)}
+            >
+              {t("media.edit")}
+            </ActionButton>
+          )}
           <ActionButton
             variant="secondary"
             icon={
@@ -258,11 +262,14 @@ export default function SeriesDetailPage() {
       )}
 
       {/* Seasons */}
-      <div className="flex flex-col gap-6 px-4 md:px-12 py-4 md:py-8">
+      <div className={`flex flex-col gap-6 py-4 md:py-8 ${isTV ? "px-8" : "px-4 md:px-12"}`}>
         <h2 className="text-2xl font-semibold text-[#fafafa]">
           {t("media.seasons")}
         </h2>
-        <div className="flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0">
+        <div className={isTV
+          ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4"
+          : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0"
+        }>
           {series.seasons.map((season) => {
             const seasonName =
               season.season_number === 0
@@ -278,7 +285,7 @@ export default function SeriesDetailPage() {
                 )}
                 title={seasonName}
                 subtitle={`${season.episodes_count} ${t("media.episodes")}`}
-                className="shrink-0 w-[120px] md:w-full"
+                className={isTV ? "" : "shrink-0 w-[120px] md:w-full"}
               >
                 <span className="absolute top-2 right-2 flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-black/70 text-white text-xs font-bold">
                   {season.episodes_count}
@@ -291,7 +298,7 @@ export default function SeriesDetailPage() {
 
       {/* Cast */}
       {cast.length > 0 && (
-        <div className="px-4 md:px-12 pb-4 md:pb-8">
+        <div className={isTV ? "px-8 pb-8" : "px-4 md:px-12 pb-4 md:pb-8"}>
           <CastSection cast={cast} />
         </div>
       )}

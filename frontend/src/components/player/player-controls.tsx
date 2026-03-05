@@ -56,11 +56,13 @@ interface PlayerControlsProps {
   onToggleFullscreen: () => void;
   onTogglePiP?: () => void;
   onBack: () => void;
+  isTV?: boolean;
   onAudioChange: (index: number) => void;
   onSubtitleChange: (index: number | null) => void;
   onSubtitleOffsetChange: (offset: number) => void;
   onSkip: (seconds: number) => void;
   onSeekStart?: () => void;
+  onActivity?: () => void;
   onSettingsOpenChange?: (open: boolean) => void;
   hasEpisodes?: boolean;
   episodePickerOpen?: boolean;
@@ -96,7 +98,9 @@ export function PlayerControls({
   onSubtitleOffsetChange,
   onSkip,
   onSeekStart,
+  onActivity,
   onSettingsOpenChange,
+  isTV,
   hasEpisodes,
   episodePickerOpen,
   onToggleEpisodes,
@@ -114,7 +118,7 @@ export function PlayerControls({
       <div className="flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent">
         <button
           onClick={onBack}
-          className="p-2 rounded-full hover:bg-white/10 transition-colors"
+          className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
         >
           <AnimatedBack className="text-white" />
         </button>
@@ -135,7 +139,7 @@ export function PlayerControls({
           {/* Skip backward */}
           <button
             onClick={() => onSkip(-10)}
-            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110"
+            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             disabled={isLoading}
           >
             <div className="relative drop-shadow-lg">
@@ -170,7 +174,7 @@ export function PlayerControls({
               onClick={onTogglePlay}
               disabled={isLoading}
               className={cn(
-                "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg",
+                "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
                 isLoading
                   ? "bg-black/60"
                   : "bg-black/30 hover:bg-black/40 hover:scale-105",
@@ -190,7 +194,7 @@ export function PlayerControls({
           {/* Skip forward */}
           <button
             onClick={() => onSkip(10)}
-            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110"
+            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             disabled={isLoading}
           >
             <div className="relative drop-shadow-lg">
@@ -217,6 +221,7 @@ export function PlayerControls({
           duration={duration}
           onSeek={onSeek}
           onSeekStart={onSeekStart}
+          onActivity={onActivity}
         />
 
         {/* Bottom row */}
@@ -226,14 +231,14 @@ export function PlayerControls({
             <div className="text-[13px] text-white/90 font-medium tabular-nums px-2 py-2 rounded-full hover:bg-white/10 transition-colors cursor-default">
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
-            <div className="hidden md:flex">
+            {!isTV && <div className="hidden md:flex">
               <VolumeSlider
                 volume={volume}
                 isMuted={isMuted}
                 onVolumeChange={onVolumeChange}
                 onToggleMute={onToggleMute}
               />
-            </div>
+            </div>}
           </div>
 
           {/* Right — Controls */}
@@ -243,7 +248,7 @@ export function PlayerControls({
                 <button
                   ref={episodesButtonRef}
                   onClick={onToggleEpisodes}
-                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   <AnimatedEpisodes
                     isOpen={!!episodePickerOpen}
@@ -276,23 +281,25 @@ export function PlayerControls({
               </PlayerTooltip>
             )}
 
-            <PlayerTooltip
-              label={
-                isFullscreen
-                  ? t("player.exitFullscreen")
-                  : t("player.fullscreen")
-              }
-            >
-              <button
-                onClick={onToggleFullscreen}
-                className="p-2 rounded-full hover:bg-white/10 transition-colors"
+            {!isTV && (
+              <PlayerTooltip
+                label={
+                  isFullscreen
+                    ? t("player.exitFullscreen")
+                    : t("player.fullscreen")
+                }
               >
-                <AnimatedFullscreen
-                  isFullscreen={isFullscreen}
-                  className="text-white"
-                />
-              </button>
-            </PlayerTooltip>
+                <button
+                  onClick={onToggleFullscreen}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                >
+                  <AnimatedFullscreen
+                    isFullscreen={isFullscreen}
+                    className="text-white"
+                  />
+                </button>
+              </PlayerTooltip>
+            )}
           </div>
         </div>
       </div>

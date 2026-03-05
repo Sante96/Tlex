@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 export interface ProfileAvatarProps {
   src?: string;
   name: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   borderColor?: string;
   className?: string;
   onClick?: () => void;
@@ -19,6 +19,7 @@ const sizeClasses = {
   md: "w-16 h-16",
   lg: "w-24 h-24",
   xl: "w-32 h-32",
+  "2xl": "w-44 h-44",
 };
 
 const borderSizeClasses = {
@@ -26,6 +27,7 @@ const borderSizeClasses = {
   md: "ring-[3px]",
   lg: "ring-4",
   xl: "ring-4",
+  "2xl": "ring-4",
 };
 
 const textSizeClasses = {
@@ -33,6 +35,7 @@ const textSizeClasses = {
   md: "text-xl",
   lg: "text-3xl",
   xl: "text-4xl",
+  "2xl": "text-5xl",
 };
 
 export function ProfileAvatar({
@@ -67,13 +70,15 @@ export function ProfileAvatar({
       fill
       className="object-cover"
       sizes={
-        size === "xl"
-          ? "128px"
-          : size === "lg"
-            ? "96px"
-            : size === "md"
-              ? "64px"
-              : "40px"
+        size === "2xl"
+          ? "176px"
+          : size === "xl"
+            ? "128px"
+            : size === "lg"
+              ? "96px"
+              : size === "md"
+                ? "64px"
+                : "40px"
       }
     />
   ) : (

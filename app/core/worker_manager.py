@@ -119,6 +119,10 @@ class WorkerManager:
                         logger.debug(f"Started extra client {i+1} for worker {worker.id}")
                     except Exception as e:
                         logger.warning(f"Failed to create extra client {i+1} for worker {worker.id}: {e}")
+                        if "AUTH_KEY_DUPLICATED" in str(e) or "AUTH_KEY_UNREGISTERED" in str(e):
+                            logger.warning(f"Worker {worker.id} extra sessions invalidated, clearing from DB")
+                            extra_sessions = []  # clear local var; saved below
+                            sessions_updated = True
                         break  # Stop creating more if one fails
 
                 # Save updated sessions to DB
@@ -141,6 +145,12 @@ class WorkerManager:
             except Exception as e:
                 logger.error(f"Failed to load worker {worker.id}: {e}")
                 worker.status = WorkerStatus.OFFLINE
+                if "AUTH_KEY_DUPLICATED" in str(e) or "AUTH_KEY_UNREGISTERED" in str(e):
+                    logger.warning(
+                        f"Worker {worker.id} session invalidated (AUTH_KEY error). "
+                        "Clearing extra_sessions — re-authorize this worker from the admin panel."
+                    )
+                    worker.extra_sessions = []
                 await session.commit()
 
         logger.info(f"Loaded {loaded}/{len(workers)} workers ({len(self._client_pool)} total clients)")

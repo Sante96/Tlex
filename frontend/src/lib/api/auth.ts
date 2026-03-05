@@ -95,3 +95,41 @@ export async function toggleUserAdmin(
 export async function deleteUser(userId: number): Promise<void> {
   await api.delete(`/api/v1/auth/users/${userId}`);
 }
+
+export interface DeviceCodeResponse {
+  user_code: string;
+  device_code: string;
+  expires_in: number;
+  interval: number;
+}
+
+export interface DevicePollResponse {
+  status: "pending" | "confirmed" | "expired";
+  access_token?: string;
+  refresh_token?: string;
+  token_type: string;
+}
+
+export async function requestDeviceCode(): Promise<DeviceCodeResponse> {
+  const response = await api.post<DeviceCodeResponse>("/api/v1/auth/device/request");
+  return response.data;
+}
+
+export async function confirmDeviceCode(
+  userCode: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  await api.post("/api/v1/auth/device/confirm", {
+    user_code: userCode,
+    email,
+    password,
+  });
+}
+
+export async function pollDeviceCode(deviceCode: string): Promise<DevicePollResponse> {
+  const response = await api.get<DevicePollResponse>("/api/v1/auth/device/poll", {
+    params: { device_code: deviceCode },
+  });
+  return response.data;
+}
