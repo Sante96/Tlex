@@ -25,14 +25,11 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('android-tv/**/*.gradle*', 'android-tv/**/gradle-wrapper.properties') }}
-          restore-keys: gradle-
+          gradle-version: "9.4.0"
+          cache-read-only: false
 
       - name: Extract version from package.json
         id: version
@@ -51,14 +48,10 @@ jobs:
         run: |
           echo "DEFAULT_SERVER_URL=${{ secrets.DEFAULT_SERVER_URL || '' }}" > local.properties
 
-      - name: Make Gradlew executable
-        working-directory: android-tv
-        run: chmod +x gradlew
-
       - name: Build Release APK
         working-directory: android-tv
         run: |
-          ./gradlew assembleRelease --no-daemon \
+          gradle assembleRelease --no-daemon \
             -PversionName=${{ steps.version.outputs.name }} \
             -PversionCode=${{ steps.version.outputs.code }}
 
