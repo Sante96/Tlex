@@ -379,11 +379,17 @@ async def stream_play(
         pre_seek_time=pre_seek_time if pre_seek_time > 0 else None,
     )
 
+    # Always 206: Android TV WebView (Chromium) and iOS Safari refuse to play
+    # video served as 200. RFC 7233 allows 206 for any satisfiable range,
+    # including a full open-ended range bytes=0-* with unknown total size.
     return StreamingResponse(
         ffmpeg_remuxer.stream(input_url, options),
+        status_code=206,
         media_type="video/mp4",
         headers={
             "Content-Type": "video/mp4",
+            "Accept-Ranges": "bytes",
+            "Content-Range": "bytes 0-*/*",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "X-Content-Type-Options": "nosniff",
             # Anti-buffering headers for Cloudflare/nginx proxies
