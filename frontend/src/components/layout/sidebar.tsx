@@ -243,4 +243,4 @@ export function Sidebar() {
   );
 }
 
-export { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, TV_WIDTHS };
+export { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED };
