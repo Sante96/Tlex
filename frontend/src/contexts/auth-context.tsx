@@ -25,6 +25,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
+  loginWithToken: (accessToken: string, refreshToken?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -62,6 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchUser();
   };
 
+  const loginWithToken = useCallback(async (accessToken: string, refreshToken?: string) => {
+    Cookies.set("token", accessToken, { expires: 7 });
+    if (refreshToken) Cookies.set("refresh_token", refreshToken, { expires: 30 });
+    await fetchUser();
+  }, [fetchUser]);
+
   const logout = () => {
     Cookies.remove("token");
     setUser(null);
@@ -74,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithToken,
         logout,
       }}
     >

@@ -3,6 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* TV resolution breakpoints — applied via data-tv-tier on <html> by TVViewportEffect */
+@custom-variant tv-720 (&:is([data-tv-tier="720"] *));
+@custom-variant tv-1080 (&:is([data-tv-tier="1080"] *));
+@custom-variant tv-4k (&:is([data-tv-tier="4k"] *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -238,3 +243,4 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+

@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from app.api.deps import DBSession
@@ -26,6 +26,40 @@ FONT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Lock to prevent parallel font extraction for same media_id
 _font_extraction_locks: dict[int, asyncio.Lock] = {}
+
+# In-flight subtitle extraction tasks: key = (media_id, abs_track, format)
+_subtitle_tasks: dict[tuple[int, int, str], asyncio.Task] = {}
+# Lock per-key to avoid double-start
+_subtitle_locks: dict[tuple[int, int, str], asyncio.Lock] = {}
+
+
+async def _extract_and_cache(
+    media_id: int,
+    relative_index: int,
+    abs_track: int,
+    fmt: str,
+) -> None:
+    key = (media_id, abs_track, fmt)
+    try:
+        from app.database import async_session_maker
+        from app.services.subtitles.mkv_extractor import extract_subtitle_direct
+
+        async with async_session_maker() as s:
+            reader = await get_virtual_reader(s, media_id)
+            if not reader:
+                return
+            content = await extract_subtitle_direct(reader, track_index=relative_index, output_format=fmt)
+            if content:
+                cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{abs_track}.{fmt}"
+                cache_file.write_bytes(content)
+                logger.info(f"Background subtitle cached: {cache_file.name}")
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.warning(f"Background subtitle extraction failed media={media_id} track={abs_track}: {e}")
+    finally:
+        _subtitle_tasks.pop(key, None)
+        _subtitle_locks.pop(key, None)
 
 
 @router.get("/{media_id}")
@@ -56,65 +90,49 @@ async def get_subtitle(
         logger.debug(f"Serving cached subtitle: {cache_file.name}")
         content = cache_file.read_bytes()
     else:
-        # Get subtitle streams to convert absolute index to relative
+        # DB query to validate track and get relative_index
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
         from app.models.media import MediaItem
 
-        query = select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
-        result = await session.execute(query)
+        result = await session.execute(
+            select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+        )
         media = result.scalar_one_or_none()
-
         if not media:
             raise HTTPException(status_code=404, detail="Media not found")
 
-        # Find subtitle streams and convert absolute index to relative
         subtitle_streams = sorted(
             [s for s in media.streams if s.codec_type == CodecType.SUBTITLE],
-            key=lambda s: s.stream_index
+            key=lambda s: s.stream_index,
         )
-
-        # Find the relative index for the requested track
-        relative_index = None
-        for i, s in enumerate(subtitle_streams):
-            if s.stream_index == track:
-                relative_index = i
-                break
-
+        relative_index = next(
+            (i for i, s in enumerate(subtitle_streams) if s.stream_index == track),
+            None,
+        )
         if relative_index is None:
             raise HTTPException(status_code=400, detail=f"Subtitle track {track} not found")
 
-        if relative_index is None:
-            raise HTTPException(status_code=400, detail=f"Subtitle track {track} not found")
+        key = (media_id, track, format)
+        if key not in _subtitle_locks:
+            _subtitle_locks[key] = asyncio.Lock()
 
-        logger.debug(f"Extracting subtitle: media={media_id}, track={track}")
-
-        # Use direct MKV extraction (fast - reads only needed bytes)
-        try:
-            from app.services.subtitles.mkv_extractor import extract_subtitle_direct
-
-            reader = await get_virtual_reader(session, media_id)
-            if not reader:
-                raise HTTPException(status_code=404, detail="Could not create stream reader")
-
-            content = await extract_subtitle_direct(
-                reader,
-                track_index=relative_index,
-                output_format=format,
-            )
-
-            if not content:
-                raise HTTPException(status_code=500, detail="Subtitle extraction returned empty content")
-
-            # Cache the result
-            cache_file.write_bytes(content)
-            logger.debug(f"Cached subtitle: {cache_file.name}")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception(f"Subtitle extraction failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e) or "Extraction failed") from None
+        async with _subtitle_locks[key]:
+            # Double-check cache (another task may have written it)
+            if cache_file.exists() and cache_file.stat().st_size > 0:
+                content = cache_file.read_bytes()
+            else:
+                task = _subtitle_tasks.get(key)
+                if task is None or task.done():
+                    _subtitle_tasks[key] = asyncio.create_task(
+                        _extract_and_cache(media_id, relative_index, track, format)
+                    )
+                return JSONResponse(
+                    status_code=202,
+                    content={"status": "extracting", "retry_after": 5},
+                    headers={"Retry-After": "5"},
+                )
 
     # Determine content type and filename
     if format == "ass":
@@ -132,6 +150,25 @@ async def get_subtitle(
             "Cache-Control": "public, max-age=86400",
         },
     )
+
+
+@router.get("/{media_id}/status")
+async def get_subtitle_status(
+    media_id: int,
+    track: int = Query(0),
+    format: str = Query("ass"),
+) -> dict:
+    """Poll extraction status for a subtitle track."""
+    if format not in ("ass", "srt"):
+        raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
+    cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{track}.{format}"
+    if cache_file.exists() and cache_file.stat().st_size > 0:
+        return {"status": "ready"}
+    key = (media_id, track, format)
+    task = _subtitle_tasks.get(key)
+    if task and not task.done():
+        return {"status": "extracting"}
+    return {"status": "not_started"}
 
 
 @router.get("/{media_id}/tracks")

@@ -381,13 +381,13 @@ function SeriesSkeleton() {
       {/* Cast row */}
       <div className="px-4 md:px-12 pb-8">
         <div className="h-7 w-16 bg-[#27272a] rounded mb-5" />
-        <div className="flex gap-5">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <div className="flex gap-5 overflow-x-hidden">
+          {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="flex flex-col items-center gap-2 shrink-0 w-[200px]"
+              className="flex flex-col items-center gap-2 shrink-0 w-[120px] md:w-[160px]"
             >
-              <div className="w-[200px] h-[200px] rounded-full bg-[#27272a]" />
+              <div className="w-[120px] h-[120px] md:w-[160px] md:h-[160px] rounded-full bg-[#27272a]" />
               <div className="h-3 w-24 bg-[#27272a] rounded" />
               <div className="h-2.5 w-16 bg-[#27272a] rounded" />
             </div>

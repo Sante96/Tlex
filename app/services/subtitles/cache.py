@@ -16,7 +16,9 @@ from app.services.subtitles import subtitle_extractor
 SUBTITLE_CACHE_DIR = Path("cache/subtitles")
 FONT_CACHE_DIR = Path("cache/fonts")
 
-# Max concurrent extractions to avoid overloading Telegram
+# Max concurrent extractions during startup warmup.
+# Keep at 1: subtitle extraction reads large byte ranges from Telegram and
+# competes directly with active video streams on the same DC connections.
 MAX_CONCURRENT = 1
 
 

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(uv add:*)",
+      "Bash(uv run:*)",
+      "Bash(uv pip:*)",
+      "Bash(uv sync:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npx eslint:*)",
+      "Bash(xargs ls:*)",
+      "Bash(rm:*)"
+    ]
+  }
+}

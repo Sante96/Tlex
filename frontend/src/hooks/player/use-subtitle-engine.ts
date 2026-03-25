@@ -59,6 +59,7 @@ export function useSubtitleEngine({
   const initializingRef = useRef(false);
   const manualOffsetRef = useRef(initialManualOffset);
   const rafIdRef = useRef<number | null>(null);
+  const rafTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timeOffsetRef = useRef(timeOffset);
 
   // Canvas sync (letterbox-aware sizing + ResizeObserver)
@@ -108,13 +109,18 @@ export function useSubtitleEngine({
       rafIdRef.current = requestAnimationFrame(loop);
     };
     if (rafIdRef.current === null) {
-      setTimeout(() => {
+      rafTimerRef.current = setTimeout(() => {
+        rafTimerRef.current = null;
         rafIdRef.current = requestAnimationFrame(loop);
       }, 100);
     }
   }, [videoRef, updateSubtitles]);
 
   const stopRenderLoop = useCallback(() => {
+    if (rafTimerRef.current !== null) {
+      clearTimeout(rafTimerRef.current);
+      rafTimerRef.current = null;
+    }
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;

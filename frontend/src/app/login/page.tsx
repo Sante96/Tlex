@@ -7,7 +7,6 @@ import { Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import QRCode from "react-qr-code";
-import Cookies from "js-cookie";
 import Image from "next/image";
 import { DSButton, DSInput, TVButton, TVBackground } from "@/components/ds";
 import { useAuth } from "@/contexts/auth-context";
@@ -21,7 +20,7 @@ const MeshGradient = dynamic(
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginWithToken } = useAuth();
   const isTV = useIsTV();
 
   const [email, setEmail] = useState("");
@@ -84,8 +83,7 @@ export default function LoginPage() {
         if (res.status === "confirmed" && res.access_token) {
           clearInterval(pollRef.current!);
           clearInterval(countdown);
-          Cookies.set("token", res.access_token, { expires: 7 });
-          if (res.refresh_token) Cookies.set("refresh_token", res.refresh_token, { expires: 30 });
+          await loginWithToken(res.access_token, res.refresh_token ?? undefined);
           router.push("/profiles");
         } else if (res.status === "expired") {
           clearInterval(pollRef.current!);
@@ -100,7 +98,7 @@ export default function LoginPage() {
       clearInterval(pollRef.current!);
       clearInterval(countdown);
     };
-  }, [deviceCode, router]);
+  }, [deviceCode, router, loginWithToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

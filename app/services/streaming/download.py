@@ -1,11 +1,12 @@
 """Telegram chunk download with retry logic."""
 
 import asyncio
+import random
 from collections.abc import AsyncIterator, Callable
 
 from loguru import logger
 from pyrogram import Client
-from pyrogram.errors import FileReferenceExpired, FloodWait, RPCError
+from pyrogram.errors import FileReferenceExpired, FloodPremiumWait, FloodWait, RPCError
 
 from app.models.media import MediaPart
 from app.services.streaming.cache import (
@@ -165,7 +166,12 @@ async def stream_part(
             # Check if we got all expected chunks
             if chunks_remaining > 0:
                 consecutive_failures += 1
-                wait_time = 1.0 * consecutive_failures
+                # Zero chunks = likely FloodWait or dead connection — use a longer backoff.
+                # Partial chunks = transient network issue — short backoff is fine.
+                if chunks_fetched_this_attempt == 0:
+                    wait_time = min(consecutive_failures * 5.0, 30.0)
+                else:
+                    wait_time = 1.0 * consecutive_failures
                 logger.warning(
                     f"[INCOMPLETE] Stream ended early for part {part.id}: "
                     f"got {chunks_fetched_this_attempt} chunks this attempt, "
@@ -228,18 +234,18 @@ async def stream_part(
                         pass
                     media_sessions.pop(dc_id, None)
                     logger.debug(f"Dropped stale media session DC{dc_id} for client {id(client)}")
-                # First attempt: retry immediately (minimize video stutter)
-                # Subsequent attempts: backoff
+                # Add jitter on all retries to avoid thundering herd when multiple
+                # coroutines hit DC timeout simultaneously and all reconnect at once.
                 if attempt > 1:
                     wait_time = min(attempt * 2, 8)
-                    logger.warning(
-                        f"Connection error ({e}), retry {attempt}/{max_retries} in {wait_time}s"
-                    )
-                    await asyncio.sleep(wait_time)
                 else:
-                    logger.warning(
-                        f"Connection error ({e}), retry {attempt}/{max_retries} immediately — dropped stale media session"
-                    )
+                    # First retry: short random jitter (0.5–2s) instead of immediate —
+                    # prevents a storm of simultaneous DC reconnections.
+                    wait_time = random.uniform(0.5, 2.0)
+                logger.warning(
+                    f"Connection error ({e}), retry {attempt}/{max_retries} in {wait_time:.1f}s"
+                )
+                await asyncio.sleep(wait_time)
                 continue
             else:
                 raise
@@ -305,8 +311,8 @@ async def _handle_rpc_error(
         else:
             raise RuntimeError("Failed to refresh expired file reference") from e
 
-    if isinstance(e, FloodWait):
-        logger.warning(f"FloodWait {e.value}s, waiting...")
+    if isinstance(e, (FloodWait, FloodPremiumWait)):
+        logger.warning(f"Flood wait {e.value}s ({type(e).__name__}), waiting...")
         await asyncio.sleep(e.value)
         return file_id
 

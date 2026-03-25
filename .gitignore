@@ -85,6 +85,11 @@ htmlcov/
 coverage/
 
 # ============================================
+# Runtime diagnostics
+# ============================================
+crash_stream.json
+
+# ============================================
 # OS
 # ============================================
 .DS_Store
@@ -116,3 +121,8 @@ docker-compose.override.yml
 
 # Pencil files
 *.pen
+
+roadmap.md
+structure.md
+tlex-release.jks
+tlex.code-workspace

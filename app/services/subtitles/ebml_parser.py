@@ -259,7 +259,7 @@ def _parse_block(
     payload = data[data_offset:offset + size]
 
     return SubtitleEvent(
-        timestamp_ms=cluster_timecode + relative_time,
+        timestamp_ms=max(0, cluster_timecode + relative_time),
         duration_ms=None,
         data=payload,
     )

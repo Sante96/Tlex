@@ -10,12 +10,25 @@ import { DSNavItem, DSIconButton } from "@/components/ds";
 import Image from "next/image";
 import pkg from "../../../package.json";
 import { useSidebar } from "@/contexts/sidebar-context";
-import { useIsTV } from "@/hooks/use-platform";
+import { useIsTV, useTVTier, type TVTier } from "@/hooks/use-platform";
 import { getScannerStatus } from "@/lib/api";
 import type { FocusEvent } from "react";
 
 const SIDEBAR_EXPANDED = 260;
 const SIDEBAR_COLLAPSED = 72;
+
+export const TV_WIDTHS: Record<TVTier, { expanded: number; collapsed: number }> = {
+  "720":  { expanded: 200, collapsed: 56 },
+  "1080": { expanded: 220, collapsed: 64 },
+  "4k":   { expanded: 260, collapsed: 72 },
+};
+
+// Horizontal padding per tier — determines icon column size when collapsed
+const TV_PADDINGS: Record<TVTier, { v: number; h: number }> = {
+  "720":  { v: 12, h: 10 },
+  "1080": { v: 14, h: 12 },
+  "4k":   { v: 20, h: 14 },
+};
 
 const navRoutes = [
   { key: "nav.home", href: "/", icon: Home },
@@ -42,8 +55,15 @@ export function Sidebar() {
   const t = useTranslations();
   const isTV = useIsTV();
 
+  const tvTier = useTVTier();
+  const tvWidths = TV_WIDTHS[tvTier ?? "1080"];
+  const tvPad = TV_PADDINGS[tvTier ?? "1080"];
+  // Icon column fills the full inner width of the collapsed sidebar
+  const tvIconCol = tvWidths.collapsed - tvPad.h * 2;
   const collapsed = isTV ? !tvExpanded : isCollapsed;
-  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
+  const sidebarWidth = isTV
+    ? (collapsed ? tvWidths.collapsed : tvWidths.expanded)
+    : (collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED);
 
   const handleTvFocus = () => {
     if (isTV) setTvExpanded(true);
@@ -83,25 +103,28 @@ export function Sidebar() {
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderRight: "1px solid rgba(39, 39, 42, 0.5)",
-        padding: "20px 14px",
+        padding: isTV ? `${tvPad.v}px ${tvPad.h}px` : "20px 14px",
       }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 h-12 pb-4">
+      <div className={isTV
+        ? "flex items-center gap-2 tv-1080:gap-3 h-10 tv-1080:h-12 tv-4k:h-14 pb-2 tv-1080:pb-3 tv-4k:pb-4"
+        : "flex items-center gap-3 h-12 pb-4"
+      }>
         {isTV ? (
           collapsed ? (
             <Link
               href="/"
-              className="flex items-center justify-center w-10 h-10 rounded-[10px] flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+              className="flex items-center justify-center w-9 h-9 tv-1080:w-10 tv-1080:h-10 rounded-[10px] flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
             >
-              <Image src="/tlex-icon.svg" alt="TLEX" width={32} height={32} unoptimized />
+              <Image src="/tlex-icon.svg" alt="TLEX" width={32} height={32} className="w-6 h-6 tv-1080:w-7 tv-1080:h-7 tv-4k:w-8 tv-4k:h-8" unoptimized />
             </Link>
           ) : (
             <Link
               href="/"
               className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded-[10px]"
             >
-              <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-8 w-auto" unoptimized />
+              <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-7 tv-1080:h-8 tv-4k:h-10 w-auto" unoptimized />
             </Link>
           )
         ) : (
@@ -126,26 +149,27 @@ export function Sidebar() {
       </div>
 
       {/* Nav Main */}
-      <nav className="flex flex-col gap-1 pt-4">
+      <nav className="flex flex-col gap-1 pt-3 tv-1080:pt-4 tv-4k:pt-5">
         {navRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
-            icon={<item.icon className={isTV ? "h-6 w-6" : "h-5 w-5"} />}
+            icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={collapsed}
             tvMode={isTV}
+            iconColumn={isTV ? tvIconCol : undefined}
           />
         ))}
       </nav>
 
       {/* Divider */}
-      <div className="h-px my-3 bg-[#27272a]" />
+      <div className="h-px my-2 tv-1080:my-3 tv-4k:my-4 bg-[#27272a]" />
 
       {/* Library label */}
       <span
-        className="text-[11px] font-semibold uppercase text-[#52525b] tracking-[1px] whitespace-nowrap"
+        className="text-[11px] tv-4k:text-xs font-semibold uppercase text-[#52525b] tracking-[1px] whitespace-nowrap"
         style={{
           opacity: collapsed ? 0 : 1,
           transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
@@ -155,16 +179,17 @@ export function Sidebar() {
       </span>
 
       {/* Nav Library */}
-      <nav className="flex flex-col gap-1 mt-2">
+      <nav className="flex flex-col gap-1 mt-1 tv-1080:mt-2 tv-4k:mt-3">
         {libraryRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
-            icon={<item.icon className={isTV ? "h-6 w-6" : "h-5 w-5"} />}
+            icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={collapsed}
             tvMode={isTV}
+            iconColumn={isTV ? tvIconCol : undefined}
           />
         ))}
       </nav>
@@ -174,7 +199,7 @@ export function Sidebar() {
 
       {/* Scan indicator */}
       {isScanning && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-[10px] mb-3 bg-[#e5a00d]/10 border border-[#e5a00d]/30">
+        <div className="flex items-center gap-2 px-2 tv-1080:px-3 py-1.5 tv-1080:py-2 rounded-[10px] mb-2 tv-1080:mb-3 bg-[#e5a00d]/10 border border-[#e5a00d]/30">
           <Loader2 className="h-4 w-4 animate-spin text-[#e5a00d] flex-shrink-0" />
           <span
             className="text-xs font-medium text-[#e5a00d] whitespace-nowrap"
@@ -189,32 +214,33 @@ export function Sidebar() {
       )}
 
       {/* Nav Bottom */}
-      <nav className="flex flex-col gap-1 pt-3">
+      <nav className="flex flex-col gap-1 pt-2 tv-1080:pt-3 tv-4k:pt-4">
         {bottomRoutes.map((item) => (
           <DSNavItem
             key={item.href}
             href={item.href}
-            icon={<item.icon className={isTV ? "h-6 w-6" : "h-5 w-5"} />}
+            icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
             active={isActive(pathname, item.href)}
             collapsed={collapsed}
             tvMode={isTV}
+            iconColumn={isTV ? tvIconCol : undefined}
           />
         ))}
       </nav>
       {/* Credit */}
       <div
-        className="flex flex-row items-center justify-between pt-3 select-none"
+        className="flex flex-row items-center justify-between pt-2 tv-1080:pt-3 tv-4k:pt-4 select-none"
         style={{
           opacity: collapsed ? 0 : 1,
           transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
         }}
       >
-        <p className="text-[10px] text-[#3f3f46] tracking-wide whitespace-nowrap">{t("common.madeBy")}</p>
-        <p className="text-[10px] text-[#3f3f46] tracking-wide whitespace-nowrap">v{pkg.version}</p>
+        <p className="text-[10px] tv-4k:text-[11px] text-[#3f3f46] tracking-wide whitespace-nowrap">{t("common.madeBy")}</p>
+        <p className="text-[10px] tv-4k:text-[11px] text-[#3f3f46] tracking-wide whitespace-nowrap">v{pkg.version}</p>
       </div>
     </motion.aside>
   );
 }
 
-export { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED };
+export { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, TV_WIDTHS };

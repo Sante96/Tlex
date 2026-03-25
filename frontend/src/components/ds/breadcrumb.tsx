@@ -24,8 +24,8 @@ export function DSBreadcrumb({ items }: DSBreadcrumbProps) {
         type="button"
         variant="secondary"
         onClick={() => router.back()}
-        className="!h-9 !w-9 !px-0 shrink-0"
-        icon={<ChevronLeft className="h-5 w-5" />}
+        className="!h-7 !w-7 !px-0 shrink-0"
+        icon={<ChevronLeft className="h-4 w-4" />}
       />
 
       {/* Crumbs */}

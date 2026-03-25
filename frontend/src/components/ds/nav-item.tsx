@@ -11,6 +11,7 @@ interface DSNavItemProps {
   active?: boolean;
   collapsed?: boolean;
   tvMode?: boolean;
+  iconColumn?: number;
 }
 
 export function DSNavItem({
@@ -20,20 +21,22 @@ export function DSNavItem({
   active,
   collapsed,
   tvMode,
+  iconColumn,
 }: DSNavItemProps) {
   return (
     <Link
       href={href}
       title={collapsed ? label : undefined}
       className={cn(
-        "grid w-full h-11 rounded-[10px] font-medium transition-colors outline-none overflow-hidden items-center text-[15px]",
+        "grid w-full rounded-[10px] font-medium transition-colors outline-none overflow-hidden items-center",
+        tvMode ? "h-9 tv-1080:h-10 tv-4k:h-11 text-[13px] tv-1080:text-[14px] tv-4k:text-[15px]" : "h-11 text-[15px]",
         active
           ? "bg-[#e5a00d1a] text-[#e5a00d]"
           : tvMode
             ? "text-[#a1a1aa] focus-visible:bg-white/15 focus-visible:text-[#fafafa] focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-inset"
             : "text-[#a1a1aa] hover:bg-white/10 hover:text-[#fafafa] focus-visible:bg-white/10 focus-visible:text-[#fafafa]",
       )}
-      style={{ gridTemplateColumns: "44px minmax(0, 1fr) auto" }}
+      style={{ gridTemplateColumns: `${iconColumn ?? (tvMode ? 36 : 44)}px minmax(0, 1fr) auto` }}
     >
       {/* Icon — always in 44px column, perfectly centered regardless of label */}
       <span

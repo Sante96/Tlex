@@ -68,7 +68,7 @@ function ResultRow({
   );
 }
 
-export function SearchBar({ className }: { className?: string }) {
+export function SearchBar({ className, compact }: { className?: string; compact?: boolean }) {
   const router = useRouter();
   const t = useTranslations();
   const [query, setQuery] = useState("");
@@ -198,14 +198,14 @@ export function SearchBar({ className }: { className?: string }) {
     >
       {/* Input */}
       <div
-        className="group flex items-center gap-2 h-9 px-3 rounded-lg border border-white/5 backdrop-blur-sm transition-all duration-150
-          hover:border-white/15 focus-within:border-[#e5a00d] focus-within:border-2 focus-within:px-[11px]"
+        className={`group flex items-center gap-2 px-3 rounded-lg border border-white/5 backdrop-blur-sm transition-all duration-150
+          hover:border-white/15 focus-within:border-[#e5a00d] focus-within:border-2 focus-within:px-[11px] ${compact ? "h-7" : "h-9"}`}
         style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
       >
         {loading ? (
-          <Loader2 className="h-4 w-4 shrink-0 text-[#e5a00d] animate-spin" />
+          <Loader2 className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-[#e5a00d] animate-spin`} />
         ) : (
-          <Search className="h-4 w-4 shrink-0 text-[#71717a] group-hover:text-[#a1a1aa] group-focus-within:text-[#e5a00d] transition-colors" />
+          <Search className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-[#71717a] group-hover:text-[#a1a1aa] group-focus-within:text-[#e5a00d] transition-colors`} />
         )}
         <input
           ref={inputRef}
@@ -215,7 +215,7 @@ export function SearchBar({ className }: { className?: string }) {
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => hasResults && setIsOpen(true)}
-          className="bg-transparent border-none outline-none text-sm text-[#fafafa] placeholder:text-[#71717a] w-full"
+          className={`bg-transparent border-none outline-none text-[#fafafa] placeholder:text-[#71717a] w-full ${compact ? "text-xs" : "text-sm"}`}
         />
       </div>
 

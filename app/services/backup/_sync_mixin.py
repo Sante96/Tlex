@@ -164,6 +164,7 @@ class BackupSyncMixin:
                 await asyncio.sleep(e.value + 1)
             except Exception as e:
                 logger.error(f"[BACKUP] Error forwarding batch (topic {main_topic_id}): {e}")
+                await session.rollback()
                 await asyncio.sleep(2)
             else:
                 await asyncio.sleep(1.5)

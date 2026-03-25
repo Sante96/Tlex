@@ -4,6 +4,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ProfileProvider } from "@/contexts/profile-context";
 import { ToastProvider } from "@/components/ui/toast";
+import { TVViewportEffect } from "@/components/tv-viewport-effect";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default async function RootLayout({
       <body
         className="font-sans bg-zinc-950 text-white min-h-screen"
       >
+        <TVViewportEffect />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <AuthProvider>
             <ProfileProvider>

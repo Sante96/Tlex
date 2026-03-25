@@ -75,10 +75,18 @@ known-first-party = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: real Telegram + PostgreSQL required (run with: pytest -m integration)",
+]
 
 [build-system]
 requires = ["hatchling", "hatch-nodejs-version"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest-mock>=3.15.1",
+]
 
 [tool.hatch.version]
 source = "nodejs"

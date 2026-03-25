@@ -80,6 +80,30 @@ async def extract_via_cues(
         return events, False
 
 
+def _scan_chunk_sync(
+    chunk_data: bytes,
+    target_track_number: int,
+    timecode_scale: int,
+) -> list[SubtitleEvent]:
+    """Scan a 10MB chunk for clusters. Pure CPU, no I/O — safe to run in executor."""
+    events: list[SubtitleEvent] = []
+    offset = 0
+    while offset < len(chunk_data) - 4:
+        if chunk_data[offset:offset + 4] == CLUSTER_SIGNATURE:
+            events.extend(
+                parse_cluster_for_subtitles(chunk_data, offset, target_track_number, timecode_scale)
+            )
+            try:
+                _, id_len = read_element_id(chunk_data, offset)
+                cluster_size, size_len = read_vint(chunk_data, offset + id_len)
+                offset += id_len + size_len + cluster_size
+            except Exception:
+                offset += 1
+        else:
+            offset += 1
+    return events
+
+
 async def extract_via_scan(
     reader,
     header_size: int,
@@ -93,6 +117,8 @@ async def extract_via_scan(
     chunk_size = 10 * 1024 * 1024  # 10MB chunks
     file_offset = header_size
 
+    loop = asyncio.get_running_loop()
+
     while file_offset < reader.total_size:
         read_end = min(file_offset + chunk_size, reader.total_size)
         chunk_data = b""
@@ -104,24 +130,13 @@ async def extract_via_scan(
             logger.warning(f"Failed to read chunk at {file_offset}: {e}")
             break
 
-        # Find clusters in this chunk
-        offset = 0
-        while offset < len(chunk_data) - 4:
-            if chunk_data[offset:offset + 4] == CLUSTER_SIGNATURE:
-                cluster_events = parse_cluster_for_subtitles(
-                    chunk_data, offset, target_track_number, timecode_scale
-                )
-                events.extend(cluster_events)
-
-                try:
-                    elem_id, id_len = read_element_id(chunk_data, offset)
-                    offset += id_len
-                    cluster_size, size_len = read_vint(chunk_data, offset)
-                    offset += size_len + cluster_size
-                except Exception:
-                    offset += 1
-            else:
-                offset += 1
+        chunk_events = await loop.run_in_executor(
+            None, _scan_chunk_sync,
+            bytes(chunk_data),
+            target_track_number,
+            timecode_scale,
+        )
+        events.extend(chunk_events)
 
         file_offset = read_end
 
@@ -193,7 +208,10 @@ async def _parallel_fetch_and_parse(
                 logger.warning(f"Failed to read range {start}-{end}: {e}")
                 return index, None
 
-        semaphore = asyncio.Semaphore(20)
+        # Limit to 4 concurrent range reads: each range is up to 30 MB, so
+        # 4 × 30 MB = 120 MB in-flight — enough throughput without saturating DC4.
+        # 20 was causing thundering-herd timeouts across all active video streams.
+        semaphore = asyncio.Semaphore(4)
 
         async def fetch_with_sem(start: int, end: int, index: int):
             async with semaphore:
@@ -215,7 +233,7 @@ async def _parallel_fetch_and_parse(
 
     for idx, chunk_data in valid_results:
         start, _end = read_ranges[idx]
-        chunk_events = _parse_clusters_in_chunk(
+        chunk_events = await _parse_clusters_in_chunk(
             chunk_data, start, reader, target_track_number, timecode_scale
         )
         events.extend(chunk_events)
@@ -250,6 +268,10 @@ async def _parse_clusters_in_chunk(
                 break
 
             cluster_size, size_len = read_vint(chunk_data, size_pos)
+            if cluster_size > 50_000_000:  # 50 MB hard cap — corrupted VINT guard
+                logger.debug(f"Skipping oversized cluster ({cluster_size} bytes) at {abs_start + curr_offset}")
+                curr_offset += 1
+                continue
             full_cluster_end = size_pos + size_len + cluster_size
 
             # Fetch missing data for incomplete clusters
@@ -269,8 +291,11 @@ async def _parse_clusters_in_chunk(
             if full_cluster_end <= len(chunk_data):
                 c_data = chunk_data[curr_offset:full_cluster_end]
                 try:
-                    cluster_events = parse_cluster_for_subtitles(
-                        c_data, 0, target_track_number, timecode_scale
+                    loop = asyncio.get_running_loop()
+                    cluster_events = await loop.run_in_executor(
+                        None, parse_cluster_for_subtitles,
+                        bytes(c_data),
+                        0, target_track_number, timecode_scale,
                     )
                     if cluster_events:
                         events.extend(cluster_events)

@@ -18,7 +18,7 @@ import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { SearchBar } from "@/components/layout/search-bar";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
-import { useIsTV } from "@/hooks/use-platform";
+import { useIsTV, useTVTier } from "@/hooks/use-platform";
 import { updateProfile, getSeriesDetails, getMediaDetails } from "@/lib/api";
 
 const DEFAULT_AVATAR = "/avatars/avatar-01.png";
@@ -87,6 +87,8 @@ export function TopBar() {
   const { logout } = useAuth();
   const { profile, clearProfile, refreshProfiles } = useProfile();
   const isTV = useIsTV();
+  const tvTier = useTVTier();
+  const avatarSize = tvTier === "4k" ? 36 : tvTier === "1080" ? 28 : 24;
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const breadcrumbItems = useBreadcrumbItems();
@@ -114,7 +116,7 @@ export function TopBar() {
   if (isTV) {
     return (
       <header
-        className="h-14 flex items-center gap-4 px-6 sticky top-0 z-30 relative"
+        className="h-10 tv-1080:h-12 tv-4k:h-14 flex items-center gap-3 tv-1080:gap-4 tv-4k:gap-5 px-4 tv-4k:px-6 sticky top-0 z-30 relative"
         style={{ borderBottom: "1px solid rgba(39, 39, 42, 0.15)" }}
       >
         <div className="absolute inset-0 -z-10 pointer-events-none" style={{ background: "rgba(9, 9, 11, 0.60)" }} />
@@ -124,32 +126,32 @@ export function TopBar() {
           {breadcrumbItems ? (
             <DSBreadcrumb items={breadcrumbItems} />
           ) : (
-            <span className="text-base font-semibold text-white">{t("nav.home")}</span>
+            <span className="text-sm tv-4k:text-base font-semibold text-white">{t("nav.home")}</span>
           )}
         </div>
 
         {/* Search bar — D-pad focusable */}
-        <div className="flex-1 max-w-sm">
-          <SearchBar className="w-full" />
+        <div className="flex-1 max-w-[220px] tv-1080:max-w-xs tv-4k:max-w-sm">
+          <SearchBar className="w-full" compact={tvTier === "720"} />
         </div>
 
         {/* Profile area + actions */}
-        <div className="flex items-center gap-3 ml-auto shrink-0">
-          <DSAvatar letter={profileLetter} src={profile?.avatar_url ?? undefined} />
-          <span className="text-sm font-medium text-white">{profile?.name}</span>
+        <div className="flex items-center gap-2 tv-1080:gap-3 tv-4k:gap-4 ml-auto shrink-0">
+          <DSAvatar letter={profileLetter} src={profile?.avatar_url ?? undefined} size={avatarSize} />
+          <span className="text-xs tv-1080:text-sm font-medium text-white">{profile?.name}</span>
           <TVButton
             variant="ghost"
-            icon={<Users className="h-4 w-4" />}
+            icon={<Users className="h-3.5 w-3.5 tv-1080:h-4 tv-1080:w-4" />}
             onClick={handleSwitchProfile}
-            className="h-9 px-3 text-sm"
+            className="h-7 tv-1080:h-8 tv-4k:h-9 px-2.5 tv-1080:px-3 text-xs tv-1080:text-sm"
           >
             {t("topbar.switchProfile")}
           </TVButton>
           <DSButton
             variant="destructive"
-            icon={<LogOut className="h-4 w-4" />}
+            icon={<LogOut className="h-3.5 w-3.5 tv-1080:h-4 tv-1080:w-4" />}
             onClick={handleLogout}
-            className="h-9 px-3 text-sm"
+            className="h-7 tv-1080:h-8 tv-4k:h-9 px-2.5 tv-1080:px-3 text-xs tv-1080:text-sm"
           >
             {t("topbar.logout")}
           </DSButton>

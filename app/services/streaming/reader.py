@@ -124,6 +124,10 @@ class VirtualStreamReader:
 
         try:
             await ensure_file_ids_for_client(self._parts, client)
+            # Re-check after await: another concurrent scale-up may have already appended
+            if len(self._clients) >= MAX_CLIENTS_PER_STREAM:
+                worker_manager.release_clients([client])
+                return
             self._clients.append(client)
             logger.info(f"[STREAM] Scale-up: now {len(self._clients)} clients")
         except Exception as e:

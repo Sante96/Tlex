@@ -9,6 +9,7 @@ import {
   BottomNav,
   SIDEBAR_EXPANDED,
   SIDEBAR_COLLAPSED,
+  TV_WIDTHS,
 } from "@/components/layout";
 import { TVBackground } from "@/components/ds";
 import { AuthGuard } from "@/components/auth-guard";
@@ -16,7 +17,7 @@ import { SplashScreen } from "@/components/splash-screen";
 import { RouteTransitionProvider } from "@/contexts/route-transition-context";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { useIsMobile } from "@/lib/breakpoints";
-import { useIsTV } from "@/hooks/use-platform";
+import { useIsTV, useTVTier } from "@/hooks/use-platform";
 
 const MeshGradient = dynamic(
   () => import("@paper-design/shaders-react").then((m) => ({ default: m.MeshGradient })),
@@ -27,10 +28,12 @@ function MainContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed, tvExpanded } = useSidebar();
   const isMobile = useIsMobile();
   const isTV = useIsTV();
+  const tvTier = useTVTier();
+  const tvWidths = TV_WIDTHS[tvTier ?? "1080"];
   const marginLeft = isMobile
     ? 0
     : isTV
-      ? tvExpanded ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
+      ? tvExpanded ? tvWidths.expanded : tvWidths.collapsed
       : isCollapsed
         ? SIDEBAR_COLLAPSED
         : SIDEBAR_EXPANDED;
@@ -54,6 +57,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const isTV = useIsTV();
+
   const [showSplash, setShowSplash] = useState(() => {
     if (typeof window !== "undefined") {
       return !sessionStorage.getItem("splashShown");

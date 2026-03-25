@@ -1,16 +1,21 @@
 """Device authorization endpoints for TV / set-top-box login flow."""
 
-import random
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DBSession
 from app.core.rate_limit import AUTH_LIMIT, limiter
-from app.core.security import create_access_token, generate_refresh_token, get_refresh_token_expiry, verify_password
+from app.core.security import (
+    create_access_token,
+    generate_refresh_token,
+    get_refresh_token_expiry,
+    verify_password,
+)
 from app.models.user import DeviceCode, RefreshToken, User
 from app.schemas.auth import DeviceCodeResponse, DeviceConfirmRequest, DevicePollResponse
 
@@ -22,14 +27,13 @@ _DEVICE_CODE_TTL_SECONDS = 300  # 5 minutes
 def _generate_user_code() -> str:
     """Generate a short human-readable 6-char uppercase code."""
     chars = string.ascii_uppercase.replace("O", "").replace("I", "") + string.digits.replace("0", "")
-    return "".join(random.choices(chars, k=6))
+    return "".join(secrets.choice(chars) for _ in range(6))
 
 
 @router.post("/device/request", response_model=DeviceCodeResponse)
 @limiter.limit(AUTH_LIMIT)
 async def device_request(request: Request, session: DBSession) -> DeviceCodeResponse:
     """TV requests a device code to start the login flow."""
-    user_code = _generate_user_code()
     device_code = secrets.token_urlsafe(48)
     expires_at = datetime.now(UTC) + timedelta(seconds=_DEVICE_CODE_TTL_SECONDS)
 
@@ -38,13 +42,21 @@ async def device_request(request: Request, session: DBSession) -> DeviceCodeResp
         delete(DeviceCode).where(DeviceCode.expires_at < datetime.now(UTC))
     )
 
-    entry = DeviceCode(
-        user_code=user_code,
-        device_code=device_code,
-        expires_at=expires_at,
-    )
-    session.add(entry)
-    await session.commit()
+    for _ in range(5):
+        user_code = _generate_user_code()
+        entry = DeviceCode(
+            user_code=user_code,
+            device_code=device_code,
+            expires_at=expires_at,
+        )
+        session.add(entry)
+        try:
+            await session.commit()
+            break
+        except IntegrityError:
+            await session.rollback()
+    else:
+        raise HTTPException(status_code=500, detail="Could not generate unique device code")
 
     return DeviceCodeResponse(
         user_code=user_code,

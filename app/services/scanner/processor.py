@@ -1,5 +1,6 @@
 """Media processing logic for scanner."""
 
+import asyncio
 from datetime import date
 
 from guessit import guessit
@@ -12,6 +13,10 @@ from app.models.media import MediaItem, MediaPart, MediaStream, MediaType, Serie
 from app.services.ffprobe import ffprobe_service
 from app.services.scanner.models import MediaGroup, ScannedFile
 from app.services.tmdb import tmdb_client
+
+# Limit concurrent background subtitle/font extractions triggered by scanner
+# to avoid exhausting the DB connection pool during large initial scans.
+_bg_extract_semaphore = asyncio.Semaphore(3)
 
 
 async def process_group(
@@ -216,19 +221,20 @@ async def analyze_streams(
 
             # Pre-extract fonts/subtitles in background if media has subtitles
             if has_subtitles:
-                import asyncio
-
                 from app.database import async_session_maker
                 from app.services.subtitles.cache import ensure_cache_populated
 
+                media_id_capture = media_item.id
+
                 async def extract_in_background():
-                    try:
-                        # Wait a bit for commit to complete
-                        await asyncio.sleep(2)
-                        async with async_session_maker() as bg_session:
-                            await ensure_cache_populated(media_item.id, bg_session)
-                    except Exception as e:
-                        logger.warning(f"Background cache extraction failed: {e}")
+                    async with _bg_extract_semaphore:
+                        try:
+                            # Wait a bit for commit to complete
+                            await asyncio.sleep(2)
+                            async with async_session_maker() as bg_session:
+                                await ensure_cache_populated(media_id_capture, bg_session)
+                        except Exception as e:
+                            logger.warning(f"Background cache extraction failed: {e}")
 
                 asyncio.create_task(extract_in_background())
                 logger.debug(f"Queued background subtitle cache extraction for: {media_item.title}")

@@ -1,5 +1,6 @@
 """Streaming API endpoints for media playback."""
 
+import asyncio
 import bisect
 import json
 import re
@@ -99,9 +100,12 @@ async def stream_raw(
     This endpoint provides the raw MKV/MP4 bytes from Telegram.
     Supports HTTP Range requests for seeking.
 
+    Always returns 206 Partial Content (required by Android TV WebView and
+    strict Chromium-based players that reject 200 for <video> tags).
+
     Used by:
-    - FFmpeg for remuxing (Phase 4)
-    - Direct download
+    - FFmpeg for remuxing
+    - Direct playback via <video> tag
     """
     # Persistent reader: cached across range requests for dynamic client scaling
     # First request: 1 client. Subsequent requests: tries to acquire more.
@@ -111,18 +115,25 @@ async def stream_raw(
 
     total_size = reader.total_size
     range_header = request.headers.get("range")
-    logger.info(f"[RAW] media={media_id}, range={range_header}, size={total_size}, clients={len(reader._clients)}")
 
     range_start, range_end = parse_range_header(range_header, total_size)
-    is_partial = range_header is not None
+    content_length = range_end - range_start + 1
 
-    status_code = 206 if is_partial else 200
+    logger.info(
+        f"[RAW] media={media_id}, range={range_header!r}, "
+        f"bytes={range_start}-{range_end}/{total_size}, clients={len(reader._clients)}"
+    )
 
     # Pool status for frontend warnings
     pool = worker_manager.pool_status()
 
+    # Always 206: Android TV WebView (Chromium) refuses to play video served
+    # as 200, even when Accept-Ranges and Content-Range are present.
+    # RFC 7233 allows 206 for any satisfiable byte-range, including bytes=0-N.
     headers = {
         "Accept-Ranges": "bytes",
+        "Content-Length": str(content_length),
+        "Content-Range": f"bytes {range_start}-{range_end}/{total_size}",
         "Content-Type": "video/x-matroska",
         # Anti-buffering headers for Cloudflare/nginx proxies
         "X-Accel-Buffering": "no",
@@ -136,21 +147,37 @@ async def stream_raw(
         "X-Stream-Clients": str(len(reader._clients)),
     }
 
-    if is_partial:
-        headers["Content-Range"] = f"bytes {range_start}-{range_end}/{total_size}"
-
     async def stream_generator():
-        """Generate stream chunks using persistent reader."""
+        """Generate stream chunks, detecting client disconnects promptly."""
+        client_disconnected = False
         try:
             async for chunk in reader.read_range(range_start, range_end + 1):
                 yield chunk
+                # Check after each chunk so we stop pulling from Telegram as
+                # soon as the WebView drops the connection.
+                if await request.is_disconnected():
+                    logger.info(f"[RAW] Client disconnected mid-stream for media {media_id}")
+                    client_disconnected = True
+                    break
+        except asyncio.CancelledError:
+            # ASGI layer cancelled the handler (e.g. client closed TCP)
+            logger.info(f"[RAW] Request cancelled for media {media_id}")
+            client_disconnected = True
+            raise
         except Exception:
-            # Reader was force-released or connection dropped — end stream silently
-            return
+            # Force-release or other transient error — end stream silently
+            pass
+        finally:
+            if client_disconnected:
+                # Persistent readers hold Pyrogram clients across range requests.
+                # On abrupt disconnect the frontend never calls /release, so we
+                # force-release here to return clients to the pool immediately.
+                # release_reader has no internal awaits — safe inside finally/CancelledError.
+                await release_reader(media_id)
 
     return StreamingResponse(
         stream_generator(),
-        status_code=status_code,
+        status_code=206,
         headers=headers,
         media_type="video/x-matroska",
     )
