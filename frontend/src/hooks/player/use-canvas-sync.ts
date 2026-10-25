@@ -5,6 +5,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 interface CanvasSize {
   width: number;
   height: number;
+  /** The canvas' own pixels: the CSS size times the screen's pixel ratio */
+  pixelWidth: number;
+  pixelHeight: number;
   offsetX: number;
   offsetY: number;
 }
@@ -22,6 +25,8 @@ export function useCanvasSync(
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({
     width: 0,
     height: 0,
+    pixelWidth: 0,
+    pixelHeight: 0,
     offsetX: 0,
     offsetY: 0,
   });
@@ -61,14 +66,22 @@ export function useCanvasSync(
       const finalH = Math.round(rh);
       if (finalW <= 0 || finalH <= 0) return;
 
+      // Rendered at the screen's resolution: at CSS size the text was upscaled and blurry
+      // on phones and retina screens. Capped at 2, libass' cost grows with the pixels
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      const pixelW = Math.round(finalW * ratio);
+      const pixelH = Math.round(finalH * ratio);
+
       setCanvasSize({
         width: finalW,
         height: finalH,
+        pixelWidth: pixelW,
+        pixelHeight: pixelH,
         offsetX: Math.round(ox),
         offsetY: Math.round(oy),
       });
 
-      resizeCallback?.(finalW, finalH);
+      resizeCallback?.(pixelW, pixelH);
     };
 
     const handleLoadedMetadata = () => syncSize();

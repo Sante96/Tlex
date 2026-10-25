@@ -65,7 +65,6 @@ interface PlayerControlsProps {
   onSubtitleChange: (index: number | null) => void;
   onSubtitleOffsetChange: (offset: number) => void;
   onSkip: (seconds: number) => void;
-  onSeekStart?: () => void;
   onActivity?: () => void;
   onSettingsOpenChange?: (open: boolean) => void;
   hasEpisodes?: boolean;
@@ -103,7 +102,6 @@ export function PlayerControls({
   onSubtitleChange,
   onSubtitleOffsetChange,
   onSkip,
-  onSeekStart,
   onActivity,
   onSettingsOpenChange,
   isTV,
@@ -227,7 +225,6 @@ export function PlayerControls({
           currentTime={currentTime}
           duration={duration}
           onSeek={onSeek}
-          onSeekStart={onSeekStart}
           onActivity={onActivity}
         />
 

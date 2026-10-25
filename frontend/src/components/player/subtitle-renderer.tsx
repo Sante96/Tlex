@@ -52,8 +52,8 @@ export const SubtitleRenderer = forwardRef<
   return (
     <canvas
       ref={setCanvasRefCallback}
-      width={canvasSize.width}
-      height={canvasSize.height}
+      width={canvasSize.pixelWidth}
+      height={canvasSize.pixelHeight}
       style={{
         position: "absolute",
         top: canvasSize.offsetY,

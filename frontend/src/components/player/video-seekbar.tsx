@@ -10,7 +10,6 @@ interface VideoSeekbarProps {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
-  onSeekStart?: () => void; // Called when user starts hovering (for pre-warming)
   onActivity?: () => void; // Called on any interaction to keep controls visible
   className?: string;
 }
@@ -19,7 +18,6 @@ export function VideoSeekbar({
   currentTime,
   duration,
   onSeek,
-  onSeekStart,
   onActivity,
   className,
 }: VideoSeekbarProps) {
@@ -29,35 +27,45 @@ export function VideoSeekbar({
   const [hoverPosition, setHoverPosition] = useState(0);
   const [hoverTime, setHoverTime] = useState(0);
   const [pendingTime, setPendingTime] = useState<number | null>(null);
+  // Where a finger or the mouse is dragging the thumb: seeks on release, not on every move
+  const [dragTime, setDragTime] = useState<number | null>(null);
 
   // When focused, display pending position; otherwise real position
-  const displayTime = pendingTime ?? currentTime;
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const displayTime = dragTime ?? pendingTime ?? currentTime;
+  const progress = duration > 0 ? ((dragTime ?? currentTime) / duration) * 100 : 0;
   const displayProgress = duration > 0 ? (displayTime / duration) * 100 : 0;
-  const isActive = isHovering || isFocused;
+  const isDragging = dragTime !== null;
+  const isActive = isHovering || isFocused || isDragging;
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!trackRef.current || duration <= 0) return;
-      const rect = trackRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = Math.max(0, Math.min(1, x / rect.width));
-      setHoverPosition(percentage * 100);
-      setHoverTime(percentage * duration);
-    },
-    [duration],
-  );
+  const timeAt = (clientX: number) => {
+    const rect = trackRef.current!.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration;
+  };
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!trackRef.current || duration <= 0) return;
-      const rect = trackRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = Math.max(0, Math.min(1, x / rect.width));
-      onSeek(percentage * duration);
-    },
-    [duration, onSeek],
-  );
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (duration <= 0 || e.button !== 0) return;
+    // Keep receiving the moves when the finger slides off the thin track
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragTime(timeAt(e.clientX));
+    onActivity?.();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (duration <= 0) return;
+    const time = timeAt(e.clientX);
+    setHoverPosition((time / duration) * 100);
+    setHoverTime(time);
+    if (isDragging) {
+      setDragTime(time);
+      onActivity?.();
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    setDragTime(null);
+    onSeek(timeAt(e.clientX));
+  };
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -94,13 +102,14 @@ export function VideoSeekbar({
     [duration, currentTime, pendingTime, onSeek, onActivity],
   );
 
-  const tooltipLeft = isFocused
-    ? `${displayProgress}%`
-    : isHovering
-      ? `${hoverPosition}%`
-      : null;
+  const tooltipLeft =
+    isFocused || isDragging
+      ? `${displayProgress}%`
+      : isHovering
+        ? `${hoverPosition}%`
+        : null;
 
-  const tooltipTime = isFocused ? displayTime : hoverTime;
+  const tooltipTime = isFocused || isDragging ? displayTime : hoverTime;
 
   return (
     <div
@@ -108,17 +117,17 @@ export function VideoSeekbar({
       tabIndex={0}
       data-seekbar="true"
       className={cn(
-        "relative w-full cursor-pointer group py-2",
+        // touch-none: a horizontal drag scrubs instead of scrolling or swiping
+        "relative w-full cursor-pointer group py-2 touch-none",
         "outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent rounded-sm",
         className,
       )}
-      onMouseEnter={() => {
-        setIsHovering(true);
-        onSeekStart?.();
-      }}
-      onMouseLeave={() => setIsHovering(false)}
-      onMouseMove={handleMouseMove}
-      onClick={handleClick}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setIsHovering(true)}
+      onPointerLeave={() => setIsHovering(false)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => setDragTime(null)}
       onFocus={() => setIsFocused(true)}
       onBlur={() => {
         setIsFocused(false);
@@ -147,7 +156,7 @@ export function VideoSeekbar({
         <div className="absolute inset-0 bg-white/30" />
 
         {/* Hover preview bar (mouse only) */}
-        {isHovering && !isFocused && (
+        {isHovering && !isFocused && !isDragging && (
           <div
             className="absolute inset-y-0 left-0 bg-white/20"
             style={{ width: `${hoverPosition}%` }}
@@ -156,7 +165,10 @@ export function VideoSeekbar({
 
         {/* Real progress (played) - always visible */}
         <div
-          className="absolute inset-y-0 left-0 bg-plex-orange transition-all"
+          className={cn(
+            "absolute inset-y-0 left-0 bg-plex-orange",
+            !isDragging && "transition-all",
+          )}
           style={{ width: `${progress}%` }}
         />
 
@@ -178,7 +190,8 @@ export function VideoSeekbar({
       {/* Thumb — visible on hover or focus */}
       <div
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full shadow-lg transition-all duration-150",
+          "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full shadow-lg duration-150",
+          isDragging ? "transition-[width,height,opacity]" : "transition-all",
           isActive ? "w-4 h-4 opacity-100" : "w-0 h-0 opacity-0",
           isFocused && pendingTime !== null
             ? "bg-white scale-125"
