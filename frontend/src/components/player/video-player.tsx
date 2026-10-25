@@ -112,6 +112,7 @@ export function VideoPlayer({
     setSubtitleOffset,
   } = usePlayerPreferences(
     mediaId,
+    profile?.id,
     Math.max(0, audioTracks.findIndex((t) => t.language === prefs.default_audio)),
     defaultSubtitle(subtitleTracks, prefs),
   );

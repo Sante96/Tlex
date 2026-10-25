@@ -58,11 +58,6 @@ SCHEMA_UPGRADES = (
     "ALTER TABLE backup_channels ADD COLUMN IF NOT EXISTS max_failures INTEGER NOT NULL DEFAULT 5",
     "ALTER TABLE backup_channels ADD COLUMN IF NOT EXISTS last_failure_at TIMESTAMP",
     "ALTER TABLE backup_channels ADD COLUMN IF NOT EXISTS is_promoted BOOLEAN NOT NULL DEFAULT FALSE",
-    # watch_progress had no unique (user, media): keep the newest duplicate, then enforce it
-    "DELETE FROM watch_progress a USING watch_progress b"
-    " WHERE a.user_id = b.user_id AND a.media_item_id = b.media_item_id AND a.id < b.id",
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_progress_user_media"
-    " ON watch_progress (user_id, media_item_id)",
     # PostgreSQL doesn't index foreign keys: every parts/streams/episodes load scanned
     # the whole table. Same names as the models' index=True, so new databases match.
     "CREATE INDEX IF NOT EXISTS ix_media_items_series_id ON media_items (series_id)",
@@ -73,6 +68,33 @@ SCHEMA_UPGRADES = (
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS video_keyframes TEXT",
     "ALTER TABLE media_items DROP COLUMN IF EXISTS keyframes_index",
     "ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
+    # Profiles keep their own watch progress and watchlist. Every user gets a profile if
+    # they had none; rows from before go to the user's first profile. Uniqueness moves
+    # from (user, media) to (profile, media): the old rule, re-run at every start, would
+    # delete the other profiles' rows.
+    "INSERT INTO profiles (user_id, name, is_kids, preferences)"
+    " SELECT u.id, split_part(u.email, '@', 1), FALSE, '{}' FROM users u"
+    " WHERE NOT EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)",
+    "ALTER TABLE watch_progress ADD COLUMN IF NOT EXISTS profile_id INTEGER"
+    " REFERENCES profiles(id) ON DELETE CASCADE",
+    "UPDATE watch_progress w SET profile_id = (SELECT min(p.id) FROM profiles p"
+    " WHERE p.user_id = w.user_id) WHERE profile_id IS NULL",
+    "ALTER TABLE watch_progress ALTER COLUMN profile_id SET NOT NULL",
+    "DROP INDEX IF EXISTS uq_watch_progress_user_media",
+    "DELETE FROM watch_progress a USING watch_progress b WHERE a.profile_id = b.profile_id"
+    " AND a.media_item_id = b.media_item_id AND a.id < b.id",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_progress_profile_media"
+    " ON watch_progress (profile_id, media_item_id)",
+    "ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS profile_id INTEGER"
+    " REFERENCES profiles(id) ON DELETE CASCADE",
+    "UPDATE watchlist w SET profile_id = (SELECT min(p.id) FROM profiles p"
+    " WHERE p.user_id = w.user_id) WHERE profile_id IS NULL",
+    "ALTER TABLE watchlist ALTER COLUMN profile_id SET NOT NULL",
+    "ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS uq_watchlist_user_media",
+    "ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS uq_watchlist_user_series",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_profile_media"
+    " ON watchlist (profile_id, media_item_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_profile_series ON watchlist (profile_id, series_id)",
 )
 
 

@@ -135,7 +135,8 @@
     },
     "avatar": {
       "title": "Choose your avatar"
-    }
+    },
+    "assignWorker": "No worker: assign one"
   },
   "home": {
     "welcome": "Welcome to TLEX",

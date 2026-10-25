@@ -10,9 +10,15 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import DBSession, get_admin_user, get_current_user, get_current_user_optional
+from app.api.deps import (
+    DBSession,
+    get_admin_user,
+    get_current_profile,
+    get_current_user,
+    get_current_user_optional,
+)
 from app.models.media import MediaItem, Series
-from app.models.user import User, WatchProgress
+from app.models.user import Profile, User, WatchProgress
 from app.services.overrides import (
     apply_series_override,
     get_series_override,
@@ -120,8 +126,9 @@ async def get_series(
     session: DBSession,
     series_id: int,
     current_user: User | None = Depends(get_current_user_optional),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Get series details with seasons."""
+    """Get series details with seasons, and the current profile's progress."""
     query = select(Series).where(Series.id == series_id).options(selectinload(Series.episodes))
     result = await session.execute(query)
     series = result.scalar_one_or_none()
@@ -129,17 +136,16 @@ async def get_series(
     if not series:
         raise HTTPException(status_code=404, detail="Series not found")
 
-    # Get watch progress for all episodes if user is authenticated
+    # The profile's watch progress for every episode
     watch_progress_map: dict[int, WatchProgress] = {}
-    if current_user:
-        episode_ids = [ep.id for ep in series.episodes]
-        progress_query = select(WatchProgress).where(
-            WatchProgress.user_id == current_user.id,
-            WatchProgress.media_item_id.in_(episode_ids),
-        )
-        progress_result = await session.execute(progress_query)
-        for wp in progress_result.scalars().all():
-            watch_progress_map[wp.media_item_id] = wp
+    episode_ids = [ep.id for ep in series.episodes]
+    progress_query = select(WatchProgress).where(
+        WatchProgress.profile_id == profile.id,
+        WatchProgress.media_item_id.in_(episode_ids),
+    )
+    progress_result = await session.execute(progress_query)
+    for wp in progress_result.scalars().all():
+        watch_progress_map[wp.media_item_id] = wp
 
     # Group episodes by season
     seasons_data = {}

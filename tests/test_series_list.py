@@ -35,15 +35,15 @@ async def test_series_list_counts_seasons_and_episodes(
 async def test_watchlist_lists_movies_and_series(
     client: AsyncClient, auth_headers: dict, test_session: AsyncSession
 ):
-    from app.models.user import User
+    from app.models.user import Profile
 
-    user = (await test_session.execute(User.__table__.select())).one()
+    profile = (await test_session.execute(Profile.__table__.select())).one()
     movie, show = MediaItem(title="Film", media_type=MediaType.MOVIE), Series(title="Show")
     test_session.add_all([movie, show])
     await test_session.flush()
     test_session.add_all([
-        Watchlist(user_id=user.id, media_item_id=movie.id),
-        Watchlist(user_id=user.id, series_id=show.id),
+        Watchlist(user_id=profile.user_id, profile_id=profile.id, media_item_id=movie.id),
+        Watchlist(user_id=profile.user_id, profile_id=profile.id, series_id=show.id),
     ])
     await test_session.commit()
 

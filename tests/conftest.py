@@ -84,7 +84,7 @@ async def client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None
 @pytest_asyncio.fixture
 async def auth_headers(client: AsyncClient, test_session: AsyncSession) -> dict:
     """Create authenticated user and return auth headers."""
-    from app.models.user import User
+    from app.models.user import Profile, User
     from app.core.security import hash_password, create_access_token
     
     # Create test user
@@ -93,6 +93,7 @@ async def auth_headers(client: AsyncClient, test_session: AsyncSession) -> dict:
         password_hash=hash_password("testpass123"),
         is_admin=False,
     )
+    user.profiles.append(Profile(name="main"))  # as registration does
     test_session.add(user)
     await test_session.commit()
     await test_session.refresh(user)
@@ -106,7 +107,7 @@ async def auth_headers(client: AsyncClient, test_session: AsyncSession) -> dict:
 @pytest_asyncio.fixture
 async def admin_headers(client: AsyncClient, test_session: AsyncSession) -> dict:
     """Create admin user and return auth headers."""
-    from app.models.user import User
+    from app.models.user import Profile, User
     from app.core.security import hash_password, create_access_token
     
     # Create admin user
@@ -115,6 +116,7 @@ async def admin_headers(client: AsyncClient, test_session: AsyncSession) -> dict
         password_hash=hash_password("adminpass123"),
         is_admin=True,
     )
+    user.profiles.append(Profile(name="main"))  # as registration does
     test_session.add(user)
     await test_session.commit()
     await test_session.refresh(user)

@@ -12,7 +12,8 @@ import { useProfile } from "@/contexts/profile-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useIsTV } from "@/hooks/use-platform";
 import type { Profile } from "@/lib/api";
-import { assignWorkerToProfile } from "@/lib/api";
+import { assignWorkerToProfile, errorText } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 const MeshGradient = dynamic(
   () => import("@paper-design/shaders-react").then((m) => ({ default: m.MeshGradient })),
@@ -25,6 +26,7 @@ export default function ProfilesPage() {
   const { profiles, selectProfile, hasProfiles, isLoading, refreshProfiles } = useProfile();
   const t = useTranslations();
   const isTV = useIsTV();
+  const toast = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -37,7 +39,9 @@ export default function ProfilesPage() {
     try {
       await assignWorkerToProfile(profileId);
       await refreshProfiles();
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      toast(errorText(err, t("common.actionFailed")), "error"); // e.g. no free worker
+    } finally {
       setAssigningId(null);
     }
   };
@@ -83,14 +87,15 @@ export default function ProfilesPage() {
           {/* Profile grid */}
           <div className="flex flex-wrap justify-center gap-10">
             {profiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => handleSelectProfile(profile)}
-                className="flex flex-col items-center gap-4 group outline-none"
-              >
-                <div className="relative">
+              // The worker badge is a sibling of the profile button: nested inside it,
+              // a D-pad could never reach it
+              <div key={profile.id} className="relative">
+                <button
+                  onClick={() => handleSelectProfile(profile)}
+                  className="flex flex-col items-center gap-4 group outline-none"
+                >
                   <div
-                    className="relative w-44 h-44 rounded-full transition-all duration-200 ring-4 ring-transparent focus-visible:ring-[#e5a00d] group-focus-visible:ring-[#e5a00d] group-focus-visible:scale-105 group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#09090b]"
+                    className="relative w-44 h-44 rounded-full transition-all duration-200 ring-4 ring-transparent group-focus-visible:ring-[#e5a00d] group-focus-visible:scale-105 group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#09090b]"
                     style={{ "--tw-ring-offset-color": "#09090b" } as React.CSSProperties}
                   >
                     <ProfileAvatar
@@ -100,30 +105,45 @@ export default function ProfilesPage() {
                       selected={false}
                     />
                   </div>
-                  {!profile.has_worker && (
-                    <div
-                      onClick={(e) => handleAssignWorker(e, profile.id)}
-                      role="button"
-                      tabIndex={0}
-                      title="Assegna worker"
-                      className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors cursor-pointer"
-                    >
-                      <span className="text-xs font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
-                    </div>
-                  )}
+                  <span className="text-lg font-medium text-[#a1a1aa] group-focus-visible:text-white transition-colors">
+                    {profile.name}
+                    {profile.is_kids && (
+                      <span className="ml-2 text-sm font-semibold text-blue-400 uppercase tracking-wider">
+                        {t("profiles.kids")}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                {!profile.has_worker && (
+                  <button
+                    onClick={(e) => handleAssignWorker(e, profile.id)}
+                    title={t("profiles.assignWorker")}
+                    aria-label={t("profiles.assignWorker")}
+                    className="absolute top-[154px] left-[calc(50%+66px)] w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#09090b] outline-none focus-visible:ring-4 focus-visible:ring-[#e5a00d]"
+                  >
+                    <span className="text-xs font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {/* A new account starts with one profile; the TV can add more too */}
+            {profiles.length < 5 && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex flex-col items-center gap-4 group outline-none"
+              >
+                <div className="w-44 h-44 rounded-full border-4 border-dashed border-white/20 flex items-center justify-center transition-all duration-200 bg-white/[0.03] group-focus-visible:border-[#e5a00d] group-focus-visible:scale-105">
+                  <Plus className="w-14 h-14 text-white/30 group-focus-visible:text-[#e5a00d] transition-colors" />
                 </div>
                 <span className="text-lg font-medium text-[#a1a1aa] group-focus-visible:text-white transition-colors">
-                  {profile.name}
-                  {profile.is_kids && (
-                    <span className="ml-2 text-sm font-semibold text-blue-400 uppercase tracking-wider">
-                      {t("profiles.kids")}
-                    </span>
-                  )}
+                  {t("profiles.addProfile")}
                 </span>
               </button>
-            ))}
+            )}
           </div>
         </div>
+        {showCreateModal && <CreateProfileModal onClose={() => setShowCreateModal(false)} />}
       </div>
     );
   }
@@ -165,8 +185,8 @@ export default function ProfilesPage() {
         {/* Profile grid */}
         <div className="flex flex-wrap justify-center gap-5 md:gap-8 max-w-2xl">
           {profiles.map((profile) => (
+            <div key={profile.id} className="relative">
             <button
-              key={profile.id}
               onClick={() => handleSelectProfile(profile)}
               className="flex flex-col items-center gap-3 group outline-none"
             >
@@ -198,18 +218,6 @@ export default function ProfilesPage() {
                     </div>
                   )}
                 </div>
-                {/* Worker warning badge */}
-                {!profile.has_worker && (
-                  <div
-                    onClick={(e) => handleAssignWorker(e, profile.id)}
-                    role="button"
-                    tabIndex={0}
-                    title="Assegna worker"
-                    className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors cursor-pointer"
-                  >
-                    <span className="text-[10px] font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
-                  </div>
-                )}
               </div>
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-[#a1a1aa] group-hover:text-white transition-colors text-sm font-medium">
@@ -222,6 +230,18 @@ export default function ProfilesPage() {
                 )}
               </div>
             </button>
+            {/* A sibling of the profile button: nested inside it, keyboards never reached it */}
+            {!profile.has_worker && (
+              <button
+                onClick={(e) => handleAssignWorker(e, profile.id)}
+                title={t("profiles.assignWorker")}
+                aria-label={t("profiles.assignWorker")}
+                className="absolute top-[110px] left-[calc(50%+46px)] w-5 h-5 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors outline-none focus-visible:ring-[#e5a00d]"
+              >
+                <span className="text-[10px] font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
+              </button>
+            )}
+            </div>
           ))}
 
           {/* Add profile */}

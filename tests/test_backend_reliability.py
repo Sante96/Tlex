@@ -77,16 +77,21 @@ async def test_scan_waits_when_last_run_is_recent(mocker):
 
 async def test_concurrent_progress_insert_updates_the_existing_row(test_session):
     from app.api.v1.progress import ProgressUpdate, update_progress
-    from app.models import MediaItem, User, WatchProgress
+    from app.models import MediaItem, Profile, User, WatchProgress
     from app.models.media import MediaType
 
     user = User(email="u@example.com", password_hash="x")
+    profile = Profile(name="main")
+    user.profiles.append(profile)
     media = MediaItem(title="M", media_type=MediaType.MOVIE)
     test_session.add_all([user, media])
     await test_session.commit()
     # The other request's row exists, but our SELECT ran before it committed
     test_session.add(
-        WatchProgress(user_id=user.id, media_item_id=media.id, position_seconds=10, duration_seconds=100)
+        WatchProgress(
+            user_id=user.id, profile_id=profile.id, media_item_id=media.id,
+            position_seconds=10, duration_seconds=100,
+        )
     )
     await test_session.commit()
 
@@ -102,7 +107,7 @@ async def test_concurrent_progress_insert_updates_the_existing_row(test_session)
 
     test_session.execute = execute
     resp = await update_progress(
-        media.id, ProgressUpdate(position_seconds=50, duration_seconds=100), db=test_session, current_user=user
+        media.id, ProgressUpdate(position_seconds=50, duration_seconds=100), db=test_session, profile=profile
     )
 
     rows = (await real_execute(select(WatchProgress))).scalars().all()

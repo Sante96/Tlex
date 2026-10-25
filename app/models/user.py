@@ -91,13 +91,17 @@ class Watchlist(Base):
 
     __tablename__ = "watchlist"
     __table_args__ = (
-        UniqueConstraint("user_id", "media_item_id", name="uq_watchlist_user_media"),
-        UniqueConstraint("user_id", "series_id", name="uq_watchlist_user_series"),
+        UniqueConstraint("profile_id", "media_item_id", name="uq_watchlist_profile_media"),
+        UniqueConstraint("profile_id", "series_id", name="uq_watchlist_profile_series"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Each profile has its own watchlist
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False
     )
     media_item_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=True
@@ -118,12 +122,16 @@ class WatchProgress(Base):
 
     __tablename__ = "watch_progress"
     __table_args__ = (
-        UniqueConstraint("user_id", "media_item_id", name="uq_watch_progress_user_media"),
+        UniqueConstraint("profile_id", "media_item_id", name="uq_watch_progress_profile_media"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Each profile has its own progress and Continue Watching
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False
     )
     media_item_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False

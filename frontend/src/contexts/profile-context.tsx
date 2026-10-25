@@ -79,8 +79,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const selectProfile = useCallback((selectedProfile: Profile) => {
     setProfile(selectedProfile);
+    // Read by the backend too: progress and the watchlist are this profile's. A device
+    // keeps its pick (it used to expire after 30 days)
     Cookies.set(PROFILE_COOKIE_KEY, String(selectedProfile.id), {
-      expires: 30,
+      expires: 365,
+      sameSite: "lax",
     });
   }, []);
 

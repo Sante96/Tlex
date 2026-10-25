@@ -20,7 +20,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.user import RefreshToken, User
+from app.models.user import Profile, RefreshToken, User
 from app.schemas import (
     ChangePassword,
     RefreshRequest,
@@ -142,6 +142,9 @@ async def register(request: Request, user_data: UserCreate, session: DBSession) 
         password_hash=await asyncio.to_thread(hash_password, user_data.password),
         is_admin=is_first_user,  # otherwise a fresh install has no one who can add workers
     )
+    # A first profile, named after the address: progress and the watchlist belong to
+    # profiles, and the TV's profile picker had nothing to show for a new account
+    user.profiles.append(Profile(name=user_data.email.split("@")[0]))
     session.add(user)
     await session.commit()
     await session.refresh(user)

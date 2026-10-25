@@ -108,3 +108,36 @@ async def get_admin_user(
             detail="Admin access required",
         )
     return current_user
+
+
+# The profile picked on this device: the frontend keeps its id in this cookie
+PROFILE_COOKIE = "selected_profile_id"
+
+
+async def get_current_profile(
+    request: Request,
+    session: DBSession,
+    current_user=Depends(get_current_user),
+):
+    """The profile watching: watch progress and the watchlist belong to it.
+
+    The one picked on this device, if it is the user's; otherwise the user's first.
+    Every user has one (registration creates it, the last one can't be deleted).
+    """
+    from sqlalchemy import select
+
+    from app.models.user import Profile
+
+    profiles = (
+        (
+            await session.execute(
+                select(Profile).where(Profile.user_id == current_user.id).order_by(Profile.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not profiles:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No profile")
+    wanted = request.cookies.get(PROFILE_COOKIE)
+    return next((p for p in profiles if str(p.id) == wanted), profiles[0])

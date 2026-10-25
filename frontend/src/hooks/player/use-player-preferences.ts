@@ -18,38 +18,41 @@ function saved(key: string): string | null {
 }
 
 /**
- * Per-media player choices, persisted in localStorage. Until a track is picked in the
- * player for this media, the profile's Settings decide (defaultAudio, defaultSubtitle),
- * recomputed on every render: a profile that loads late, or Settings changed later, still
- * apply. Only a pick in the player is stored.
+ * Per-media player choices of a profile, persisted in localStorage. Until a track is
+ * picked in the player for this media, the profile's Settings decide (defaultAudio,
+ * defaultSubtitle), recomputed on every render: a profile that loads late, or Settings
+ * changed later, still apply. Only a pick in the player is stored.
  */
 export function usePlayerPreferences(
   mediaId: number,
+  profileId: number | undefined,
   defaultAudio = 0,
   defaultSubtitle: number | null = null,
 ): PlayerPreferences {
+  // Each profile its own picks, like its progress (the keys used to be per browser)
+  const key = `${profileId ?? 0}_${mediaId}`;
   const [audio, setAudio] = useState(() => {
-    const value = saved(`player_audio_${mediaId}`);
+    const value = saved(`player_audio_${key}`);
     return value === null ? undefined : parseInt(value, 10);
   });
 
   // undefined = never chosen, null = explicitly off
   const [subtitle, setSubtitle] = useState<number | null | undefined>(() => {
-    const value = saved(`player_subtitle_${mediaId}`);
+    const value = saved(`player_subtitle_${key}`);
     if (value === null) return undefined;
     return value === SUBTITLE_OFF ? null : parseInt(value, 10);
   });
 
   const [subtitleOffset, setSubtitleOffsetState] = useState(() =>
-    parseFloat(saved(`player_suboffset_${mediaId}`) ?? "0"),
+    parseFloat(saved(`player_suboffset_${key}`) ?? "0"),
   );
 
   const setSelectedAudio = useCallback(
     (index: number) => {
       setAudio(index);
-      localStorage.setItem(`player_audio_${mediaId}`, String(index));
+      localStorage.setItem(`player_audio_${key}`, String(index));
     },
-    [mediaId],
+    [key],
   );
 
   const setSelectedSubtitle = useCallback(
@@ -57,19 +60,19 @@ export function usePlayerPreferences(
       setSubtitle(index);
       // Store "off" too, or the Settings default would turn subtitles back on
       localStorage.setItem(
-        `player_subtitle_${mediaId}`,
+        `player_subtitle_${key}`,
         index === null ? SUBTITLE_OFF : String(index),
       );
     },
-    [mediaId],
+    [key],
   );
 
   const setSubtitleOffset = useCallback(
     (offset: number) => {
       setSubtitleOffsetState(offset);
-      localStorage.setItem(`player_suboffset_${mediaId}`, String(offset));
+      localStorage.setItem(`player_suboffset_${key}`, String(offset));
     },
-    [mediaId],
+    [key],
   );
 
   return {

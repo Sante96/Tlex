@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
-from app.models import MediaItem, Series, User, WatchProgress
+from app.api.deps import get_current_profile, get_db
+from app.models import MediaItem, Profile, Series, WatchProgress
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -52,12 +52,12 @@ class ContinueWatchingItem(BaseModel):
 async def get_progress(
     media_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ):
     """Get watch progress for a specific media item."""
     result = await db.execute(
         select(WatchProgress).where(
-            WatchProgress.user_id == current_user.id,
+            WatchProgress.profile_id == profile.id,
             WatchProgress.media_item_id == media_id,
         )
     )
@@ -80,7 +80,7 @@ async def update_progress(
     media_id: int,
     data: ProgressUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ):
     """Update watch progress for a media item."""
     # Verify media exists (the player saves every few seconds: just the id)
@@ -89,13 +89,15 @@ async def update_progress(
 
     # Get or create progress
     query = select(WatchProgress).where(
-        WatchProgress.user_id == current_user.id,
+        WatchProgress.profile_id == profile.id,
         WatchProgress.media_item_id == media_id,
     )
     progress = (await db.execute(query)).scalar_one_or_none()
 
     if not progress:
-        progress = WatchProgress(user_id=current_user.id, media_item_id=media_id)
+        progress = WatchProgress(
+            user_id=profile.user_id, profile_id=profile.id, media_item_id=media_id
+        )
         try:
             async with db.begin_nested():
                 db.add(progress)
@@ -125,7 +127,7 @@ async def update_progress(
 @router.get("", response_model=list[ContinueWatchingItem])
 async def get_continue_watching(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
     limit: int = 10,
 ):
     """Get list of media items to continue watching.
@@ -140,7 +142,7 @@ async def get_continue_watching(
         .join(MediaItem, WatchProgress.media_item_id == MediaItem.id)
         .outerjoin(Series, MediaItem.series_id == Series.id)
         .where(
-            WatchProgress.user_id == current_user.id,
+            WatchProgress.profile_id == profile.id,
             WatchProgress.completed == False,  # noqa: E712
             WatchProgress.position_seconds > 0,
         )
@@ -199,12 +201,12 @@ async def get_continue_watching(
 async def delete_progress(
     media_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ):
     """Delete watch progress (mark as not started)."""
     result = await db.execute(
         select(WatchProgress).where(
-            WatchProgress.user_id == current_user.id,
+            WatchProgress.profile_id == profile.id,
             WatchProgress.media_item_id == media_id,
         )
     )

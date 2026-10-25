@@ -3,9 +3,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import DBSession, get_current_user
+from app.api.deps import DBSession, get_current_profile
 from app.models.media import MediaItem, Series
-from app.models.user import User, Watchlist
+from app.models.user import Profile, Watchlist
 from app.schemas import WatchlistListResponse, WatchlistMediaResponse
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -14,12 +14,12 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 @router.get("", response_model=WatchlistListResponse)
 async def get_watchlist(
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> WatchlistListResponse:
-    """Get current user's watchlist with media details (movies + series)."""
+    """The current profile's watchlist with media details (movies + series)."""
     query = (
         select(Watchlist)
-        .where(Watchlist.user_id == current_user.id)
+        .where(Watchlist.profile_id == profile.id)
         .order_by(Watchlist.added_at.desc())
     )
     result = await session.execute(query)
@@ -80,9 +80,9 @@ async def get_watchlist(
 async def add_to_watchlist(
     media_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Add a media item to the user's watchlist."""
+    """Add a media item to the profile's watchlist."""
     media_query = select(MediaItem).where(MediaItem.id == media_id)
     media_result = await session.execute(media_query)
     media = media_result.scalar_one_or_none()
@@ -91,14 +91,14 @@ async def add_to_watchlist(
         raise HTTPException(status_code=404, detail="Media not found")
 
     existing_query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.media_item_id == media_id,
     )
     existing_result = await session.execute(existing_query)
     if existing_result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Already in watchlist")
 
-    session.add(Watchlist(user_id=current_user.id, media_item_id=media_id))
+    session.add(Watchlist(user_id=profile.user_id, profile_id=profile.id, media_item_id=media_id))
     await session.commit()
     return {"message": f"Added '{media.title}' to watchlist"}
 
@@ -107,11 +107,11 @@ async def add_to_watchlist(
 async def remove_from_watchlist(
     media_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Remove a media item from the user's watchlist."""
+    """Remove a media item from the profile's watchlist."""
     query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.media_item_id == media_id,
     )
     result = await session.execute(query)
@@ -128,11 +128,11 @@ async def remove_from_watchlist(
 async def check_watchlist_status(
     media_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Check if a media item is in the user's watchlist."""
+    """Check if a media item is in the profile's watchlist."""
     query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.media_item_id == media_id,
     )
     result = await session.execute(query)
@@ -146,9 +146,9 @@ async def check_watchlist_status(
 async def add_series_to_watchlist(
     series_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Add a series to the user's watchlist."""
+    """Add a series to the profile's watchlist."""
     series_query = select(Series).where(Series.id == series_id)
     series_result = await session.execute(series_query)
     series = series_result.scalar_one_or_none()
@@ -157,14 +157,14 @@ async def add_series_to_watchlist(
         raise HTTPException(status_code=404, detail="Series not found")
 
     existing_query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.series_id == series_id,
     )
     existing_result = await session.execute(existing_query)
     if existing_result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Already in watchlist")
 
-    session.add(Watchlist(user_id=current_user.id, series_id=series_id))
+    session.add(Watchlist(user_id=profile.user_id, profile_id=profile.id, series_id=series_id))
     await session.commit()
     return {"message": f"Added '{series.title}' to watchlist"}
 
@@ -173,11 +173,11 @@ async def add_series_to_watchlist(
 async def remove_series_from_watchlist(
     series_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Remove a series from the user's watchlist."""
+    """Remove a series from the profile's watchlist."""
     query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.series_id == series_id,
     )
     result = await session.execute(query)
@@ -194,11 +194,11 @@ async def remove_series_from_watchlist(
 async def check_series_watchlist_status(
     series_id: int,
     session: DBSession,
-    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
 ) -> dict:
-    """Check if a series is in the user's watchlist."""
+    """Check if a series is in the profile's watchlist."""
     query = select(Watchlist).where(
-        Watchlist.user_id == current_user.id,
+        Watchlist.profile_id == profile.id,
         Watchlist.series_id == series_id,
     )
     result = await session.execute(query)

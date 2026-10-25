@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
@@ -16,6 +18,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { SplashScreen } from "@/components/splash-screen";
 import { RouteTransitionProvider } from "@/contexts/route-transition-context";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
+import { useProfile } from "@/contexts/profile-context";
 import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV, useTVTier } from "@/hooks/use-platform";
 
@@ -23,6 +26,28 @@ const MeshGradient = dynamic(
   () => import("@paper-design/shaders-react").then((m) => ({ default: m.MeshGradient })),
   { ssr: false },
 );
+
+/** Progress and the watchlist belong to a profile: a device that hasn't picked one goes
+ * to the picker, or takes the only one there is. It used to browse without a profile. */
+function ProfileGate({ children }: { children: React.ReactNode }) {
+  const { needsProfileSelection, isLoading, profiles, selectProfile } = useProfile();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!needsProfileSelection) return;
+    if (profiles.length === 1) selectProfile(profiles[0]);
+    else router.replace("/profiles");
+  }, [needsProfileSelection, profiles, selectProfile, router]);
+
+  if (isLoading || needsProfileSelection) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <Loader2 className="h-8 w-8 text-[#e5a00d] animate-spin" />
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
 
 function MainContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed, tvExpanded } = useSidebar();
@@ -72,36 +97,38 @@ export default function MainLayout({
 
   return (
     <AuthGuard requireAuth={true} redirectTo="/login">
-      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
-      <SidebarProvider>
-        <div className="min-h-screen">
-          {/* Background — TVBackground (CSS) on TV, animated shader on web */}
-          {isTV ? (
-            <div className="fixed inset-0 z-[-1]">
-              <TVBackground />
-            </div>
-          ) : (
-            <div className="fixed inset-0 z-[-1]">
-              <MeshGradient
-                style={{ width: "100%", height: "100%" }}
-                colors={["#09090b", "#1c1500", "#09090b"]}
-                distortion={1}
-                swirl={0.1}
-                grainMixer={0}
-                grainOverlay={0}
-                speed={0.25}
-              />
-              <div
-                className="absolute inset-0"
-                style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
-              />
-            </div>
-          )}
-          <Sidebar />
-          <MainContent>{children}</MainContent>
-          <BottomNav />
-        </div>
-      </SidebarProvider>
+      <ProfileGate>
+        {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+        <SidebarProvider>
+          <div className="min-h-screen">
+            {/* Background — TVBackground (CSS) on TV, animated shader on web */}
+            {isTV ? (
+              <div className="fixed inset-0 z-[-1]">
+                <TVBackground />
+              </div>
+            ) : (
+              <div className="fixed inset-0 z-[-1]">
+                <MeshGradient
+                  style={{ width: "100%", height: "100%" }}
+                  colors={["#09090b", "#1c1500", "#09090b"]}
+                  distortion={1}
+                  swirl={0.1}
+                  grainMixer={0}
+                  grainOverlay={0}
+                  speed={0.25}
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
+                />
+              </div>
+            )}
+            <Sidebar />
+            <MainContent>{children}</MainContent>
+            <BottomNav />
+          </div>
+        </SidebarProvider>
+      </ProfileGate>
     </AuthGuard>
   );
 }
