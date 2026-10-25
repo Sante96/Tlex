@@ -1,6 +1,8 @@
 """TMDB API client implementation."""
 
+import asyncio
 import re
+import time
 
 import httpx
 from loguru import logger
@@ -11,6 +13,12 @@ from app.services.tmdb.models import CastMember, EpisodeInfo, MovieDetails, TMDB
 settings = get_settings()
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
+
+# Display data (credits, trailers, seasons, images, people) barely changes: the detail
+# pages ask for it on every visit. Searches and the full details used by scans and
+# "refresh metadata" are never cached, they exist to fetch current data.
+CACHE_TTL = 6 * 3600
+CACHE_MAX = 1000
 
 SEASON_PATTERNS = [
     re.compile(r"\s*[-–—]\s*[Ss]tagione\s*\d+", re.IGNORECASE),
@@ -43,23 +51,46 @@ class TMDBClient:
     def __init__(self) -> None:
         self._api_key = settings.tmdb_api_key
         self._language = settings.tmdb_language
+        self._http: httpx.AsyncClient | None = None
+        self._cache: dict[tuple, tuple[float, dict]] = {}
+
+    def _client(self) -> httpx.AsyncClient:
+        # One client for every call: its pool keeps the TLS connection to TMDB open,
+        # where a client per request paid a new handshake each time
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(base_url=TMDB_BASE_URL, timeout=10.0)
+        return self._http
 
     async def _get(
-        self, path: str, *, use_language: bool = True, language: str | None = None, **extra
+        self,
+        path: str,
+        *,
+        use_language: bool = True,
+        language: str | None = None,
+        cache: bool = True,
+        **extra,
     ) -> dict | None:
-        """Shared HTTP GET with error handling."""
+        """Shared HTTP GET with error handling; successful answers cached for CACHE_TTL."""
         params: dict = {"api_key": self._api_key}
         if use_language:
             params["language"] = language or self._language
         params.update(extra)
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(f"{TMDB_BASE_URL}{path}", params=params, timeout=10.0)
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.HTTPError as e:
-                logger.error(f"TMDB API error ({path}): {e}")
-                return None
+        key = (path, tuple(sorted(params.items())))
+        hit = self._cache.get(key) if cache else None
+        if hit and time.monotonic() - hit[0] < CACHE_TTL:
+            return hit[1]
+        try:
+            resp = await self._client().get(path, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as e:
+            logger.error(f"TMDB API error ({path}): {e}")
+            return None
+        if cache:
+            if len(self._cache) >= CACHE_MAX:
+                self._cache.pop(next(iter(self._cache)))  # oldest insertion
+            self._cache[key] = (time.monotonic(), data)
+        return data
 
     # --- Movie ---
 
@@ -70,7 +101,7 @@ class TMDBClient:
         extra: dict = {"query": title}
         if year:
             extra["year"] = str(year)
-        data = await self._get("/search/movie", language=language, **extra)
+        data = await self._get("/search/movie", language=language, cache=False, **extra)
         if not data or not data.get("results"):
             logger.warning(f"No TMDB results for movie: {title}")
             return None
@@ -90,7 +121,7 @@ class TMDBClient:
     ) -> MovieDetails | None:
         """Get full movie details including genres, vote_average, content_rating."""
         r = await self._get(
-            f"/movie/{tmdb_id}", append_to_response="release_dates", language=language
+            f"/movie/{tmdb_id}", append_to_response="release_dates", language=language, cache=False
         )
         if not r:
             return None
@@ -132,9 +163,11 @@ class TMDBClient:
 
     async def get_person(self, person_id: int, language: str | None = None) -> dict | None:
         """Get person details, combined credits and social links from TMDB."""
-        details = await self._get(f"/person/{person_id}", language=language)
-        credits = await self._get(f"/person/{person_id}/combined_credits", language=language)
-        external = await self._get(f"/person/{person_id}/external_ids")
+        details, credits, external = await asyncio.gather(
+            self._get(f"/person/{person_id}", language=language),
+            self._get(f"/person/{person_id}/combined_credits", language=language),
+            self._get(f"/person/{person_id}/external_ids"),
+        )
         if not details:
             return None
         return {
@@ -214,7 +247,7 @@ class TMDBClient:
         if clean_title != title:
             logger.debug(f"Cleaned TV title: '{title}' -> '{clean_title}'")
 
-        data = await self._get("/search/tv", query=clean_title, language=language)
+        data = await self._get("/search/tv", query=clean_title, language=language, cache=False)
         if not data or not data.get("results"):
             logger.warning(f"No TMDB results for TV: {title}")
             return None
@@ -245,7 +278,7 @@ class TMDBClient:
     async def get_tv_details(self, tmdb_id: int, language: str | None = None) -> TVDetails | None:
         """Get detailed TV show info including genres, rating, content rating."""
         data = await self._get(
-            f"/tv/{tmdb_id}", append_to_response="content_ratings", language=language
+            f"/tv/{tmdb_id}", append_to_response="content_ratings", language=language, cache=False
         )
         if not data:
             return None
@@ -367,6 +400,16 @@ class TMDBClient:
             use_language=False,
         )
         return _image_list(data.get("stills", [])) if data else []
+
+    async def get_movie_images(self, tmdb_id: int) -> dict:
+        """Get available poster and backdrop images for a movie."""
+        data = await self._get(f"/movie/{tmdb_id}/images", use_language=False)
+        if not data:
+            return {"posters": [], "backdrops": []}
+        return {
+            "posters": _image_list(data.get("posters", [])),
+            "backdrops": _image_list(data.get("backdrops", [])),
+        }
 
     async def get_tv_images(self, tmdb_id: int) -> dict:
         """Get available poster and backdrop images for a TV show."""

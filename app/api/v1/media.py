@@ -560,38 +560,6 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
             )
             return {"stills": stills, "posters": [], "backdrops": []}
 
-    # For movies: fetch posters and backdrops
-    # Reuse TV images method structure for movies
-    params = {"api_key": tmdb_client._api_key}
-    import httpx
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(
-                f"https://api.themoviedb.org/3/movie/{item.tmdb_id}/images",
-                params=params,
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return {
-                "stills": [],
-                "posters": [
-                    {
-                        "file_path": img["file_path"],
-                        "width": img.get("width"),
-                        "height": img.get("height"),
-                    }
-                    for img in data.get("posters", [])
-                ],
-                "backdrops": [
-                    {
-                        "file_path": img["file_path"],
-                        "width": img.get("width"),
-                        "height": img.get("height"),
-                    }
-                    for img in data.get("backdrops", [])
-                ],
-            }
-        except httpx.HTTPError:
-            return {"stills": [], "posters": [], "backdrops": []}
+    # For movies: posters and backdrops
+    images = await tmdb_client.get_movie_images(item.tmdb_id)
+    return {"stills": [], **images}

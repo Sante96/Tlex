@@ -1,5 +1,6 @@
 """Series API endpoints for TV show management."""
 
+import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -170,21 +171,24 @@ async def get_series(
 
     # Apply season poster overrides, then TMDB fallback, then series poster
     poster_overrides = series.season_posters or {}
+    # TMDB posters for the seasons without an override, all requested at once
+    lang = request.headers.get("Accept-Language", "it-IT")
+    tmdb_id = series.tmdb_id
+    from_tmdb = [n for n in seasons_data if not poster_overrides.get(str(n))] if tmdb_id else []
+    details = (
+        await asyncio.gather(
+            *(tmdb_client.get_season_details(tmdb_id, n, language=lang) for n in from_tmdb)
+        )
+        if tmdb_id
+        else []
+    )
+    tmdb_posters = {n: d.get("poster_path") for n, d in zip(from_tmdb, details, strict=True) if d}
     for season_num in seasons_data:
-        override = poster_overrides.get(str(season_num))
-        if override:
-            seasons_data[season_num]["poster_path"] = override
-        elif series.tmdb_id:
-            lang = request.headers.get("Accept-Language", "it-IT")
-            season_details = await tmdb_client.get_season_details(
-                series.tmdb_id, season_num, language=lang
-            )
-            if season_details and season_details.get("poster_path"):
-                seasons_data[season_num]["poster_path"] = season_details["poster_path"]
-            else:
-                seasons_data[season_num]["poster_path"] = series.poster_path
-        else:
-            seasons_data[season_num]["poster_path"] = series.poster_path
+        seasons_data[season_num]["poster_path"] = (
+            poster_overrides.get(str(season_num))
+            or tmdb_posters.get(season_num)
+            or series.poster_path
+        )
 
     # Merge per-user overrides
     series_override = None
