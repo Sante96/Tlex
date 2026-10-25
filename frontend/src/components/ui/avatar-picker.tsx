@@ -38,7 +38,7 @@ export function AvatarPicker({
       aria-label={t("profiles.avatar.title")}
     >
       <button
-        onClick={onClose}
+        data-modal-close
         aria-label={t("common.close")}
         className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors z-10"
       >
@@ -57,7 +57,7 @@ export function AvatarPicker({
       />
 
       <div className="flex gap-3">
-        <DSButton variant="ghost" onClick={onClose} className="flex-1">
+        <DSButton variant="ghost" data-modal-close className="flex-1">
           {t("common.cancel")}
         </DSButton>
         <DSButton

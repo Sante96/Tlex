@@ -97,7 +97,7 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
           <DSButton
             type="button"
             variant="ghost"
-            onClick={onClose}
+            data-modal-close
             disabled={isSubmitting}
             className="flex-1"
           >

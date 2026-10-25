@@ -68,7 +68,7 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
           {t("changePassword.title")}
         </h2>
         <DSIconButton
-          onClick={onClose}
+          data-modal-close
           aria-label={t("common.close")}
           className="hover:text-white text-white/50"
           icon={<X className="h-5 w-5" />}
@@ -134,7 +134,7 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
           <div className="flex items-center justify-end gap-3 pt-1">
-            <DSButton type="button" variant="ghost" onClick={onClose}>
+            <DSButton type="button" variant="ghost" data-modal-close>
               {t("common.cancel")}
             </DSButton>
             <DSButton

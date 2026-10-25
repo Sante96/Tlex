@@ -230,7 +230,7 @@ export function EditMediaModal({
           </h2>
         </div>
         <DSIconButton
-          onClick={onClose}
+          data-modal-close
           aria-label={t("common.close")}
           className="shrink-0"
           icon={<X className="h-5 w-5 text-[#a1a1aa]" />}
@@ -318,7 +318,7 @@ export function EditMediaModal({
 
       {/* Footer */}
       <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
-        <DSButton variant="ghost" onClick={onClose}>
+        <DSButton variant="ghost" data-modal-close>
           {t("common.cancel")}
         </DSButton>
         <DSButton

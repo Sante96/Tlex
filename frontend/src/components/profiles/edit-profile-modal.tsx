@@ -74,7 +74,7 @@ export function EditProfileModal({
           {t("profiles.edit.title")}
         </h2>
         <DSIconButton
-          onClick={onClose}
+          data-modal-close
           aria-label={t("common.close")}
           className="hover:text-white text-white/50"
           icon={<X className="h-5 w-5" />}
@@ -173,7 +173,7 @@ export function EditProfileModal({
             <DSButton
               type="button"
               variant="ghost"
-              onClick={onClose}
+              data-modal-close
               className="flex-1"
             >
               {t("common.cancel")}
