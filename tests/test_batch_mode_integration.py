@@ -113,7 +113,7 @@ async def small_media_item(real_session, loaded_workers):
 @pytest_asyncio.fixture(loop_scope="module")
 async def reader(small_media_item, real_session):
     """Fresh VirtualStreamReader for each test (shares module event loop)."""
-    return VirtualStreamReader(media_item=small_media_item, session=real_session)
+    return VirtualStreamReader(media_item=small_media_item)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -347,11 +347,11 @@ class TestBatchModePerformance:
         end = min(READ_BYTES, 1)  # use 1 byte per read to isolate overhead
 
         # Read total_size from a fresh reader first
-        probe = VirtualStreamReader(media_item=small_media_item, session=real_session)
+        probe = VirtualStreamReader(media_item=small_media_item)
         end = min(READ_BYTES, probe.total_size)
 
-        reader_batch = VirtualStreamReader(media_item=small_media_item, session=real_session)
-        reader_plain = VirtualStreamReader(media_item=small_media_item, session=real_session)
+        reader_batch = VirtualStreamReader(media_item=small_media_item)
+        reader_plain = VirtualStreamReader(media_item=small_media_item)
 
         # Warm up: one read each to populate file_id cache
         async with reader_batch.batch_mode():

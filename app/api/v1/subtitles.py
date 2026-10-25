@@ -130,49 +130,6 @@ async def get_subtitle_status(
     return {"status": "not_started"}
 
 
-@router.get("/{media_id}/tracks")
-async def list_subtitle_tracks(
-    media_id: int,
-    session: DBSession,
-) -> dict:
-    """
-    List available subtitle tracks for a media item.
-
-    Returns info from database (populated during scan).
-    """
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
-    from app.models.media import MediaItem
-
-    query = (
-        select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
-    )
-    result = await session.execute(query)
-    media = result.scalar_one_or_none()
-
-    if media is None:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    subtitle_streams = [
-        {
-            "index": s.stream_index,
-            "codec": s.codec_name,
-            "language": s.language,
-            "title": s.title,
-            "is_default": s.is_default,
-        }
-        for s in media.streams
-        if s.codec_type == CodecType.SUBTITLE
-    ]
-
-    return {
-        "media_id": media_id,
-        "tracks": subtitle_streams,
-        "count": len(subtitle_streams),
-    }
-
-
 @router.get("/{media_id}/fonts")
 async def get_fonts(
     media_id: int,

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.streaming.cache as cache_module
 import app.services.streaming.manager as manager_module
@@ -72,9 +71,8 @@ def make_media(parts, media_id=1):
 
 def make_reader(parts, media_id=1):
     """Create a VirtualStreamReader backed by mocks (no real DB/Telegram)."""
-    session = MagicMock(spec=AsyncSession)
     media = make_media(parts, media_id)
-    return VirtualStreamReader(media_item=media, session=session)
+    return VirtualStreamReader(media_item=media)
 
 
 # ---------------------------------------------------------------------------

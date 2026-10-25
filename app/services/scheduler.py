@@ -55,14 +55,6 @@ class AutoScanScheduler:
         return self._redis
 
     @property
-    def is_running(self) -> bool:
-        return self._running
-
-    @property
-    def last_scan(self) -> datetime | None:
-        return self._last_scan
-
-    @property
     def next_scan(self) -> datetime | None:
         return self._next_scan
 
@@ -192,14 +184,6 @@ class BackupSyncScheduler:
         if self._redis is None:
             self._redis = redis.from_url(settings.redis_url)
         return self._redis
-
-    @property
-    def is_running(self) -> bool:
-        return self._running
-
-    @property
-    def last_sync(self) -> datetime | None:
-        return self._last_sync
 
     async def get_interval_hours(self) -> int:
         try:

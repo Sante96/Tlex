@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 
 from loguru import logger
 from pyrogram import Client
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
@@ -55,19 +54,10 @@ class VirtualStreamReader:
     offset, seamless boundary crossing, and chunked streaming.
     """
 
-    def __init__(
-        self,
-        media_item: MediaItem,
-        session: AsyncSession,
-        chunk_size: int = 1024 * 1024,
-    ) -> None:
+    def __init__(self, media_item: MediaItem) -> None:
         self._media_item = media_item
-        self._session = session
-        self._chunk_size = chunk_size
         self._parts: list[MediaPart] = sorted(media_item.parts, key=lambda p: p.part_index)
         self._total_size = sum(p.file_size for p in self._parts)
-        self._current_position = 0
-        self._workers: list = []
         self._clients: list[Client] = []
         self._batch_mode_active = False
         self._persistent = False
@@ -136,7 +126,6 @@ class VirtualStreamReader:
             logger.error("No workers available for streaming")
             return False
         self._clients = clients
-        self._workers = []
         _readers.add(self)
         logger.info(f"[STREAM] Acquired {len(self._clients)} client(s) from pool")
         return True
@@ -235,7 +224,6 @@ class VirtualStreamReader:
             count = len(self._clients)
             worker_manager.release_clients(self._clients)
             logger.info(f"[STREAM] Released {count} client(s) back to pool")
-        self._workers = []
         self._clients = []
 
     # --- Main streaming ---
@@ -359,5 +347,4 @@ class VirtualStreamReader:
                 except Exception:
                     if self._clients:
                         worker_manager.release_clients(self._clients)
-                    self._workers = []
                     self._clients = []

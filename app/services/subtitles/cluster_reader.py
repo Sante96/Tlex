@@ -393,7 +393,7 @@ def _find_segment_data_start(header_data: bytes) -> int:
     segment_signature = bytes([0x18, 0x53, 0x80, 0x67])
     segment_pos = header_data.find(segment_signature)
     if segment_pos >= 0:
-        seg_id, seg_id_len = read_element_id(header_data, segment_pos)
+        _, seg_id_len = read_element_id(header_data, segment_pos)
         _seg_size, seg_size_len = read_vint(header_data, segment_pos + seg_id_len)
         return segment_pos + seg_id_len + seg_size_len
     return 0

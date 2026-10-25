@@ -88,7 +88,6 @@ class Settings(BaseSettings):
     # Application
     # ============================================
     app_port: int = 8000  # where ffmpeg reaches this backend over loopback
-    chunk_size_bytes: int = 1048576  # 1MB
 
     # ============================================
     # Scanner Settings

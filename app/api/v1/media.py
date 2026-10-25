@@ -597,33 +597,3 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
             }
         except httpx.HTTPError:
             return {"stills": [], "posters": [], "backdrops": []}
-
-
-@router.get("/{media_id}/episodes")
-async def get_media_episodes(request: Request, session: DBSession, media_id: int) -> list[dict]:
-    """Get episodes for a TV season from TMDB."""
-    query = select(MediaItem).where(MediaItem.id == media_id)
-    result = await session.execute(query)
-    item = result.scalar_one_or_none()
-
-    if not item:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    if not item.tmdb_id or item.media_type != MediaType.EPISODE:
-        return []
-
-    lang = request.headers.get("Accept-Language", "it-IT")
-    season = item.season_number if item.season_number is not None else 1
-    episodes = await tmdb_client.get_season_episodes(item.tmdb_id, season, language=lang)
-
-    return [
-        {
-            "episode_number": ep.episode_number,
-            "name": ep.name,
-            "overview": ep.overview,
-            "still_path": ep.still_path,
-            "air_date": ep.air_date,
-            "runtime": ep.runtime,
-        }
-        for ep in episodes
-    ]

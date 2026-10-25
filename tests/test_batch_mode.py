@@ -26,11 +26,9 @@ INVARIANTS UNDER TEST
   G. without batch_mode     get_available_clients + release_clients each read
 """
 
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.media import MediaItem, MediaPart
 from app.services.streaming.reader import VirtualStreamReader
@@ -61,8 +59,7 @@ def make_reader(*parts: MediaPart) -> VirtualStreamReader:
     media.id = 1
     media.parts = list(parts)
     media.duration_seconds = None
-    session = MagicMock(spec=AsyncSession)
-    return VirtualStreamReader(media_item=media, session=session)
+    return VirtualStreamReader(media_item=media)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

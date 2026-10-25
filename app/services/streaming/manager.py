@@ -74,11 +74,7 @@ async def get_virtual_reader(
         crash_flush(reason=f"Media {media_id} has no parts — cannot create reader")
         return None
 
-    reader = VirtualStreamReader(
-        media_item=media_item,
-        session=session,
-        chunk_size=settings.chunk_size_bytes,
-    )
+    reader = VirtualStreamReader(media_item=media_item)
 
     if persistent:
         reader._persistent = True
@@ -119,7 +115,6 @@ async def release_reader(media_id: int, *, only_if_idle: bool = False) -> None:
             count = len(reader._clients)
             worker_manager.release_clients(reader._clients)
             reader._clients = []
-            reader._workers = []
             logger.info(
                 f"[READER] Force-released {count} client(s) for media {media_id}"
                 f"{f' ({active} stream(s) were active)' if active else ''}"

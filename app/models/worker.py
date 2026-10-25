@@ -40,17 +40,3 @@ class Worker(Base):
 
     def __repr__(self) -> str:
         return f"<Worker(id={self.id}, phone={self.phone_number}, status={self.status.value})>"
-
-    @property
-    def is_available(self) -> bool:
-        """Check if worker can accept new streams."""
-        if self.status != WorkerStatus.ACTIVE:
-            return False
-        return self.current_load < self.max_concurrent_streams
-
-    @property
-    def available_slots(self) -> int:
-        """Number of available stream slots."""
-        if self.status != WorkerStatus.ACTIVE:
-            return 0
-        return max(0, self.max_concurrent_streams - self.current_load)

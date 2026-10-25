@@ -30,7 +30,3 @@ class MediaGroup:
     @property
     def total_size(self) -> int:
         return sum(f.file_size for f in self.files)
-
-    @property
-    def is_split(self) -> bool:
-        return len(self.files) > 1 or any(f.split_index is not None for f in self.files)

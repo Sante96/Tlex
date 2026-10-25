@@ -29,5 +29,3 @@ limiter = Limiter(
 
 # Rate limit decorators for different endpoint types
 AUTH_LIMIT = "5/minute"  # Strict limit for auth endpoints
-API_LIMIT = "60/minute"  # Standard API limit
-STREAM_LIMIT = "30/minute"  # Streaming endpoints

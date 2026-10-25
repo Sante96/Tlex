@@ -101,7 +101,7 @@ class TestStreamAuth:
         app.dependency_overrides.pop(get_stream_user, None)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             assert (await c.get("/api/v1/stream/raw/1")).status_code == 401
-            assert (await c.get("/api/v1/subtitles/1/tracks")).status_code == 401
+            assert (await c.get("/api/v1/subtitles/1/status")).status_code == 401
 
     async def test_cookie_token_accepted(self):
         user = MagicMock()
