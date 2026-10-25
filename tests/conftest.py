@@ -10,8 +10,7 @@ os.environ.setdefault("ENABLE_REGISTRATION", "true")
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
@@ -58,9 +57,7 @@ async def test_engine():
 @pytest_asyncio.fixture(scope="function")
 async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create test database session."""
-    async_session = sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session = async_sessionmaker(test_engine, expire_on_commit=False)
     
     async with async_session() as session:
         yield session

@@ -8,6 +8,8 @@ from pyrogram.enums import ChatMembersFilter
 from pyrogram.errors import FloodWait, PeerIdInvalid, UserPrivacyRestricted
 from pyrogram.types import ChatPrivileges
 
+from app.core.utils import flood_seconds
+
 
 class BackupMembersMixin:
     async def invite_members(
@@ -26,7 +28,8 @@ class BackupMembersMixin:
         logger.info(f"Inviting members from {main_channel_id} to {backup_channel_id}")
 
         user_ids: list[int] = []
-        async for member in client.get_chat_members(main_channel_id):
+        # Pyrogram annotates its async generators as coroutines
+        async for member in client.get_chat_members(main_channel_id):  # pyright: ignore[reportGeneralTypeIssues]
             if member.user and not member.user.is_bot and not member.user.is_deleted:
                 user_ids.append(member.user.id)
 
@@ -40,8 +43,8 @@ class BackupMembersMixin:
                     await client.add_chat_members(backup_channel_id, uid)
                     invited += 1
                 except FloodWait as e:
-                    logger.warning(f"FloodWait {e.value}s while inviting members")
-                    await asyncio.sleep(e.value + 1)
+                    logger.warning(f"FloodWait {flood_seconds(e)}s while inviting members")
+                    await asyncio.sleep(flood_seconds(e) + 1)
                     try:
                         await client.add_chat_members(backup_channel_id, uid)
                         invited += 1
@@ -83,7 +86,8 @@ class BackupMembersMixin:
 
         logger.info(f"[BACKUP] Promoting admins from {main_channel_id} to {backup_channel_id}")
 
-        async for member in client.get_chat_members(
+        # Pyrogram annotates its async generators as coroutines
+        async for member in client.get_chat_members(  # pyright: ignore[reportGeneralTypeIssues]
             main_channel_id, filter=ChatMembersFilter.ADMINISTRATORS
         ):
             if not member.user or member.user.is_bot or member.user.is_deleted:
@@ -100,7 +104,7 @@ class BackupMembersMixin:
                 logger.info(f"[BACKUP] Promoted admin {member.user.id} (@{member.user.username})")
                 await asyncio.sleep(0.5)
             except FloodWait as e:
-                await asyncio.sleep(e.value + 1)
+                await asyncio.sleep(flood_seconds(e) + 1)
                 try:
                     await client.promote_chat_member(
                         backup_channel_id, member.user.id, privileges=full_privileges

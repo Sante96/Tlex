@@ -17,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models.backup import BackupChannel, BackupMessage
+from app.services.backup._create_mixin import BackupCreateMixin
 
 
-class BackupFailoverMixin:
+class BackupFailoverMixin(BackupCreateMixin):
     async def check_health(
         self,
         session: AsyncSession,
@@ -83,15 +84,12 @@ class BackupFailoverMixin:
         parts = parts_result.scalars().all()
         # Forwarded copies have their own message ids (and topics): moving channel_id
         # alone pointed every part at the wrong message.
-        msg_map = dict(
-            (
-                await session.execute(
-                    select(BackupMessage.main_message_id, BackupMessage.backup_message_id).where(
-                        BackupMessage.backup_channel_db_id == backup.id
-                    )
-                )
-            ).all()
+        msg_rows = await session.execute(
+            select(BackupMessage.main_message_id, BackupMessage.backup_message_id).where(
+                BackupMessage.backup_channel_db_id == backup.id
+            )
         )
+        msg_map = dict(msg_rows.tuples().all())
         topic_map = backup.topic_map or {}
         unsynced = 0
         for part in parts:
@@ -129,7 +127,8 @@ class BackupFailoverMixin:
 
         peer = await client.resolve_peer(backup_tg_id)
         await client.invoke(
-            raw.functions.channels.DeleteChannel(channel=peer)
+            # resolve_peer's InputPeerChannel goes where TL wants an InputChannel, as Pyrogram's own methods do
+            raw.functions.channels.DeleteChannel(channel=peer)  # pyright: ignore[reportArgumentType]
         )
         logger.info(f"[BACKUP] Deleted Telegram supergroup {backup_tg_id}")
 

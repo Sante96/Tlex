@@ -67,7 +67,8 @@ class TelegramScanner:
         else:
             messages = client.get_chat_history(channel_id, limit=limit)
 
-        async for message in messages:
+        # Pyrogram annotates its async generators as coroutines
+        async for message in messages:  # pyright: ignore[reportGeneralTypeIssues]
             if not message.document and not message.video:
                 continue
 

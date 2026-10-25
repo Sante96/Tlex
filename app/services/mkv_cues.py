@@ -19,7 +19,7 @@ import httpx
 from loguru import logger
 
 
-def read_vint(data: bytes, offset: int) -> tuple[int, int]:
+def read_vint(data: bytes | bytearray, offset: int) -> tuple[int, int]:
     """
     Read EBML variable-length integer.
 
@@ -69,7 +69,7 @@ def read_vint(data: bytes, offset: int) -> tuple[int, int]:
     return 0, 0
 
 
-def read_element_id(data: bytes, offset: int) -> tuple[int, int]:
+def read_element_id(data: bytes | bytearray, offset: int) -> tuple[int, int]:
     """
     Read EBML element ID.
 
@@ -98,7 +98,7 @@ def read_element_id(data: bytes, offset: int) -> tuple[int, int]:
     return 0, 0
 
 
-def read_uint(data: bytes, offset: int, length: int) -> int:
+def read_uint(data: bytes | bytearray, offset: int, length: int) -> int:
     """Read unsigned integer of given length."""
     if offset + length > len(data):
         return 0

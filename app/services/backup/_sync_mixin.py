@@ -10,11 +10,13 @@ from pyrogram.errors import FloodWait
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import flood_seconds
 from app.database import async_session_maker
 from app.models.backup import BackupChannel, BackupMessage
+from app.services.backup._failover_mixin import BackupFailoverMixin
 
 
-class BackupSyncMixin:
+class BackupSyncMixin(BackupFailoverMixin):
     async def sync_messages(
         self,
         session: AsyncSession,
@@ -109,7 +111,8 @@ class BackupSyncMixin:
         """Forward new media messages from one topic to the matching backup topic."""
         pending: list[int] = []
 
-        async for message in client.get_discussion_replies(
+        # Pyrogram annotates its async generators as coroutines
+        async for message in client.get_discussion_replies(  # pyright: ignore[reportGeneralTypeIssues]
             main_channel_id, main_topic_id, limit=limit or 10000
         ):
             if message.id not in already_synced and (message.document or message.video):
@@ -132,16 +135,17 @@ class BackupSyncMixin:
                 main_peer = await client.resolve_peer(main_channel_id)
                 result = await client.invoke(
                     raw.functions.messages.ForwardMessages(
-                        from_peer=main_peer,
-                        to_peer=backup_peer,
+                        from_peer=main_peer,  # pyright: ignore[reportArgumentType]
+                        to_peer=backup_peer,  # pyright: ignore[reportArgumentType]
                         id=batch_ids,
                         random_id=[random.randint(1, 2**31) for _ in batch_ids],
                         top_msg_id=backup_topic_id,
                     )
                 )
+                # The forwarded copies come back as UpdateNew(Channel)Message entries
                 fwd_ids = [
-                    u.message.id for u in result.updates
-                    if hasattr(u, "message") and hasattr(u.message, "id")
+                    m.id for u in getattr(result, "updates", [])
+                    if (m := getattr(u, "message", None)) is not None and hasattr(m, "id")
                 ]
                 now = datetime.utcnow()
                 if len(fwd_ids) == len(batch_ids):
@@ -160,8 +164,8 @@ class BackupSyncMixin:
                 await session.flush()
 
             except FloodWait as e:
-                logger.warning(f"[BACKUP] FloodWait {e.value}s during forward")
-                await asyncio.sleep(e.value + 1)
+                logger.warning(f"[BACKUP] FloodWait {flood_seconds(e)}s during forward")
+                await asyncio.sleep(flood_seconds(e) + 1)
             except Exception as e:
                 logger.error(f"[BACKUP] Error forwarding batch (topic {main_topic_id}): {e}")
                 await session.rollback()

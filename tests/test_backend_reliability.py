@@ -66,6 +66,7 @@ async def test_scan_waits_when_last_run_is_recent(mocker):
     last = datetime.now() - timedelta(minutes=10)
     scheduler, run = await _one_tick(mocker, last)
     run.assert_not_awaited()
+    assert scheduler.next_scan is not None
     assert abs((scheduler.next_scan - (last + timedelta(hours=1))).total_seconds()) < 1
 
 
@@ -248,6 +249,6 @@ def test_apply_switches_transport_and_crypto_threads(monkeypatch):
 
     pyrogram_tuning.apply()
 
-    assert session_module.Connection(2, False, False, None, True).mode is TCPAbridged
+    assert session_module.Connection(2, False, False, {}, True).mode is TCPAbridged
     assert TCP.recv is pyrogram_tuning._recv
     assert pyrogram.crypto_executor._max_workers == pyrogram_tuning.CRYPTO_THREADS

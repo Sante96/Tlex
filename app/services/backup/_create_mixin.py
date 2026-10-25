@@ -23,12 +23,16 @@ class BackupCreateMixin:
                 megagroup=True,
             )
         )
-        channel = result.chats[0]
+        chats = getattr(result, "chats", None)
+        if not chats:
+            raise RuntimeError(f"CreateChannel returned no chat: {type(result).__name__}")
+        channel = chats[0]
         chat_id = int(f"-100{channel.id}")
         peer = await client.resolve_peer(chat_id)
 
         await client.invoke(
-            raw.functions.channels.ToggleForum(channel=peer, enabled=True, tabs=False)
+            # resolve_peer's InputPeerChannel goes where TL wants an InputChannel, as Pyrogram's own methods do
+            raw.functions.channels.ToggleForum(channel=peer, enabled=True, tabs=False)  # pyright: ignore[reportArgumentType]
         )
         logger.info(f"[BACKUP] Created megagroup id={chat_id} with forum enabled")
         return chat_id

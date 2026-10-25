@@ -378,10 +378,10 @@ async def refresh_series_metadata(
             continue
         key = (ep.season_number, ep.episode_number)
         if key in tmdb_episodes:
-            if tmdb_episodes[key]:
-                ep.title = tmdb_episodes[key]
-            if tmdb_overviews[key]:
-                ep.overview = tmdb_overviews[key]
+            if title := tmdb_episodes[key]:
+                ep.title = title
+            if overview := tmdb_overviews[key]:
+                ep.overview = overview
             updated_eps += 1
 
     await session.commit()

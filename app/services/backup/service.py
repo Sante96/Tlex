@@ -1,17 +1,11 @@
 """Backup channel service — assembled from domain mixins."""
 
-from app.services.backup._create_mixin import BackupCreateMixin
-from app.services.backup._failover_mixin import BackupFailoverMixin
 from app.services.backup._members_mixin import BackupMembersMixin
 from app.services.backup._sync_mixin import BackupSyncMixin
 
 
-class BackupService(
-    BackupCreateMixin,
-    BackupMembersMixin,
-    BackupSyncMixin,
-    BackupFailoverMixin,
-):
+# BackupSyncMixin brings BackupFailoverMixin, which brings BackupCreateMixin
+class BackupService(BackupSyncMixin, BackupMembersMixin):
     """
     Manages backup Telegram channels.
 

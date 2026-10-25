@@ -4,6 +4,7 @@ import time
 
 from loguru import logger
 from pyrogram import Client
+from pyrogram.types import Message
 
 from app.models.media import MediaPart
 from app.services.streaming.cache import _FILE_ID_CACHE, _FILE_ID_CACHE_TTL
@@ -27,7 +28,8 @@ async def populate_peer_cache(client: Client, parts: list[MediaPart]) -> None:
         # Slow path: iterate dialogs
         try:
             found = False
-            async for dialog in client.get_dialogs():
+            # Pyrogram annotates its async generators as coroutines
+            async for dialog in client.get_dialogs():  # pyright: ignore[reportGeneralTypeIssues]
                 if dialog.chat and dialog.chat.id == channel_id:
                     logger.debug(f"Found channel {channel_id} in dialogs cache")
                     found = True
@@ -50,7 +52,9 @@ async def _fetch_file_id_from_channel(
     )
     if not messages:
         return None
-    message = messages if not isinstance(messages, list) else messages[0]
+    message = messages[0] if isinstance(messages, list) else messages
+    if not isinstance(message, Message):
+        return None
     doc = message.document or message.video
     return doc.file_id if doc else None
 

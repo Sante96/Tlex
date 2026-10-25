@@ -474,11 +474,9 @@ class TestChunkCache:
     def test_invalidate_all_clients_for_part(self):
         cache_module._FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
         cache_module._FILE_ID_CACHE[(1, 99)] = ("fid", time.time())
-        cache_module._FILE_ID_CACHE[1] = ("fid", time.time())
         invalidate_file_id_cache(1)
         assert (1, 42) not in cache_module._FILE_ID_CACHE
         assert (1, 99) not in cache_module._FILE_ID_CACHE
-        assert 1 not in cache_module._FILE_ID_CACHE
 
     def test_invalidate_leaves_other_parts(self):
         cache_module._FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
@@ -550,6 +548,7 @@ class TestManagerGetVirtualReader:
         mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
 
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
         assert media.id in manager_module._reader_cache
 
         await release_reader(media.id)
@@ -562,6 +561,7 @@ class TestManagerGetVirtualReader:
         mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
 
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
 
         # Backdate last_access by 2 minutes to make the reader stale
         manager_module._reader_cache[media.id] = (reader, time.time() - 120)
@@ -750,7 +750,7 @@ class TestDynamicClients:
         assert b in {client for _, client in calls}
 
     async def test_new_viewer_gets_a_client_back_from_a_stream_with_two(self, pool):
-        a, b, c = MagicMock(name="a"), MagicMock(name="b"), MagicMock(name="c")
+        a, b = MagicMock(name="a"), MagicMock(name="b")
         busy = self._long_reader([a, b])
         import app.services.streaming.reader as reader_module
 

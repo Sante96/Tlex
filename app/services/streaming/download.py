@@ -14,8 +14,9 @@ from contextlib import aclosing
 from loguru import logger
 from pyrogram import Client, raw
 from pyrogram.errors import FloodPremiumWait, FloodWait, RPCError
-from pyrogram.file_id import FileId
+from pyrogram.file_id import FileId, FileIdCached
 
+from app.core.utils import flood_seconds
 from app.models.media import MediaPart
 from app.services.streaming.cache import (
     _FILE_ID_CACHE,
@@ -34,7 +35,15 @@ MAX_ATTEMPTS = 5
 _open_locks: dict[int, asyncio.Lock] = {}
 
 
-async def _get_file(client: Client, fid: FileId, offset: int, limit: int) -> bytes | None:
+def _decode(file_id: str) -> FileIdCached:
+    # This Pyrogram fork's FileId.decode builds a FileIdCached, typed as possibly None
+    fid = FileId.decode(file_id)
+    if fid is None:
+        raise ValueError(f"Undecodable file_id {file_id[:16]}...")
+    return fid
+
+
+async def _get_file(client: Client, fid: FileIdCached, offset: int, limit: int) -> bytes | None:
     """One upload.GetFile on the client's media session for the file's DC.
 
     None when there's no such session yet or Telegram redirects to a CDN.
@@ -68,7 +77,7 @@ async def read_small(client: Client, file_id: str, offset: int, length: int) -> 
     Returns None when this shortcut can't be used: the file's DC has no media session yet
     (the regular chunk path creates it) or Telegram redirects to a CDN.
     """
-    fid = FileId.decode(file_id)
+    fid = _decode(file_id)
     pieces = []
     end = offset + length
     while offset < end:
@@ -98,7 +107,7 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         file_id = _FILE_ID_CACHE.get((part.id, id(client)), (part.telegram_file_id,))[0]
-        fid = FileId.decode(file_id)
+        fid = _decode(file_id)
         session = client.media_sessions.get(fid.dc_id)
         try:
             data = await asyncio.wait_for(
@@ -111,8 +120,8 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             return data
 
         except (FloodWait, FloodPremiumWait) as e:
-            logger.warning(f"[STREAM] {type(e).__name__} {e.value}s on part {part.id}, waiting")
-            await asyncio.sleep(e.value)
+            logger.warning(f"[STREAM] {type(e).__name__} {flood_seconds(e)}s on part {part.id}, waiting")
+            await asyncio.sleep(flood_seconds(e))
 
         except RPCError as e:
             if "FILE_REFERENCE" not in f"{getattr(e, 'ID', '')} {e}":
@@ -150,7 +159,9 @@ async def _pyrogram_chunk(client: Client, file_id: str, index: int) -> bytes:
     OSError for fetch_chunk to retry (with the session now open, on the direct path)."""
     # ponytail: one call per client at a time; a CDN-served file would fetch serially
     async with _open_locks.setdefault(id(client), asyncio.Lock()):
-        async with aclosing(client.stream_media(file_id, offset=index, limit=1)) as chunks:
+        # Pyrogram annotates stream_media like download_media; it is an async generator
+        chunks_gen = client.stream_media(file_id, offset=index, limit=1)
+        async with aclosing(chunks_gen) as chunks:  # pyright: ignore[reportArgumentType]
             async for chunk in chunks:
                 return chunk
     raise OSError("get_file returned no data")

@@ -5,6 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel
+from pyrogram.types import Message
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -320,7 +321,7 @@ async def analyze_media(
                     first_part.channel_id,
                     message_ids=first_part.message_id,
                 )
-                if messages and messages.document:
+                if isinstance(messages, Message) and messages.document:
                     file_id = messages.document.file_id
                     # Update in DB for future use
                     first_part.telegram_file_id = file_id

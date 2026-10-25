@@ -173,6 +173,7 @@ class FFmpegRemuxer:
 
         def reader_thread(proc: subprocess.Popen, q: Queue) -> None:
             """Read stdout in a separate thread."""
+            assert proc.stdout is not None  # stdout=PIPE
             try:
                 while True:
                     chunk = proc.stdout.read(chunk_size)

@@ -58,6 +58,14 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
+[tool.pyright]
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
+# Pyrogram exposes its API (`from pyrogram import Client`, raw.functions.*) without __all__,
+# so every import its docs show would count as a private one
+reportPrivateImportUsage = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

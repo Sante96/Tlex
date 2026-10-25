@@ -4,6 +4,13 @@ import shutil
 from datetime import UTC, datetime
 
 from loguru import logger
+from pyrogram.errors import FloodPremiumWait, FloodWait
+
+
+def flood_seconds(e: FloodWait | FloodPremiumWait) -> int:
+    """Seconds Telegram asks to wait. Pyrogram types `value` as int | str | error;
+    for these errors it is always the int from FLOOD_WAIT_X."""
+    return e.value if isinstance(e.value, int) else 1
 
 
 def utc_now() -> datetime:

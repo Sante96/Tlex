@@ -4,7 +4,7 @@ import asyncio
 import time
 import weakref
 from collections import deque
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager
 
 from loguru import logger
@@ -234,7 +234,7 @@ class VirtualStreamReader:
                     logger.debug(f"[STREAM] Small read fell back to chunk read: {e}")
         return b"".join([chunk async for chunk in self.read_range(start, end)])
 
-    async def read_range(self, start: int, end: int | None = None) -> AsyncIterator[bytes]:
+    async def read_range(self, start: int, end: int | None = None) -> AsyncGenerator[bytes]:
         """
         Read a range of bytes from the virtual stream.
 

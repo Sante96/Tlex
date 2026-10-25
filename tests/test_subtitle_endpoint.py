@@ -83,7 +83,7 @@ class TestGetSubtitle:
             )
 
         assert resp.status_code == 202
-        assert json.loads(resp.body) == {"status": "extracting", "retry_after": 2}
+        assert json.loads(bytes(resp.body)) == {"status": "extracting", "retry_after": 2}
         assert resp.headers["retry-after"] == "2"
         start.assert_called_once_with(1)
 
@@ -294,7 +294,7 @@ class TestGetFontFile:
     async def test_cached_font_served(self):
         import app.api.v1.subtitles as mod
 
-        resp = await mod.get_font_file(media_id=1, filename="Arial.ttf", session=None)
+        resp = await mod.get_font_file(media_id=1, filename="Arial.ttf", session=MagicMock())
         assert resp.body == b"font"
 
     @pytest.mark.parametrize("filename", ["..", "../secret.txt", "..\\secret.txt"])
@@ -304,7 +304,7 @@ class TestGetFontFile:
         import app.api.v1.subtitles as mod
 
         with pytest.raises(HTTPException) as exc:
-            await mod.get_font_file(media_id=1, filename=filename, session=None)
+            await mod.get_font_file(media_id=1, filename=filename, session=MagicMock())
         assert exc.value.status_code == 404
 
 

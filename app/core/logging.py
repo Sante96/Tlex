@@ -19,10 +19,10 @@ class StderrFilter:
             "'BadMsgNotification' object has no attribute",
         ]
 
-    def write(self, msg):
+    def write(self, message: str) -> None:
         # Suppress messages matching patterns
-        if not any(pattern in msg for pattern in self.suppress_patterns):
-            self.original_stderr.write(msg)
+        if not any(pattern in message for pattern in self.suppress_patterns):
+            self.original_stderr.write(message)
 
     def flush(self):
         self.original_stderr.flush()

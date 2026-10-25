@@ -97,7 +97,10 @@ async def lifespan(app: FastAPI):
                     try:
                         await media_session.invoke(raw.functions.Ping(ping_id=0))
                     except Exception as e:
-                        logger.debug(f"Keepalive: dropping stale media session DC{dc_id} for client {id(client)}: {e}")
+                        logger.warning(
+                            f"Keepalive: dropping media session DC{dc_id} for client {id(client)}: "
+                            f"{type(e).__name__}: {e}"
+                        )
                         try:
                             await media_session.stop()
                         except Exception:
@@ -130,7 +133,7 @@ app = FastAPI(
 
 # Rate limiting
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
 # CORS middleware - use configured origins, with fallback to localhost in debug
 cors_origins = settings.cors_origins_list if settings.cors_origins_list else []
@@ -180,7 +183,7 @@ async def health():
     # Check Redis
     try:
         redis_client = redis.from_url(settings.redis_url)
-        await redis_client.ping()
+        await redis_client.ping()  # pyright: ignore[reportGeneralTypeIssues]  (redis-py types it sync)
         await redis_client.close()
         health_status["components"]["redis"] = {"status": "healthy"}
     except Exception as e:

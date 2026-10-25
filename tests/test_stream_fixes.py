@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 
 import app.services.streaming.crash_log as crash_log_module
 import app.services.streaming.manager as manager_module
@@ -114,7 +114,9 @@ class TestStreamAuth:
 
     async def test_internal_token_skips_user_lookup(self):
         request = MagicMock(query_params={"internal": INTERNAL_STREAM_TOKEN}, cookies={})
-        assert await get_stream_user(request, session=None, token=None) is None
+        session = AsyncMock()
+        assert await get_stream_user(request, session=session, token=None) is None
+        session.execute.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +211,7 @@ def mock_reader_get(mocker) -> MagicMock:
 class TestStreamRaw206:
     """stream_raw must always return 206 with correct Range headers."""
 
-    async def _get(self, headers: dict | None = None) -> object:
+    async def _get(self, headers: dict | None = None) -> Response:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -579,6 +581,7 @@ class TestCrashLogManagerIntegration:
         media, _ = media_with_parts
         mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
         # Inject a fake client so the release branch is taken
         reader._clients = [MagicMock()]
         crash_log_module._ring.clear()
@@ -592,6 +595,7 @@ class TestCrashLogManagerIntegration:
         media, _ = media_with_parts
         mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
         reader._clients = [MagicMock()]
         crash_log_module._ring.clear()
 
@@ -604,6 +608,7 @@ class TestCrashLogManagerIntegration:
         media, _ = media_with_parts
         release = mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
         reader._clients = [MagicMock()]
         reader._active_streams = 1  # e.g. ffmpeg's next range request
 

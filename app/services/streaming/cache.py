@@ -5,9 +5,9 @@ import time
 # Pyrogram uses 1MB chunks for streaming
 PYROGRAM_CHUNK_SIZE = 1024 * 1024  # 1MB
 
-# Cache for refreshed file_ids
+# Cache for refreshed file_ids: (part_id, id(client)) -> (file_id, refreshed at)
 # Avoids refreshing file_id on every HTTP request
-_FILE_ID_CACHE: dict[int, tuple[str, float]] = {}
+_FILE_ID_CACHE: dict[tuple[int, int], tuple[str, float]] = {}
 _FILE_ID_CACHE_TTL = 30 * 60  # 30 minutes
 
 # Chunk cache for pre-fetched data
@@ -37,18 +37,10 @@ def invalidate_file_id_cache(part_id: int, client_id: int | None = None) -> None
         client_id: If provided, only invalidate for this specific client
     """
     if client_id is not None:
-        # Client-specific cache key
-        cache_key = (part_id, client_id)
-        if cache_key in _FILE_ID_CACHE:
-            del _FILE_ID_CACHE[cache_key]
+        _FILE_ID_CACHE.pop((part_id, client_id), None)
     else:
-        # Legacy: invalidate by part_id only
-        if part_id in _FILE_ID_CACHE:
-            del _FILE_ID_CACHE[part_id]
-        # Also invalidate any client-specific entries for this part
-        keys_to_delete = [k for k in _FILE_ID_CACHE.keys() if isinstance(k, tuple) and k[0] == part_id]
-        for k in keys_to_delete:
-            del _FILE_ID_CACHE[k]
+        for key in [k for k in _FILE_ID_CACHE if k[0] == part_id]:
+            del _FILE_ID_CACHE[key]
 
 
 def _cache_chunk(part_id: int, chunk_index: int, data: bytes) -> None:

@@ -30,7 +30,6 @@ WHAT IS TESTED
      the acquire/release/refresh cycle between calls.
 """
 
-import asyncio
 import time
 
 import pytest
@@ -41,8 +40,8 @@ import pytest_asyncio
 # inside every test function without "Future attached to a different loop".
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, selectinload
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
@@ -64,7 +63,7 @@ async def real_session():
     """Open a real async session to the production PostgreSQL database."""
     settings = get_settings()
     engine = create_async_engine(settings.database_url, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     try:
         async with async_session() as session:

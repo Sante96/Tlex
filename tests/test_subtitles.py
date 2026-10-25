@@ -643,7 +643,8 @@ def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8) -> bytes:
     return b"\x1a\x45\xdf\xa3\x80" + b"\x18\x53\x80\x67" + _size(len(body), 8) + body
 
 
-def _lines(events: list[SubtitleEvent]) -> list[tuple[int, int, bytes]]:
+def _lines(events: list[SubtitleEvent] | None) -> list[tuple[int, int | None, bytes]]:
+    assert events is not None
     return [(e.timestamp_ms, e.duration_ms, e.data) for e in events]
 
 
@@ -652,6 +653,7 @@ class TestExtractAllSubtitles:
     async def test_reads_only_the_cued_blocks(self, cluster_size_len):
         reader = MockReader(_mkv(cluster_size_len=cluster_size_len))
         result = await extract_all_subtitles(reader)
+        assert result is not None
 
         assert [t.track_number for t, _ in result] == [3, 4]
         assert _lines(result[0][1]) == LINES
@@ -663,6 +665,7 @@ class TestExtractAllSubtitles:
     async def test_without_subtitle_cues_reads_the_clusters(self):
         reader = MockReader(_mkv(subtitle_cues=False))
         result = await extract_all_subtitles(reader)
+        assert result is not None
 
         assert _lines(result[0][1]) == LINES
         assert result[1][1] is None
