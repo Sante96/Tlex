@@ -7,7 +7,7 @@ from pyrogram import Client
 from pyrogram.types import Message
 
 from app.models.media import MediaPart
-from app.services.streaming.cache import _FILE_ID_CACHE, _FILE_ID_CACHE_TTL
+from app.services.streaming.cache import FILE_ID_CACHE, FILE_ID_CACHE_TTL
 from app.services.streaming.crash_log import flush as crash_flush
 from app.services.streaming.crash_log import record as crash_record
 
@@ -142,12 +142,12 @@ async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) ->
     needs_refresh = False
     for part in parts:
         cache_key = (part.id, client_id)
-        cached = _FILE_ID_CACHE.get(cache_key)
+        cached = FILE_ID_CACHE.get(cache_key)
         if cached is None:
             logger.debug(f"Part {part.id} not in cache, needs refresh")
             needs_refresh = True
             break
-        elif (now - cached[1]) > _FILE_ID_CACHE_TTL:
+        elif (now - cached[1]) > FILE_ID_CACHE_TTL:
             logger.debug(
                 f"Part {part.id} cache expired (age={(now - cached[1]):.0f}s), needs refresh"
             )
@@ -166,13 +166,13 @@ async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) ->
     failed_parts = []
     for part in parts:
         cache_key = (part.id, client_id)
-        cached = _FILE_ID_CACHE.get(cache_key)
-        if cached and (now - cached[1]) <= _FILE_ID_CACHE_TTL:
+        cached = FILE_ID_CACHE.get(cache_key)
+        if cached and (now - cached[1]) <= FILE_ID_CACHE_TTL:
             part.telegram_file_id = cached[0]
             continue
         new_file_id = await refresh_file_id(part, client)
         if new_file_id:
-            _FILE_ID_CACHE[cache_key] = (new_file_id, now)
+            FILE_ID_CACHE[cache_key] = (new_file_id, now)
         else:
             failed_parts.append(part.id)
 
@@ -198,10 +198,10 @@ async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> 
         cache_key = (part.id, client_id)
 
         # Check if we have a recent file_id for this client+part combo
-        cached = _FILE_ID_CACHE.get(cache_key)
+        cached = FILE_ID_CACHE.get(cache_key)
         now = time.time()
 
-        if cached and (now - cached[1]) <= _FILE_ID_CACHE_TTL:
+        if cached and (now - cached[1]) <= FILE_ID_CACHE_TTL:
             part.telegram_file_id = cached[0]
             continue
 
@@ -210,7 +210,7 @@ async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> 
         crash_record("ensure_file_ids.refresh", part_id=part.id, client_id=client_id)
         new_file_id = await refresh_file_id(part, client)
         if new_file_id:
-            _FILE_ID_CACHE[cache_key] = (new_file_id, now)
+            FILE_ID_CACHE[cache_key] = (new_file_id, now)
         else:
             failed_parts.append(part.id)
 

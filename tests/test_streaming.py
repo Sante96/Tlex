@@ -12,8 +12,8 @@ import app.services.streaming.manager as manager_module
 from app.models.media import MediaItem, MediaPart, MediaType
 from app.services.streaming.cache import (
     PYROGRAM_CHUNK_SIZE,
-    _cache_chunk,
-    _get_cached_chunk,
+    cache_chunk,
+    get_cached_chunk,
     invalidate_file_id_cache,
 )
 from app.services.streaming.manager import (
@@ -31,11 +31,11 @@ from app.services.streaming.reader import VirtualStreamReader
 @pytest.fixture(autouse=True)
 def clear_all_caches():
     cache_module._CHUNK_CACHE.clear()
-    cache_module._FILE_ID_CACHE.clear()
+    cache_module.FILE_ID_CACHE.clear()
     manager_module._reader_cache.clear()
     yield
     cache_module._CHUNK_CACHE.clear()
-    cache_module._FILE_ID_CACHE.clear()
+    cache_module.FILE_ID_CACHE.clear()
     manager_module._reader_cache.clear()
 
 
@@ -447,40 +447,40 @@ class TestChunkCache:
     """Direct tests on cache.py — store, retrieve, TTL, eviction, invalidation."""
 
     def test_store_and_retrieve(self):
-        _cache_chunk(1, 0, b"hello")
-        assert _get_cached_chunk(1, 0) == b"hello"
+        cache_chunk(1, 0, b"hello")
+        assert get_cached_chunk(1, 0) == b"hello"
 
     def test_miss_returns_none(self):
-        assert _get_cached_chunk(99, 0) is None
+        assert get_cached_chunk(99, 0) is None
 
     def test_chunk_expired_returns_none(self, mocker):
-        _cache_chunk(1, 0, b"data")
+        cache_chunk(1, 0, b"data")
         future_time = time.time() + cache_module._CHUNK_CACHE_TTL + 1
         mocker.patch("app.services.streaming.cache.time.time", return_value=future_time)
-        assert _get_cached_chunk(1, 0) is None
+        assert get_cached_chunk(1, 0) is None
 
     def test_lru_eviction(self):
         for i in range(cache_module._CHUNK_CACHE_MAX_SIZE + 1):
-            _cache_chunk(i, 0, b"data")
+            cache_chunk(i, 0, b"data")
         assert len(cache_module._CHUNK_CACHE) == cache_module._CHUNK_CACHE_MAX_SIZE
 
     def test_invalidate_specific_client(self):
-        cache_module._FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
+        cache_module.FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
         invalidate_file_id_cache(1, client_id=42)
-        assert (1, 42) not in cache_module._FILE_ID_CACHE
+        assert (1, 42) not in cache_module.FILE_ID_CACHE
 
     def test_invalidate_all_clients_for_part(self):
-        cache_module._FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
-        cache_module._FILE_ID_CACHE[(1, 99)] = ("fid", time.time())
+        cache_module.FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
+        cache_module.FILE_ID_CACHE[(1, 99)] = ("fid", time.time())
         invalidate_file_id_cache(1)
-        assert (1, 42) not in cache_module._FILE_ID_CACHE
-        assert (1, 99) not in cache_module._FILE_ID_CACHE
+        assert (1, 42) not in cache_module.FILE_ID_CACHE
+        assert (1, 99) not in cache_module.FILE_ID_CACHE
 
     def test_invalidate_leaves_other_parts(self):
-        cache_module._FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
-        cache_module._FILE_ID_CACHE[(2, 42)] = ("fid", time.time())
+        cache_module.FILE_ID_CACHE[(1, 42)] = ("fid", time.time())
+        cache_module.FILE_ID_CACHE[(2, 42)] = ("fid", time.time())
         invalidate_file_id_cache(1)
-        assert (2, 42) in cache_module._FILE_ID_CACHE
+        assert (2, 42) in cache_module.FILE_ID_CACHE
 
 
 # ---------------------------------------------------------------------------
@@ -613,7 +613,7 @@ class TestFetchChunk:
         from app.services.streaming import download
 
         sleep = mocker.patch.object(download.asyncio, "sleep", new_callable=AsyncMock)
-        part = make_part(900 + len(cache_module._FILE_ID_CACHE), 0, 3 * self.MB)
+        part = make_part(900 + len(cache_module.FILE_ID_CACHE), 0, 3 * self.MB)
         part.telegram_file_id = encoded_file_id(b"old")
         client = MagicMock(sleep_threshold=10)
         return download, part, client, sleep

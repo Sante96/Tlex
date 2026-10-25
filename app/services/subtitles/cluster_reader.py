@@ -32,8 +32,8 @@ from app.services.subtitles.ebml_parser import (
     BLOCK_GROUP_ID,
     SIMPLE_BLOCK_ID,
     SubtitleEvent,
-    _parse_block,
-    _parse_block_group,
+    parse_block,
+    parse_block_group,
     parse_cluster_for_subtitles,
 )
 
@@ -250,8 +250,8 @@ def _block_header(data: bytes, p: int) -> tuple[int, int, int] | None:
 
 def _parse(data: bytes, elem_id: int, body: int, size: int, track: int) -> SubtitleEvent | None:
     if elem_id == SIMPLE_BLOCK_ID:
-        return _parse_block(data, body, size, 0, (track,))
-    parsed = _parse_block_group(data, body, size, 0, (track,))
+        return parse_block(data, body, size, 0, (track,))
+    parsed = parse_block_group(data, body, size, 0, (track,))
     return parsed[0] if parsed else None
 
 
@@ -290,7 +290,7 @@ async def extract_via_cues(
 
         logger.debug(f"Found Cues element at tail offset {cues_offset_relative}")
 
-        segment_data_start = _find_segment_data_start(header_data)
+        segment_data_start = find_segment_data_start(header_data)
         cluster_positions = parse_cues_for_clusters(
             tail_data, cues_offset_relative, segment_data_start
         )
@@ -388,7 +388,7 @@ async def extract_via_scan(
 # --- Private helpers ---
 
 
-def _find_segment_data_start(header_data: bytes) -> int:
+def find_segment_data_start(header_data: bytes) -> int:
     """Find Segment element data start offset in MKV header."""
     segment_signature = bytes([0x18, 0x53, 0x80, 0x67])
     segment_pos = header_data.find(segment_signature)

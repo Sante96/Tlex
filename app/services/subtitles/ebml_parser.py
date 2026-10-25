@@ -213,12 +213,12 @@ def parse_cluster_for_subtitles(
         if elem_id == TIMECODE_ID:
             cluster_timecode = read_uint(data, offset, elem_size)
         elif elem_id == SIMPLE_BLOCK_ID:
-            event = _parse_block(data, offset, elem_size, cluster_timecode, tracks)
+            event = parse_block(data, offset, elem_size, cluster_timecode, tracks)
             if event:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
                 events.append(event)
         elif elem_id == BLOCK_GROUP_ID:
-            bg_events = _parse_block_group(data, offset, elem_size, cluster_timecode, tracks)
+            bg_events = parse_block_group(data, offset, elem_size, cluster_timecode, tracks)
             for event in bg_events:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
                 # BlockDuration is in the same timestamp units as the block time
@@ -231,7 +231,7 @@ def parse_cluster_for_subtitles(
     return events
 
 
-def _parse_block(
+def parse_block(
     data: bytes,
     offset: int,
     size: int,
@@ -265,7 +265,7 @@ def _parse_block(
     )
 
 
-def _parse_block_group(
+def parse_block_group(
     data: bytes,
     offset: int,
     size: int,
@@ -290,7 +290,7 @@ def _parse_block_group(
         offset += size_len
 
         if elem_id == BLOCK_ID:
-            block_event = _parse_block(data, offset, elem_size, cluster_timecode, tracks)
+            block_event = parse_block(data, offset, elem_size, cluster_timecode, tracks)
         elif elem_id == 0x9B:  # BlockDuration
             duration = read_uint(data, offset, elem_size)
 

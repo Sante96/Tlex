@@ -12,7 +12,7 @@ from pyrogram import Client
 
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
-from app.services.streaming.cache import _FILE_ID_CACHE, PYROGRAM_CHUNK_SIZE
+from app.services.streaming.cache import FILE_ID_CACHE, PYROGRAM_CHUNK_SIZE
 from app.services.streaming.download import Throttled, fetch_chunk, read_small
 from app.services.streaming.models import StreamPosition
 from app.services.streaming.telegram import (
@@ -258,7 +258,7 @@ class VirtualStreamReader:
         if pos and self._clients and pos.local_offset + (end - start) <= pos.part.file_size:
             client = self._clients[self._rr_counter % len(self._clients)]
             self._rr_counter += 1
-            cached = _FILE_ID_CACHE.get((pos.part.id, id(client)))
+            cached = FILE_ID_CACHE.get((pos.part.id, id(client)))
             if cached:
                 try:
                     data = await read_small(client, cached[0], pos.local_offset, end - start)

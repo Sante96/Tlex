@@ -20,10 +20,10 @@ from app.core.utils import flood_seconds
 from app.core.worker_manager import worker_manager
 from app.models.media import MediaPart
 from app.services.streaming.cache import (
-    _FILE_ID_CACHE,
+    FILE_ID_CACHE,
     PYROGRAM_CHUNK_SIZE,
-    _cache_chunk,
-    _get_cached_chunk,
+    cache_chunk,
+    get_cached_chunk,
     invalidate_file_id_cache,
 )
 from app.services.streaming.telegram import refresh_file_id
@@ -119,12 +119,12 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
     connection Telegram closed is waited for while Pyrogram reconnects it. Raises
     Throttled when the account is being slowed down.
     """
-    cached = _get_cached_chunk(part.id, index)
+    cached = get_cached_chunk(part.id, index)
     if cached is not None:
         return cached
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        file_id = _FILE_ID_CACHE.get((part.id, id(client)), (part.telegram_file_id,))[0]
+        file_id = FILE_ID_CACHE.get((part.id, id(client)), (part.telegram_file_id,))[0]
         fid = _decode(file_id)
         session = client.media_sessions.get(fid.dc_id)
         try:
@@ -136,7 +136,7 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
                 data = await asyncio.wait_for(
                     _pyrogram_chunk(client, file_id, index), CHUNK_TIMEOUT
                 )
-            _cache_chunk(part.id, index, data)
+            cache_chunk(part.id, index, data)
             return data
 
         except FloodPremiumWait as e:
@@ -155,7 +155,7 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             new_file_id = await refresh_file_id(part, client)
             if not new_file_id:
                 raise RuntimeError("Failed to refresh expired file reference") from e
-            _FILE_ID_CACHE[(part.id, id(client))] = (new_file_id, time.time())
+            FILE_ID_CACHE[(part.id, id(client))] = (new_file_id, time.time())
 
         except (OSError, AttributeError, BadMsgNotification) as e:  # TimeoutError is an OSError
             # AttributeError: Pyrogram's session desync (BadMsgNotification) on older paths.
