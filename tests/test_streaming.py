@@ -583,8 +583,10 @@ class FakeSession:
         self.responses = list(responses)
         self.requests = []
         self.stopped = False
+        self.is_connected = asyncio.Event()
+        self.is_connected.set()
 
-    async def invoke(self, query, sleep_threshold=None):
+    async def send(self, query, wait_response=True, timeout=None):
         from pyrogram import raw
 
         self.requests.append((query.location.file_reference, query.offset, query.limit))
@@ -648,10 +650,28 @@ class TestFetchChunk:
         assert await download.fetch_chunk(client, part, 0) == b"c"
         sleep.assert_awaited_once_with(7)
 
-    async def test_dead_connection_is_dropped_and_reopened_by_pyrogram(self, setup):
+    async def test_closed_connection_is_kept_for_pyrogram_to_reconnect(self, setup):
+        # Telegram closes busy media connections; Pyrogram reconnects the same session
         download, part, client, _ = setup
-        dead = FakeSession(OSError("Connection lost"))
-        client.media_sessions = {4: dead}
+        session = FakeSession(OSError("unable to perform operation on TCPTransport closed"), b"e")
+        client.media_sessions = {4: session}
+
+        assert await download.fetch_chunk(client, part, 1) == b"e"
+        assert not session.stopped and client.media_sessions[4] is session
+
+    async def test_restart_timeout_is_retried_without_dropping_the_session(self, setup):
+        # Pyrogram's restart wakes the requests in flight with a TimeoutError; stopping the
+        # session from outside would leave it reconnecting as a zombie
+        download, part, client, _ = setup
+        session = FakeSession(TimeoutError(), b"f")
+        client.media_sessions = {4: session}
+
+        assert await download.fetch_chunk(client, part, 1) == b"f"
+        assert not session.stopped and client.media_sessions[4] is session
+
+    async def test_new_dc_session_is_opened_by_pyrogram(self, setup):
+        download, part, client, _ = setup
+        client.media_sessions = {}
         opened = []
 
         async def stream_media(file_id, offset, limit):
@@ -662,8 +682,21 @@ class TestFetchChunk:
         client.stream_media = stream_media
 
         assert await download.fetch_chunk(client, part, 1) == b"d"
-        assert dead.stopped and client.media_sessions[4] is not dead
         assert opened == [(1, 1)]
+
+    async def test_premium_wait_marks_the_account_and_raises(self, setup, mocker):
+        from pyrogram.errors import FloodPremiumWait
+
+        download, part, client, sleep = setup
+        client.media_sessions = {4: FakeSession(FloodPremiumWait(value=3))}
+        mark = mocker.patch.object(download.worker_manager, "mark_throttled")
+
+        with pytest.raises(download.Throttled) as exc:
+            await download.fetch_chunk(client, part, 0)
+
+        assert exc.value.seconds == 3
+        mark.assert_called_once_with(client, 3)
+        sleep.assert_not_awaited()  # the reader moves the chunk instead of waiting
 
     async def test_gives_up_after_max_attempts(self, setup):
         download, part, client, _ = setup
@@ -774,3 +807,99 @@ class TestDynamicClients:
         assert not await self._long_reader([])._ensure_workers()
         pool["release"].assert_not_called()
         assert len(lone._clients) == 1
+
+
+# ---------------------------------------------------------------------------
+# TestThrottledAccounts — chunks move off an account Telegram is slowing down
+# ---------------------------------------------------------------------------
+
+
+class TestThrottledAccounts:
+    MB = 1024 * 1024
+
+    @pytest.fixture
+    def env(self, mocker):
+        from app.services.streaming import download
+
+        mocker.patch("app.services.streaming.reader.refresh_all_file_ids", new_callable=AsyncMock)
+        mocker.patch("app.services.streaming.reader.ensure_file_ids_for_client", new_callable=AsyncMock)
+        mocker.patch("app.services.streaming.reader.worker_manager.pool_pressure", return_value=0.0)
+        throttled: set = set()
+        mocker.patch("app.services.streaming.reader.worker_manager.is_throttled", side_effect=lambda c: c in throttled)
+        acquire = mocker.patch(
+            "app.services.streaming.reader.worker_manager.try_acquire_one", new_callable=AsyncMock, return_value=None
+        )
+        release = mocker.patch("app.services.streaming.reader.worker_manager.release_clients")
+        sleep = mocker.patch("app.services.streaming.reader.asyncio.sleep", new_callable=AsyncMock)
+        reader = make_reader([make_part(0, 0, 4 * self.MB)])
+        reader._persistent = True
+        return download, reader, throttled, acquire, release, sleep
+
+    def _fetch_raising_for(self, mocker, download, throttled, calls):
+        async def fake_fetch_chunk(client, part, index):
+            calls.append((index, client))
+            if client in throttled:
+                raise download.Throttled(5)
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
+
+    async def _read_all(self, reader):
+        return b"".join([c async for c in reader.read_range(0, 4 * self.MB)])
+
+    async def test_chunk_moves_to_the_other_account_at_once(self, mocker, env):
+        download, reader, throttled, _, _, sleep = env
+        standard, premium = MagicMock(name="standard"), MagicMock(name="premium")
+        reader._clients = [standard, premium]
+        calls = []
+
+        async def fetch(client, part, index):  # the standard account gets throttled on its first chunk
+            calls.append((index, client))
+            if client is standard:
+                throttled.add(standard)
+                raise download.Throttled(5)
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fetch)
+
+        data = await self._read_all(reader)
+
+        assert data == file_bytes(reader._parts)
+        assert sum(1 for _, c in calls if c is standard) == 1  # never asked again
+        sleep.assert_not_awaited()
+
+    async def test_all_throttled_swaps_in_a_client_of_another_account(self, mocker, env):
+        download, reader, throttled, acquire, release, sleep = env
+        standard, standard2, premium = MagicMock(name="s1"), MagicMock(name="s2"), MagicMock(name="p")
+        reader._clients = [standard, standard2]
+        throttled.update({standard, standard2})
+        acquire.return_value = premium
+        calls = []
+        self._fetch_raising_for(mocker, download, throttled, calls)
+
+        data = await self._read_all(reader)
+
+        assert data == file_bytes(reader._parts)
+        assert premium in reader._clients and len(reader._clients) == 2
+        release.assert_called_once()  # one throttled client went back to the pool
+        sleep.assert_not_awaited()
+
+    async def test_waits_only_when_no_account_is_free(self, mocker, env):
+        download, reader, throttled, acquire, _, sleep = env
+        lone = MagicMock(name="lone")
+        reader._clients = [lone]
+        throttled.add(lone)
+        calls = []
+
+        async def fetch(client, part, index):
+            calls.append((index, client))
+            if len([c for c in calls if c[0] == index]) == 1:
+                raise download.Throttled(5)  # first try of each chunk: throttled, then fine
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fetch)
+
+        data = await self._read_all(reader)
+
+        assert data == file_bytes(reader._parts)
+        sleep.assert_awaited_with(5)

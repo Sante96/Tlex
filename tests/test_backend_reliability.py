@@ -252,3 +252,29 @@ def test_apply_switches_transport_and_crypto_threads(monkeypatch):
     assert session_module.Connection(2, False, False, {}, True).mode is TCPAbridged
     assert TCP.recv is pyrogram_tuning._recv
     assert pyrogram.crypto_executor._max_workers == pyrogram_tuning.CRYPTO_THREADS
+
+
+async def test_throttled_account_is_avoided_until_its_wait_ends(mocker):
+    manager = WorkerManager()
+    clients = _pool(manager, {10: 4, 12: 6})
+    clock = mocker.patch("app.core.worker_manager.time.monotonic", return_value=1000.0)
+
+    manager.mark_throttled(clients[10][0], 11)
+    assert manager.is_throttled(clients[10][3])  # the whole account
+    assert not manager.is_throttled(clients[12][0])
+    [client] = await manager.get_available_clients(limit=1)
+    assert client in clients[12]
+
+    clock.return_value = 1012.0
+    assert not manager.is_throttled(clients[10][0])
+
+
+async def test_scale_up_skips_a_throttled_account(mocker):
+    manager = WorkerManager()
+    clients = _pool(manager, {10: 4, 12: 6, 14: 2})
+    mocker.patch("app.core.worker_manager.time.monotonic", return_value=1000.0)
+    first = clients[10][0]
+    manager._client_in_use[id(first)] = True
+    manager.mark_throttled(clients[12][0], 5)
+
+    assert await manager.try_acquire_one(spread_from=[first]) in clients[14]

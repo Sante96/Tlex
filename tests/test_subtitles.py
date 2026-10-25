@@ -708,7 +708,9 @@ class TestReadSmall:
         from pyrogram import raw
 
         class Session:
-            async def invoke(self, query, sleep_threshold=None):
+            is_connected = MagicMock(is_set=MagicMock(return_value=True))
+
+            async def send(self, query, wait_response=True, timeout=None):
                 o, n = query.offset, query.limit
                 assert o % 4096 == 0 and n % 4096 == 0 and (1 << 20) % n == 0
                 assert o >> 20 == (o + n - 1) >> 20  # never across a 1 MB boundary

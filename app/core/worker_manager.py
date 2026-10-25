@@ -1,6 +1,7 @@
 """Worker Manager for Telegram account pool coordination."""
 
 import asyncio
+import time
 from collections import Counter
 
 from loguru import logger
@@ -44,6 +45,7 @@ class WorkerManager:
         self._clients: dict[int, Client] = {}  # worker_id -> primary Client
         self._client_pool: list[tuple[int, Client]] = []  # [(worker_id, client), ...] all clients
         self._client_in_use: dict[int, bool] = {}  # id(client) -> is_in_use
+        self._throttled_until: dict[int, float] = {}  # worker_id -> time.monotonic()
         self._lock = asyncio.Lock()
 
     async def load_workers(self, session: AsyncSession, worker_ids: list[int] | None = None) -> int:
@@ -256,7 +258,8 @@ class WorkerManager:
         """
         async with self._lock:
             taken = {wid for wid, c in self._client_pool if c in (spread_from or [])}
-            free = sorted(self._free_clients(), key=lambda wc: wc[0] in taken)
+            # _free_clients already puts throttled accounts last; then prefer a new account
+            free = sorted(self._free_clients(), key=lambda wc: (self._throttled(wc[0]), wc[0] in taken))
             if not free:
                 return None
             worker_id, client = free[0]
@@ -265,11 +268,28 @@ class WorkerManager:
             return client
 
     def _free_clients(self) -> list[tuple[int, Client]]:
-        """Free clients, those of the accounts with the fewest clients in use first, so
-        streams spread over the accounts."""
+        """Free clients: accounts Telegram is slowing down last, then those with the fewest
+        clients in use first, so streams spread over the accounts."""
         busy = Counter(wid for wid, c in self._client_pool if self._client_in_use.get(id(c), False))
         free = [(wid, c) for wid, c in self._client_pool if not self._client_in_use.get(id(c), False)]
-        return sorted(free, key=lambda wc: busy[wc[0]])
+        return sorted(free, key=lambda wc: (self._throttled(wc[0]), busy[wc[0]]))
+
+    def _throttled(self, worker_id: int) -> bool:
+        return self._throttled_until.get(worker_id, 0.0) > time.monotonic()
+
+    def mark_throttled(self, client: Client, seconds: float) -> None:
+        """Telegram answered FLOOD_PREMIUM_WAIT: the client's account (the limit is per
+        account, for non-premium ones) shouldn't be asked for downloads until then."""
+        for wid, c in self._client_pool:
+            if c is client:
+                until = time.monotonic() + seconds
+                if until > self._throttled_until.get(wid, 0.0):
+                    logger.info(f"[POOL] Worker {wid} throttled by Telegram for {seconds}s")
+                    self._throttled_until[wid] = until
+                return
+
+    def is_throttled(self, client: Client) -> bool:
+        return any(c is client and self._throttled(wid) for wid, c in self._client_pool)
 
     def release_clients(self, clients: list[Client]) -> None:
         """

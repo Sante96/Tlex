@@ -13,10 +13,11 @@ from contextlib import aclosing
 
 from loguru import logger
 from pyrogram import Client, raw
-from pyrogram.errors import FloodPremiumWait, FloodWait, RPCError
+from pyrogram.errors import BadMsgNotification, FloodPremiumWait, FloodWait, RPCError
 from pyrogram.file_id import FileId, FileIdCached
 
 from app.core.utils import flood_seconds
+from app.core.worker_manager import worker_manager
 from app.models.media import MediaPart
 from app.services.streaming.cache import (
     _FILE_ID_CACHE,
@@ -28,7 +29,17 @@ from app.services.streaming.cache import (
 from app.services.streaming.telegram import refresh_file_id
 
 CHUNK_TIMEOUT = 20.0  # a request on a dead connection would otherwise hang for minutes
+RECONNECT_TIMEOUT = 10.0  # Telegram closes busy media connections often; Pyrogram reconnects
 MAX_ATTEMPTS = 5
+
+
+class Throttled(Exception):
+    """Telegram is slowing this client's account down (FLOOD_PREMIUM_WAIT, the free-tier
+    download limit): the caller should use a client of another account meanwhile."""
+
+    def __init__(self, seconds: int):
+        super().__init__(f"account throttled for {seconds}s")
+        self.seconds = seconds
 
 # Opening a media session (or following a CDN redirect) is left to Pyrogram's get_file,
 # one call per client at a time so concurrent fetches don't each open a session.
@@ -51,7 +62,12 @@ async def _get_file(client: Client, fid: FileIdCached, offset: int, limit: int) 
     session = client.media_sessions.get(fid.dc_id)
     if session is None:
         return None
-    r = await session.invoke(
+    # send, not invoke: invoke silently sleeps out FloodWaits up to the client's
+    # sleep_threshold, so a throttled account would stall the stream unseen. Like invoke,
+    # wait for a session Telegram just disconnected to come back first.
+    if not session.is_connected.is_set():
+        await asyncio.wait_for(session.is_connected.wait(), RECONNECT_TIMEOUT)
+    r = await session.send(
         raw.functions.upload.GetFile(
             location=raw.types.InputDocumentFileLocation(
                 id=fid.media_id,
@@ -62,7 +78,7 @@ async def _get_file(client: Client, fid: FileIdCached, offset: int, limit: int) 
             offset=offset,
             limit=limit,
         ),
-        sleep_threshold=client.sleep_threshold,
+        timeout=CHUNK_TIMEOUT,
     )
     return r.bytes if isinstance(r, raw.types.upload.File) else None
 
@@ -98,8 +114,9 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
     """Chunk `index` (1 MB) of a part, from the chunk cache or Telegram.
 
     Uses this client's own file_id: access hashes and file references belong to the
-    account. An expired reference is refreshed at once, a FloodWait is waited out, a dead
-    connection is dropped and reopened.
+    account. An expired reference is refreshed at once, a FloodWait is waited out, a
+    connection Telegram closed is waited for while Pyrogram reconnects it. Raises
+    Throttled when the account is being slowed down.
     """
     cached = _get_cached_chunk(part.id, index)
     if cached is not None:
@@ -119,8 +136,12 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             _cache_chunk(part.id, index, data)
             return data
 
-        except (FloodWait, FloodPremiumWait) as e:
-            logger.warning(f"[STREAM] {type(e).__name__} {flood_seconds(e)}s on part {part.id}, waiting")
+        except FloodPremiumWait as e:
+            worker_manager.mark_throttled(client, flood_seconds(e))
+            raise Throttled(flood_seconds(e)) from e
+
+        except FloodWait as e:
+            logger.warning(f"[STREAM] FloodWait {flood_seconds(e)}s on part {part.id}, waiting")
             await asyncio.sleep(flood_seconds(e))
 
         except RPCError as e:
@@ -133,22 +154,20 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
                 raise RuntimeError("Failed to refresh expired file reference") from e
             _FILE_ID_CACHE[(part.id, id(client))] = (new_file_id, time.time())
 
-        except (OSError, AttributeError) as e:  # TimeoutError is an OSError
-            # AttributeError: Pyrogram's session desync (BadMsgNotification)
-            logger.warning(
+        except (OSError, AttributeError, BadMsgNotification) as e:  # TimeoutError is an OSError
+            # AttributeError: Pyrogram's session desync (BadMsgNotification) on older paths.
+            # The session is never dropped here: a dead connection makes Pyrogram restart it
+            # (no data for 10 s while a pong is due every 5), its restart wakes the requests
+            # in flight with a TimeoutError, and its start() retries until connected, so
+            # stopping it from outside only left zombies reconnecting (measured: ~8x the
+            # disconnects). The next attempt waits for the reconnection.
+            restarting = session is not None and not session.is_connected.is_set()
+            (logger.debug if restarting else logger.warning)(
                 f"[STREAM] Chunk {index} of part {part.id} failed ({type(e).__name__}: {e}), "
                 f"retry {attempt}/{MAX_ATTEMPTS}"
             )
-            # Drop the connection that failed (unless a concurrent fetch already did): the
-            # next attempt opens a fresh one
-            if session is not None and client.media_sessions.get(fid.dc_id) is session:
-                client.media_sessions.pop(fid.dc_id, None)
-                try:
-                    await session.stop()
-                except Exception:
-                    pass
-            # Jitter: concurrent fetches failing together shouldn't reconnect in a storm
-            await asyncio.sleep(random.uniform(0.5, 2.0) if attempt == 1 else min(attempt * 2, 8))
+            # Jitter: fetches failing together shouldn't all resend at the same instant
+            await asyncio.sleep(random.uniform(0.2, 1.0) * attempt)
 
     raise RuntimeError(f"Failed to fetch chunk {index} of part {part.id} after {MAX_ATTEMPTS} attempts")
 

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
 from app.services.streaming.cache import _FILE_ID_CACHE, PYROGRAM_CHUNK_SIZE
-from app.services.streaming.download import fetch_chunk, read_small
+from app.services.streaming.download import Throttled, fetch_chunk, read_small
 from app.services.streaming.models import StreamPosition
 from app.services.streaming.telegram import (
     ensure_file_ids_for_client,
@@ -74,6 +74,7 @@ class VirtualStreamReader:
         self._rr_counter = 0
         self._active_streams = 0
         self._force_released = False
+        self._swap_lock = asyncio.Lock()
 
     @property
     def total_size(self) -> int:
@@ -182,6 +183,50 @@ class VirtualStreamReader:
             f"(pool pressure {pressure:.0%})"
         )
 
+    async def _swap_throttled(self) -> bool:
+        """Every client of this stream is on an account Telegram is slowing down: trade one
+        for a free client of another account, if the pool has one."""
+        async with self._swap_lock:
+            if any(not worker_manager.is_throttled(c) for c in self._clients):
+                return True  # a concurrent fetch already swapped
+            client = await worker_manager.try_acquire_one(spread_from=self._clients)
+            if client is None or worker_manager.is_throttled(client):
+                if client is not None:
+                    worker_manager.release_clients([client])
+                return False
+            try:
+                await ensure_file_ids_for_client(self._parts, client)
+            except Exception as e:
+                logger.warning(f"[STREAM] Swap failed, releasing client: {e}")
+                worker_manager.release_clients([client])
+                return False
+            if len(self._clients) >= MAX_CLIENTS_PER_STREAM:
+                worker_manager.release_clients([self._clients.pop(0)])
+            self._clients.append(client)
+            logger.info("[STREAM] Throttled account: moved the stream to a client of another one")
+            return True
+
+    async def _fetch(self, part: MediaPart, index: int) -> bytes:
+        """One chunk on one of this stream's clients, skipping those whose account Telegram
+        is slowing down: a throttled chunk moves to another client at once instead of
+        waiting out the FLOOD_PREMIUM_WAIT."""
+        while True:
+            usable = [c for c in self._clients if not worker_manager.is_throttled(c)]
+            clients = usable or self._clients
+            if not clients:
+                return b""  # released: read_range stops at the force-release check
+            client = clients[self._rr_counter % len(clients)]
+            self._rr_counter += 1
+            try:
+                return await fetch_chunk(client, part, index)
+            except Throttled as e:
+                if any(not worker_manager.is_throttled(c) for c in self._clients):
+                    continue
+                if await self._swap_throttled():
+                    continue
+                logger.warning(f"[STREAM] Every account is throttled, waiting {e.seconds}s")
+                await asyncio.sleep(e.seconds)
+
     async def _release_workers(self) -> None:
         """Release workers back to the pool for reuse."""
         if self._batch_mode_active or self._persistent:
@@ -280,9 +325,7 @@ class VirtualStreamReader:
                     if step is None:
                         return
                     part, index, skip, take = step
-                    client = self._clients[self._rr_counter % len(self._clients)]
-                    self._rr_counter += 1
-                    pending.append((asyncio.create_task(fetch_chunk(client, part, index)), skip, take))
+                    pending.append((asyncio.create_task(self._fetch(part, index)), skip, take))
 
             launch()
             last_rebalance = time.monotonic()
