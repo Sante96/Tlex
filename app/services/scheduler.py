@@ -92,7 +92,9 @@ class AutoScanScheduler:
             return
 
         self._running = True
-        logger.info(f"Auto-scan scheduler starting with {self.interval_hours}h interval")
+        # The interval set from the UI lives in Redis (the property is the .env default)
+        interval = await self.get_interval_hours()
+        logger.info(f"Auto-scan scheduler starting with {interval}h interval")
 
         while self._running:
             try:
@@ -105,6 +107,8 @@ class AutoScanScheduler:
                 else:
                     r = await self._get_redis()
                     last = await _last_run(r, REDIS_KEY_SCAN_LAST_RUN) or self._last_scan
+                    # The status shows it too: after a restart "last scan" was empty
+                    self._last_scan = last
                     self._next_scan = (
                         last + timedelta(hours=interval_hours) if last else datetime.now()
                     )

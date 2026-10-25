@@ -68,6 +68,9 @@ async def test_scan_waits_when_last_run_is_recent(mocker):
     run.assert_not_awaited()
     assert scheduler.next_scan is not None
     assert abs((scheduler.next_scan - (last + timedelta(hours=1))).total_seconds()) < 1
+    # A fresh scheduler (a restart) reports the last run it found in Redis
+    status = await scheduler.get_status()
+    assert abs((datetime.fromisoformat(status["last_scan"]) - last).total_seconds()) < 1
 
 
 # ---------------------------------------------------------------------------
