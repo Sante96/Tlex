@@ -175,9 +175,11 @@ export function EpisodePicker({
               ? "absolute bottom-0 left-0 right-0 z-30"
               : "absolute top-0 left-0 right-0 z-30"
           }
-          initial={isMobile ? { y: "100%" } : { y: -20, opacity: 0 }}
-          animate={isMobile ? { y: 0 } : { y: 0, opacity: 1 }}
-          exit={isMobile ? { y: "100%" } : { y: -20, opacity: 0 }}
+          // The fade is on the panel below: an ancestor's opacity turns its blur off
+          // until the animation ends (Chrome blurs only what's inside the faded element)
+          initial={isMobile ? { y: "100%" } : { y: -20 }}
+          animate={{ y: 0 }}
+          exit={isMobile ? { y: "100%" } : { y: -20 }}
           transition={{
             duration: isMobile ? 0.3 : 0.2,
             ease: [0.4, 0, 0.2, 1],
@@ -196,7 +198,11 @@ export function EpisodePicker({
               }
             : {})}
         >
-          <div
+          <motion.div
+            initial={isMobile ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={isMobile ? undefined : { opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className={
               isMobile
                 ? "rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.6)]"
@@ -347,7 +353,7 @@ export function EpisodePicker({
                 )}
               </div>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -432,8 +438,8 @@ function EpisodeThumb({
 
         {/* Play hover overlay */}
         {!isCurrent && (
-          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 group-focus-visible:bg-black/30 transition-colors flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
               <Play className="h-5 w-5 text-white fill-white ml-0.5" />
             </div>
           </div>

@@ -16,7 +16,6 @@ import {
 import { TVBackground } from "@/components/ds";
 import { AuthGuard } from "@/components/auth-guard";
 import { SplashScreen } from "@/components/splash-screen";
-import { RouteTransitionProvider } from "@/contexts/route-transition-context";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { useProfile } from "@/contexts/profile-context";
 import { useIsMobile } from "@/lib/breakpoints";
@@ -71,7 +70,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
     >
       <TopBar />
       <main className="pb-16 md:pb-0 landscape:pb-0">
-        <RouteTransitionProvider>{children}</RouteTransitionProvider>
+        {children}
       </main>
     </motion.div>
   );

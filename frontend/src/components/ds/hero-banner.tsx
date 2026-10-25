@@ -69,9 +69,11 @@ export function HeroBanner({
 
   return (
     <div className="relative" style={isMobile ? undefined : { height }}>
+      {/* A slide without a fade: the action buttons are blurred glass, and an ancestor's
+          opacity turns their blur off until the fade ends */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ y: 20 }}
+        animate={{ y: 0 }}
         transition={{
           duration: 0.4,
           delay: 0.15,

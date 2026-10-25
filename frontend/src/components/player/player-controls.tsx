@@ -111,15 +111,24 @@ export function PlayerControls({
   episodesButtonRef,
 }: PlayerControlsProps) {
   const t = useTranslations();
+  // Each part fades by itself: a fade on the whole overlay turned off the play button's
+  // blur until it ended (an ancestor's opacity hides what's behind from backdrop-filter)
+  const shown = visible ? "opacity-100" : "opacity-0";
+  const fade = cn("transition-opacity duration-300", shown);
   return (
     <div
       className={cn(
-        "absolute inset-0 flex flex-col transition-opacity duration-300 z-20",
-        visible ? "opacity-100" : "opacity-0 pointer-events-none",
+        "absolute inset-0 flex flex-col z-20",
+        !visible && "pointer-events-none",
       )}
     >
       {/* Top bar */}
-      <div className="flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent">
+      <div
+        className={cn(
+          "flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent",
+          fade,
+        )}
+      >
         <button
           onClick={onBack}
           aria-label={t("common.back")}
@@ -149,7 +158,10 @@ export function PlayerControls({
           <button
             onClick={() => onSkip(-10)}
             aria-label={t("player.back")}
-            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+            className={cn(
+              "p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+              shown,
+            )}
           >
             <div className="relative drop-shadow-lg">
               <RotateCcw
@@ -184,6 +196,7 @@ export function PlayerControls({
               aria-label={isPlaying ? t("player.pause") : t("player.play")}
               className={cn(
                 "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                shown,
                 isLoading
                   ? "bg-black/60"
                   : "bg-black/30 hover:bg-black/40 hover:scale-105",
@@ -204,7 +217,10 @@ export function PlayerControls({
           <button
             onClick={() => onSkip(10)}
             aria-label={t("player.forward")}
-            className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+            className={cn(
+              "p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+              shown,
+            )}
           >
             <div className="relative drop-shadow-lg">
               <RotateCw
@@ -224,7 +240,12 @@ export function PlayerControls({
       </div>
 
       {/* Bottom controls */}
-      <div className="bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10 space-y-1">
+      <div
+        className={cn(
+          "bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10 space-y-1",
+          fade,
+        )}
+      >
         <VideoSeekbar
           currentTime={currentTime}
           duration={duration}
