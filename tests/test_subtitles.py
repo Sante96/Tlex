@@ -507,6 +507,26 @@ class TestExtractViaScanClientHandling:
         assert events == []
         assert reader.call_count == 1  # stopped on first failure
 
+    async def test_cluster_across_chunk_boundary_is_complete(self):
+        # The first cluster runs past the 10 MB chunk: the line cut in two and the one
+        # after the cut must both come out whole
+        video = bytes([0x81]) + bytes(3) + bytes(10 * 1024 * 1024 - 200)
+        across = b"Across the cut " * 20
+        first = (
+            _elem(bytes([0xE7]), (1000).to_bytes(2, "big"))
+            + b"\xa3" + _size(len(video), 4) + video
+            + _simple_block(3, 0, across)
+            + _simple_block(3, 50, b"After the cut")
+        )
+        second = _elem(bytes([0xE7]), (5000).to_bytes(2, "big")) + _simple_block(3, 0, b"Next cluster")
+        data = b"".join(b"\x1f\x43\xb6\x75" + _size(len(c), 8) + c for c in (first, second))
+
+        events = await extract_via_scan(MockReader(data), 0, {3}, 1_000_000)
+
+        assert [(e.timestamp_ms, e.data) for e in events] == [
+            (1000, across), (1050, b"After the cut"), (5000, b"Next cluster")
+        ]
+
     async def test_cluster_in_data_is_extracted(self):
         block = _simple_block(track_num=3, relative_time=0, payload=b"Subtitle text")
         data = _cluster(timecode=1000, blocks=[block]) + b"\x00" * 100

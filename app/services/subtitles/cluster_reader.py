@@ -315,24 +315,32 @@ def _scan_chunk_sync(
     chunk_data: bytes,
     tracks: Collection[int],
     timecode_scale: int,
-) -> list[SubtitleEvent]:
-    """Scan a 10MB chunk for clusters. Pure CPU, no I/O — safe to run in executor."""
+    last: bool = True,
+) -> tuple[list[SubtitleEvent], int]:
+    """Scan a 10MB chunk for clusters. Pure CPU, no I/O — safe to run in executor.
+
+    Returns the events and where scanning stopped: unless this is the last chunk, a cluster
+    cut off by the end of the chunk is left unparsed, for the caller to retry with the next
+    chunk appended.
+    """
     events: list[SubtitleEvent] = []
     offset = 0
     while offset < len(chunk_data) - 4:
         if chunk_data[offset:offset + 4] == CLUSTER_SIGNATURE:
+            cluster_size, size_len = read_vint(chunk_data, offset + 4)
+            end = offset + 4 + size_len + cluster_size
+            if cluster_size > 50_000_000:  # corrupted VINT, not a real cluster
+                offset += 1
+                continue
+            if not last and (size_len == 0 or end > len(chunk_data)):
+                return events, offset
             events.extend(
                 parse_cluster_for_subtitles(chunk_data, offset, tracks, timecode_scale)
             )
-            try:
-                _, id_len = read_element_id(chunk_data, offset)
-                cluster_size, size_len = read_vint(chunk_data, offset + id_len)
-                offset += id_len + size_len + cluster_size
-            except Exception:
-                offset += 1
+            offset = end if size_len else offset + 1
         else:
             offset += 1
-    return events
+    return events, min(offset, len(chunk_data))
 
 
 async def extract_via_scan(
@@ -347,12 +355,13 @@ async def extract_via_scan(
 
     chunk_size = 10 * 1024 * 1024  # 10MB chunks
     file_offset = header_size
+    carry = b""  # tail of the previous chunk: a cluster it cut off
 
     loop = asyncio.get_running_loop()
 
     while file_offset < reader.total_size:
         read_end = min(file_offset + chunk_size, reader.total_size)
-        chunk_data = b""
+        chunk_data = bytearray(carry)
 
         try:
             async for chunk in reader.read_range(file_offset, read_end):
@@ -361,13 +370,15 @@ async def extract_via_scan(
             logger.warning(f"Failed to read chunk at {file_offset}: {e}")
             break
 
-        chunk_events = await loop.run_in_executor(
+        chunk_events, stop = await loop.run_in_executor(
             None, _scan_chunk_sync,
             bytes(chunk_data),
             tracks,
             timecode_scale,
+            read_end >= reader.total_size,
         )
         events.extend(chunk_events)
+        carry = bytes(chunk_data[stop:])
 
         file_offset = read_end
 
