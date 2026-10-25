@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from app.core.utils import find_ffmpeg, find_ffprobe, find_mkvextract, find_mkvmerge
+from app.core.utils import find_mkvextract, find_mkvmerge
 from app.services.subtitles.fonts import extract_font_names
 from app.services.subtitles.models import AttachedFont
 
@@ -30,108 +29,14 @@ def safe_font_filename(name: str | None, att_id: object) -> str:
 
 class SubtitleExtractor:
     """
-    Extracts subtitles and fonts from media files using FFmpeg.
+    Extracts attached fonts from MKV files (mkvmerge/mkvextract on the header only).
 
-    This service handles:
-    - Extraction of subtitle tracks (ASS, SRT) from media files.
-    - Conversion of SRT subtitles to ASS format for consistent rendering.
-    - Extraction of attached fonts from MKV files (using header sniping for performance).
+    Subtitle tracks themselves are parsed directly from the MKV by mkv_extractor.
     """
 
     def __init__(self) -> None:
-        self._ffmpeg_path = find_ffmpeg()
-        self._ffprobe_path = find_ffprobe()
         self._mkvextract_path = find_mkvextract()
         self._mkvmerge_path = find_mkvmerge()
-
-    async def extract_subtitle_from_reader(
-        self,
-        reader: VirtualStreamReader,
-        stream_index: int,
-        output_format: str = "ass",
-    ) -> bytes:
-        """
-        Extract a subtitle track directly from a VirtualStreamReader.
-
-        This method downloads the file to a temp location and runs FFmpeg on it.
-        FFmpeg needs seekable input for MKV containers, so piping doesn't work reliably.
-
-        Args:
-            reader: The VirtualStreamReader instance to read from.
-            stream_index: The index of the subtitle stream to extract.
-            output_format: The desired output format (default: "ass").
-
-        Returns:
-            The extracted subtitle content as bytes.
-
-        Raises:
-            RuntimeError: If FFmpeg execution fails.
-        """
-        # Read ENTIRE file - MKV subtitles are distributed throughout the file
-        read_size = reader.total_size
-
-        logger.debug(f"Reading {read_size / 1024 / 1024:.1f}MB for subtitle extraction")
-
-        # Write to temp file
-        with tempfile.NamedTemporaryFile(suffix=".mkv", delete=False) as tmp:
-            tmp_path = tmp.name
-            bytes_written = 0
-            async for chunk in reader.read_range(0, read_size):
-                tmp.write(chunk)
-                bytes_written += len(chunk)
-
-        logger.debug(f"Wrote {bytes_written / 1024 / 1024:.1f}MB to temp file")
-
-        cmd = [
-            self._ffmpeg_path,
-            "-hide_banner",
-            "-loglevel",
-            "warning",
-            "-i", tmp_path,
-            "-map", f"0:s:{stream_index}",
-            "-c:s", output_format,
-            "-f", output_format,
-            "-",
-        ]
-
-        logger.debug(f"Extracting subtitle stream {stream_index} as {output_format}")
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
-
-        # Use subprocess.run in thread
-        def run_ffmpeg():
-            return subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=120,  # Increased timeout for large files
-            )
-
-        try:
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                result = await loop.run_in_executor(executor, run_ffmpeg)
-
-            logger.debug(f"FFmpeg: code={result.returncode}, output={len(result.stdout)} bytes")
-            if result.stderr:
-                logger.warning(f"FFmpeg stderr: {result.stderr.decode()}")
-
-            if result.returncode != 0:
-                error_msg = result.stderr.decode() if result.stderr else "Unknown error"
-                logger.error(f"Subtitle extraction failed (code {result.returncode}): {error_msg}")
-                raise RuntimeError(error_msg or f"FFmpeg failed with code {result.returncode}")
-
-            logger.debug(f"Extracted {len(result.stdout)} bytes subtitle")
-            return result.stdout
-
-        except subprocess.TimeoutExpired:
-            logger.error("FFmpeg timed out")
-            raise RuntimeError("Subtitle extraction timed out") from None
-
-        finally:
-            # Clean up temp file
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
 
     async def extract_all_fonts_from_reader(
         self, reader: VirtualStreamReader
@@ -253,47 +158,6 @@ class SubtitleExtractor:
 
         logger.info(f"Extracted {len(fonts)} fonts via header snipe")
         return fonts
-
-    async def convert_srt_to_ass(self, srt_content: bytes) -> bytes:
-        """
-        Convert SRT subtitle to ASS format.
-
-        Args:
-            srt_content: SRT content as bytes
-
-        Returns:
-            ASS content as bytes
-        """
-        cmd = [
-            self._ffmpeg_path,
-            "-hide_banner",
-            "-loglevel",
-            "warning",
-            "-f",
-            "srt",
-            "-i",
-            "pipe:0",
-            "-c:s",
-            "ass",
-            "-f",
-            "ass",
-            "-",
-        ]
-
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        stdout, stderr = await process.communicate(input=srt_content)
-
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
-            raise RuntimeError(f"SRT to ASS conversion failed: {error_msg}")
-
-        return stdout
 
 
 subtitle_extractor = SubtitleExtractor()

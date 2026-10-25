@@ -11,9 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from app._version import __version__
 from app.api.v1 import router as api_v1_router
 from app.config import get_settings
-from app.core.exceptions import TLEXException, tlex_exception_handler
 from app.core.logging import setup_logging
-from app.core.metrics import get_metrics_response
 from app.core.rate_limit import limiter
 from app.core.worker_manager import worker_manager
 from app.database import async_session_maker, create_all_tables, engine
@@ -131,7 +129,6 @@ app = FastAPI(
 # Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_exception_handler(TLEXException, tlex_exception_handler)
 
 # CORS middleware - use configured origins, with fallback to localhost in debug
 cors_origins = settings.cors_origins_list if settings.cors_origins_list else []
@@ -156,12 +153,6 @@ async def root():
         "status": "running",
         "environment": settings.environment,
     }
-
-
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint."""
-    return get_metrics_response()
 
 
 @app.get("/health")

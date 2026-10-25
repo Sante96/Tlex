@@ -111,11 +111,6 @@ export async function getMediaTrailer(id: number): Promise<string | null> {
   return response.data.key;
 }
 
-export async function getMediaEpisodes(id: number): Promise<EpisodeInfo[]> {
-  const response = await api.get<EpisodeInfo[]>(`/api/v1/media/${id}/episodes`);
-  return response.data;
-}
-
 export interface NextEpisode {
   id: number;
   title: string;

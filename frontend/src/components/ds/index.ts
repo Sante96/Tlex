@@ -1,7 +1,6 @@
 // Primitives
 export { DSButton } from "./button";
 export { TVButton } from "./tv-button";
-export { TVInput } from "./tv-input";
 export { TVBackground } from "./tv-background";
 export { DSCard } from "./card";
 export { DSInput } from "./input";
@@ -10,7 +9,6 @@ export { DSIconButton } from "./icon-button";
 export { DSDropdownMenu } from "./dropdown-menu";
 export { DSAvatar } from "./avatar";
 export { DSNavItem } from "./nav-item";
-export { DSProfileCard } from "./profile-card";
 
 // Composites
 export { PosterCard } from "./poster-card";

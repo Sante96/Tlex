@@ -1,11 +1,10 @@
 """Worker Manager for Telegram account pool coordination."""
 
 import asyncio
-from datetime import timedelta
 
 from loguru import logger
 from pyrogram import Client
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -30,9 +29,10 @@ class WorkerManager:
 
     Responsibilities:
     - Load and initialize all worker sessions
-    - Select optimal worker for downloads (load balancing)
-    - Handle FloodWait errors with automatic failover
-    - Track worker load and status
+    - Hand out pool clients to streams (get_available_clients / release_clients)
+    - Bring workers back once their FloodWait expires (a stream that hits
+      FloodWait waits it out in streaming/download.py)
+    - Track client usage and worker status
     - Create multiple clients per worker for concurrent streams
     """
 
@@ -40,7 +40,6 @@ class WorkerManager:
         self._clients: dict[int, Client] = {}  # worker_id -> primary Client
         self._client_pool: list[tuple[int, Client]] = []  # [(worker_id, client), ...] all clients
         self._client_in_use: dict[int, bool] = {}  # id(client) -> is_in_use
-        self._worker_loads: dict[int, int] = {}  # worker_id -> current_load
         self._lock = asyncio.Lock()
 
     async def load_workers(self, session: AsyncSession, worker_ids: list[int] | None = None) -> int:
@@ -198,35 +197,6 @@ class WorkerManager:
 
             return worker, self._clients[worker.id]
 
-    async def get_best_workers(self, session: AsyncSession, limit: int = 3) -> list[tuple[Worker, Client]]:
-        """
-        Get a pool of optimal workers for striping (parallel downloads).
-
-        Returns up to `limit` active workers, prioritizing premium ones.
-        """
-        async with self._lock:
-            await self._recover_flood_wait_workers(session)
-
-            # Get multiple workers
-            stmt = (
-                select(Worker)
-                .where(Worker.status == WorkerStatus.ACTIVE)
-                .order_by(Worker.is_premium.desc())
-                .limit(limit)
-            )
-            result = await session.execute(stmt)
-            workers = result.scalars().all()
-
-            results = []
-            for worker in workers:
-                if worker.id in self._clients:
-                    results.append((worker, self._clients[worker.id]))
-
-            if not results:
-                logger.warning("No available workers for striping!")
-
-            return results
-
     async def get_available_clients(self, limit: int = 1) -> list[Client]:
         """
         Get available worker clients without DB session (for streaming).
@@ -309,60 +279,6 @@ class WorkerManager:
         total = len(self._client_pool)
         logger.info(f"[POOL] Released {len(clients)} client(s), pool={in_use}/{total} in use")
 
-    async def acquire_worker(self, session: AsyncSession, worker: Worker) -> None:
-        """Increment worker load when starting a stream."""
-        # Update in-memory load
-        self._worker_loads[worker.id] = self._worker_loads.get(worker.id, 0) + 1
-
-        # We don't update DB for every stream to avoid write contention
-        # But we update last_used_at
-        stmt = (
-            update(Worker)
-            .where(Worker.id == worker.id)
-            .values(last_used_at=utc_now())
-        )
-        await session.execute(stmt)
-        await session.commit()
-
-    async def release_worker(self, worker_id: int) -> None:
-        """Decrement worker load when stream ends."""
-        # Update in-memory load
-        if worker_id in self._worker_loads:
-            self._worker_loads[worker_id] = max(0, self._worker_loads[worker_id] - 1)
-
-    async def handle_flood_wait(
-        self, session: AsyncSession, worker: Worker, wait_seconds: int
-    ) -> tuple[Worker, Client] | None:
-        """
-        Handle FloodWait error with automatic failover.
-
-        1. Mark current worker as FLOOD_WAIT
-        2. Get a new worker from the pool
-        3. Return new worker for retry
-
-        Returns:
-            New (Worker, Client) tuple or None if no workers available.
-        """
-        flood_until = utc_now() + timedelta(seconds=wait_seconds)
-
-        logger.warning(f"Worker {worker.id} hit FloodWait ({wait_seconds}s), switching...")
-
-        # Mark worker as flood_wait
-        stmt = (
-            update(Worker)
-            .where(Worker.id == worker.id)
-            .values(
-                status=WorkerStatus.FLOOD_WAIT,
-                flood_wait_until=flood_until,
-                current_load=0,  # Reset load since it can't serve
-            )
-        )
-        await session.execute(stmt)
-        await session.commit()
-
-        # Get new worker
-        return await self.get_best_worker(session)
-
     async def _recover_flood_wait_workers(self, session: AsyncSession) -> None:
         """Check and recover workers whose flood wait has expired."""
         now = utc_now()
@@ -407,7 +323,7 @@ class WorkerManager:
                 "phone": w.phone_number[-4:] if w.phone_number else "****",  # Last 4 digits only
                 "is_premium": w.is_premium,
                 "status": w.status.value,
-                "current_load": self._worker_loads.get(w.id, 0),
+                "current_load": clients_in_use,
                 "is_connected": w.id in self._clients,
                 "clients_total": len(worker_clients),
                 "clients_in_use": clients_in_use,

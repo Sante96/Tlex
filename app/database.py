@@ -73,9 +73,3 @@ async def create_all_tables() -> None:
         if conn.dialect.name == "postgresql":
             for statement in SCHEMA_UPGRADES:
                 await conn.execute(text(statement))
-
-
-async def drop_all_tables() -> None:
-    """Drop all database tables (use with caution!)."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)

@@ -8,3 +8,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release outputs: signed APKs are published by CI, not committed
+/app/release/

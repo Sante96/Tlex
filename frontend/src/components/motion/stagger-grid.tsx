@@ -12,11 +12,6 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, scale: 0.92 },
-  visible: { opacity: 1, scale: 1 },
-};
-
 interface StaggerGridProps {
   children: React.ReactNode;
   className?: string;
@@ -30,14 +25,6 @@ export function StaggerGrid({ children, className }: StaggerGridProps) {
       initial="hidden"
       animate="visible"
     >
-      {children}
-    </motion.div>
-  );
-}
-
-export function StaggerItem({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div variants={itemVariants} transition={{ duration: 0.3 }}>
       {children}
     </motion.div>
   );

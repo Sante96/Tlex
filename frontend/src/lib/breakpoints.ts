@@ -8,8 +8,6 @@ export const BREAKPOINTS = {
   "2xl": 1536,
 } as const;
 
-export type Breakpoint = keyof typeof BREAKPOINTS;
-
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -24,20 +22,4 @@ export function useIsMobile(): boolean {
   }, []);
 
   return isMobile;
-}
-
-export function useBreakpoint(bp: Breakpoint): boolean {
-  const [isAbove, setIsAbove] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia(`(min-width: ${BREAKPOINTS[bp]}px)`).matches;
-  });
-
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${BREAKPOINTS[bp]}px)`);
-    const handler = (e: MediaQueryListEvent) => setIsAbove(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [bp]);
-
-  return isAbove;
 }

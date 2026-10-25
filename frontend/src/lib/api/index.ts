@@ -28,7 +28,6 @@ export {
   refreshMetadata,
   getMediaCast,
   getMediaTrailer,
-  getMediaEpisodes,
   getNextEpisode,
   updateMediaItem,
   getMediaTmdbImages,
@@ -94,8 +93,6 @@ export type { Profile, ProfileListResponse } from "./profiles";
 // Stream & Subtitles
 export {
   getStreamUrl,
-  getSubtitleUrl,
-  getSubtitleTracks,
   warmStream,
   releaseStream,
   getPoolStatus,

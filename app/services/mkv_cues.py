@@ -15,17 +15,8 @@ EBML Element IDs used:
 - CueTrack: 0xF7
 """
 
-from dataclasses import dataclass
-
 import httpx
 from loguru import logger
-
-
-@dataclass
-class CuePoint:
-    """A single cue point (keyframe) in MKV."""
-    time_ms: int  # Timestamp in milliseconds
-    track: int = 1  # Track number (usually 1 for video)
 
 
 def read_vint(data: bytes, offset: int) -> tuple[int, int]:
@@ -200,13 +191,6 @@ def extract_timecode_scale(data: bytes) -> int:
 
 
 CUE_CLUSTER_POSITION_ID = 0xF1
-
-@dataclass
-class CueData:
-    """Cue point data with timestamp and cluster position."""
-    time_ms: int
-    cluster_position: int
-    track: int
 
 
 def parse_cues_for_clusters(
@@ -435,19 +419,3 @@ async def extract_keyframes_from_url(
 
         logger.debug(f"Extracted {len(keyframes)} keyframes from MKV Cues")
         return keyframes
-
-
-# For testing
-if __name__ == "__main__":
-    import asyncio
-
-    async def test():
-        # Test with a local file
-        url = "http://127.0.0.1:8000/api/v1/stream/raw/78"
-        keyframes = await extract_keyframes_from_url(url)
-        print(f"Found {len(keyframes)} keyframes")
-        if keyframes:
-            print(f"First 10: {keyframes[:10]}")
-            print(f"Last 10: {keyframes[-10:]}")
-
-    asyncio.run(test())

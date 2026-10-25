@@ -84,18 +84,6 @@ class TMDBClient:
             media_type="movie",
         )
 
-    async def get_movie_details(self, tmdb_id: int) -> TMDBResult | None:
-        """Get detailed movie info by TMDB ID."""
-        r = await self._get(f"/movie/{tmdb_id}")
-        if not r:
-            return None
-        return TMDBResult(
-            tmdb_id=r["id"], title=r.get("title", ""),
-            overview=r.get("overview"), poster_path=r.get("poster_path"),
-            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
-            media_type="movie",
-        )
-
     async def get_movie_full_details(self, tmdb_id: int, language: str | None = None) -> MovieDetails | None:
         """Get full movie details including genres, vote_average, content_rating."""
         r = await self._get(f"/movie/{tmdb_id}", append_to_response="release_dates", language=language)

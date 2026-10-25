@@ -23,25 +23,6 @@ export function getStreamUrl(
   return `/api/stream/play/${mediaId}${query ? `?${query}` : ""}`;
 }
 
-export function getSubtitleUrl(mediaId: number, track = 0, format = "ass") {
-  return `/api/v1/subtitles/${mediaId}?track=${track}&format=${format}`;
-}
-
-export async function getSubtitleTracks(mediaId: number) {
-  const response = await api.get<{
-    media_id: number;
-    tracks: Array<{
-      index: number;
-      codec: string;
-      language: string | null;
-      title: string | null;
-      is_default: boolean;
-    }>;
-    count: number;
-  }>(`/api/v1/subtitles/${mediaId}/tracks`);
-  return response.data;
-}
-
 /**
  * Pre-warm the Telegram file_id cache for faster playback start.
  * Call this when user opens video page, before they click play.

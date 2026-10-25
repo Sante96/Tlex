@@ -40,19 +40,6 @@ export function formatDurationShort(seconds: number | null): string | null {
 }
 
 /**
- * Format bytes to human readable size (KB, MB, GB)
- */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-/**
  * Remove SxEx prefix from episode title (e.g., "S01E03 - Era Ora" -> "Era Ora")
  */
 export function cleanEpisodeTitle(title: string): string {
