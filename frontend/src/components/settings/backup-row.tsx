@@ -8,9 +8,10 @@ import {
   ToggleRight,
   ArrowUpCircle,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { DSIconButton, DSCard } from "@/components/ds";
 import type { BackupChannel } from "@/lib/api/backup";
+import { serverDate } from "@/lib/format";
 
 interface BackupRowProps {
   backup: BackupChannel;
@@ -44,6 +45,7 @@ export function BackupRow({
 }: BackupRowProps) {
   const t = useTranslations("backup");
   const tc = useTranslations("common");
+  const locale = useLocale();
 
   return (
     <DSCard
@@ -165,7 +167,7 @@ export function BackupRow({
             <span>·</span>
             <span>
               {t("lastSync")}:{" "}
-              {new Date(b.last_sync_at).toLocaleString(undefined, {
+              {serverDate(b.last_sync_at).toLocaleString(locale, {
                 day: "2-digit",
                 month: "2-digit",
                 hour: "2-digit",

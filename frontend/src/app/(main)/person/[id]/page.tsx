@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { getPersonDetails, type PersonDetails } from "@/lib/api";
-import { getTmdbImageUrl } from "@/lib/format";
+import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import { PosterCard } from "@/components/ds";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsTV } from "@/hooks/use-platform";
@@ -29,6 +29,7 @@ function XIcon({ className }: { className?: string }) {
 
 export default function PersonPage() {
   const t = useTranslations();
+  const locale = useLocale();
   const params = useParams();
   const router = useRouter();
   const personId = Number(params.id);
@@ -73,7 +74,7 @@ export default function PersonPage() {
     ? getTmdbImageUrl(person.profile_path, "w500")
     : null;
   const birthday = person.birthday
-    ? new Date(person.birthday).toLocaleDateString(undefined, {
+    ? new Date(`${person.birthday}T00:00`).toLocaleDateString(locale, {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -209,7 +210,7 @@ export default function PersonPage() {
           }>
             {person.works.map((work) => {
               const year = work.release_date
-                ? new Date(work.release_date).getFullYear().toString()
+                ? yearOf(work.release_date)
                 : "";
               const subtitle = work.character ?? work.job ?? year;
               const imageUrl = getTmdbImageUrl(work.poster_path, "w300");

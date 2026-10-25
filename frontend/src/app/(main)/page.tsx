@@ -16,7 +16,7 @@ import {
   type ContinueWatchingItem,
   type SeriesItem,
 } from "@/lib/api";
-import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
+import { cleanEpisodeTitle, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { PosterCardSkeleton } from "@/components/ui/skeleton";
 
 // Posters per home row
@@ -165,7 +165,7 @@ export default function HomePage() {
                 title={m.title}
                 subtitle={
                   m.release_date
-                    ? new Date(m.release_date).getFullYear().toString()
+                    ? yearOf(m.release_date)
                     : ""
                 }
                 className={cardClass}

@@ -20,11 +20,7 @@ import {
   type SeasonInfo,
   type CastMember,
 } from "@/lib/api";
-import {
-  formatDurationShort,
-  cleanEpisodeTitle,
-  getTmdbImageUrl,
-} from "@/lib/format";
+import { cleanEpisodeTitle, formatDurationShort, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
 import { useIsTV } from "@/hooks/use-platform";
 
@@ -104,7 +100,7 @@ export default function SeasonDetailPage() {
   );
   const backdropUrl = getTmdbImageUrl(series.backdrop_path, "original");
   const year = series.first_air_date
-    ? new Date(series.first_air_date).getFullYear()
+    ? yearOf(series.first_air_date)
     : null;
   const genresText = series.genres?.join(", ") || "";
 

@@ -56,3 +56,15 @@ export function getTmdbImageUrl(
   if (!path) return null;
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
+
+/** The year of a TMDB date ("2020-01-01"). new Date() reads such a date as UTC midnight:
+ * west of Greenwich, January 1st fell in the year before. */
+export function yearOf(date: string): string {
+  return date.slice(0, 4);
+}
+
+/** A timestamp from the backend: the database keeps UTC without a zone, which new Date()
+ * reads as local time (an hour or two early in Italy). */
+export function serverDate(iso: string): Date {
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+}

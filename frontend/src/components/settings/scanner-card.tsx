@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock, RefreshCw, Play, Loader2 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { DSButton, DSCard } from "@/components/ds";
 import {
   Select,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { errorText } from "@/lib/api";
+import { serverDate } from "@/lib/format";
 
 interface ScannerCardProps {
   autoScanData: AutoScanStatus | null;
@@ -38,6 +39,7 @@ export function ScannerCard({
   onAutoScanChange,
 }: ScannerCardProps) {
   const t = useTranslations();
+  const locale = useLocale();
   const toast = useToast();
   return (
     <DSCard
@@ -104,7 +106,7 @@ export function ScannerCard({
               {t("scanner.lastScan")}
             </div>
             <div className="text-lg font-bold">
-              {new Date(autoScanData.last_scan).toLocaleString(undefined, {
+              {serverDate(autoScanData.last_scan).toLocaleString(locale, {
                 day: "2-digit",
                 month: "2-digit",
                 hour: "2-digit",

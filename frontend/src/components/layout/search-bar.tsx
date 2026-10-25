@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Film, Tv, Loader2, ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { getMediaList, getSeriesList } from "@/lib/api";
-import { getTmdbImageUrl } from "@/lib/format";
+import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import Image from "next/image";
 
 interface SearchResult {
@@ -103,7 +103,7 @@ export function SearchBar({ className, compact }: { className?: string; compact?
           poster_path: m.poster_path,
           type: "movie" as const,
           year: m.release_date
-            ? new Date(m.release_date).getFullYear().toString()
+            ? yearOf(m.release_date)
             : undefined,
         })),
       );
@@ -114,7 +114,7 @@ export function SearchBar({ className, compact }: { className?: string; compact?
           poster_path: s.poster_path,
           type: "series" as const,
           year: s.first_air_date
-            ? new Date(s.first_air_date).getFullYear().toString()
+            ? yearOf(s.first_air_date)
             : undefined,
         })),
       );

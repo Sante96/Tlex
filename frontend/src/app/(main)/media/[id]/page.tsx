@@ -33,7 +33,7 @@ import {
   type MediaDetails,
   type CastMember,
 } from "@/lib/api";
-import { formatDuration, getTmdbImageUrl } from "@/lib/format";
+import { formatDuration, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
 import { useAuth } from "@/contexts/auth-context";
@@ -145,7 +145,7 @@ export default function MediaDetailPage() {
   const posterUrl = getTmdbImageUrl(media.poster_path, "w500");
   const backdropUrl = getTmdbImageUrl(media.backdrop_path, "original");
   const year = media.release_date
-    ? new Date(media.release_date).getFullYear()
+    ? yearOf(media.release_date)
     : null;
   const duration = media.duration_seconds
     ? formatDuration(media.duration_seconds)

@@ -34,7 +34,7 @@ import {
   type SeriesDetails,
   type CastMember,
 } from "@/lib/api";
-import { getTmdbImageUrl } from "@/lib/format";
+import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
 import { useAuth } from "@/contexts/auth-context";
@@ -146,7 +146,7 @@ export default function SeriesDetailPage() {
   const posterUrl = getTmdbImageUrl(series.poster_path, "w500");
   const backdropUrl = getTmdbImageUrl(series.backdrop_path, "original");
   const year = series.first_air_date
-    ? new Date(series.first_air_date).getFullYear()
+    ? yearOf(series.first_air_date)
     : null;
   const genresText = series.genres?.join(", ") || "";
 
