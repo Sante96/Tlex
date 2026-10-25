@@ -1,11 +1,10 @@
-.venv
-node_modules
-__pycache__
-*.pyc
-*.pyo
-.next
-.git
-data/
-cache/
-sessions/
-*.log
+# Whitelist: the backend image only needs these. Everything else (.env*, keystores,
+# logs, frontend/node_modules, graphify-out, ...) stays out of the build context.
+*
+!app/
+!scripts/
+!pyproject.toml
+!uv.lock
+# app/_version.py reads the version from here
+!frontend/package.json
+**/__pycache__
