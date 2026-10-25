@@ -677,3 +677,100 @@ class TestFetchChunk:
 
         with pytest.raises(RuntimeError, match="after 5 attempts"):
             await download.fetch_chunk(client, part, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestDynamicClients — scaling during long reads, reclaim for new viewers
+# ---------------------------------------------------------------------------
+
+
+class TestDynamicClients:
+    MB = 1024 * 1024
+
+    @pytest.fixture
+    def pool(self, mocker):
+        import app.services.streaming.reader as reader_module
+
+        mocker.patch.object(reader_module, "REBALANCE_SECONDS", 0)
+        mocker.patch("app.services.streaming.reader.refresh_all_file_ids", new_callable=AsyncMock)
+        mocker.patch("app.services.streaming.reader.ensure_file_ids_for_client", new_callable=AsyncMock)
+        return {
+            "pressure": mocker.patch("app.services.streaming.reader.worker_manager.pool_pressure", return_value=0.0),
+            "acquire": mocker.patch(
+                "app.services.streaming.reader.worker_manager.try_acquire_one",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            "release": mocker.patch("app.services.streaming.reader.worker_manager.release_clients"),
+            "get": mocker.patch(
+                "app.services.streaming.reader.worker_manager.get_available_clients",
+                new_callable=AsyncMock,
+            ),
+        }
+
+    def _long_reader(self, clients):
+        reader = make_reader([make_part(0, 0, 20 * self.MB)])
+        reader._clients = list(clients)
+        reader._persistent = True
+        return reader
+
+    def _record(self, mocker, calls):
+        async def fake_fetch_chunk(client, part, index):
+            calls.append((index, client))
+            await asyncio.sleep(0)
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
+
+    async def test_scale_down_during_a_long_read(self, mocker, pool):
+        a, b = MagicMock(name="a"), MagicMock(name="b")
+        reader = self._long_reader([a, b])
+        calls = []
+        self._record(mocker, calls)
+        pool["pressure"].return_value = 0.9  # pool nearly full: give the extra client back
+
+        async for _ in reader.read_range(0, 20 * self.MB):
+            pass
+
+        pool["release"].assert_called_once_with([b])
+        assert reader._clients == [a]
+        assert {client for index, client in calls if index >= 12} == {a}
+
+    async def test_scale_up_during_a_long_read(self, mocker, pool):
+        a, b = MagicMock(name="a"), MagicMock(name="b")
+        reader = self._long_reader([a])
+        calls = []
+        self._record(mocker, calls)
+        pool["acquire"].side_effect = [None, b]  # the pool frees a client mid-film
+
+        async for _ in reader.read_range(0, 20 * self.MB):
+            pass
+
+        assert reader._clients == [a, b]
+        assert b in {client for _, client in calls}
+
+    async def test_new_viewer_gets_a_client_back_from_a_stream_with_two(self, pool):
+        a, b, c = MagicMock(name="a"), MagicMock(name="b"), MagicMock(name="c")
+        busy = self._long_reader([a, b])
+        import app.services.streaming.reader as reader_module
+
+        reader_module._readers.add(busy)
+        newcomer = self._long_reader([])
+        pool["get"].side_effect = [[], [b]]  # pool exhausted, then b once reclaimed
+
+        assert await newcomer._ensure_workers()
+
+        pool["release"].assert_called_once_with([b])
+        assert busy._clients == [a]
+        assert newcomer._clients == [b]
+
+    async def test_no_reclaim_from_streams_with_a_single_client(self, pool):
+        import app.services.streaming.reader as reader_module
+
+        lone = self._long_reader([MagicMock()])
+        reader_module._readers.add(lone)
+        pool["get"].return_value = []
+
+        assert not await self._long_reader([])._ensure_workers()
+        pool["release"].assert_not_called()
+        assert len(lone._clients) == 1

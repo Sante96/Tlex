@@ -1,6 +1,8 @@
 """Virtual Stream Reader — unified file-like interface over Telegram parts."""
 
 import asyncio
+import time
+import weakref
 from collections import deque
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
@@ -21,6 +23,28 @@ from app.services.streaming.telegram import (
 
 IN_FLIGHT_PER_CLIENT = 4  # more requests per connection didn't add speed
 MAX_IN_FLIGHT = 8  # per read: 8 MB buffered at most
+SCALE_UP_BELOW = 0.5  # pool pressure (share of clients in use)
+SCALE_DOWN_ABOVE = 0.75
+REBALANCE_SECONDS = 5.0  # how often a long read rechecks its clients
+
+# Readers holding clients, for _reclaim_spare_client
+_readers: weakref.WeakSet["VirtualStreamReader"] = weakref.WeakSet()
+
+
+def _reclaim_spare_client() -> bool:
+    """With the pool exhausted, take back the extra client of the stream holding the most,
+    so a new viewer gets one instead of an error. The donor's reads stop using it at their
+    next chunk."""
+    donor = max(
+        (r for r in _readers if len(r._clients) > 1 and not r._batch_mode_active),
+        key=lambda r: len(r._clients),
+        default=None,
+    )
+    if donor is None:
+        return False
+    worker_manager.release_clients([donor._clients.pop()])
+    logger.info(f"[STREAM] Reclaimed a client from a stream for a new viewer ({len(donor._clients)} left)")
+    return True
 
 
 class VirtualStreamReader:
@@ -105,11 +129,14 @@ class VirtualStreamReader:
         if self._clients:
             return True
         clients = await worker_manager.get_available_clients(limit=1)
+        if not clients and _reclaim_spare_client():
+            clients = await worker_manager.get_available_clients(limit=1)
         if not clients:
             logger.error("No workers available for streaming")
             return False
         self._clients = clients
         self._workers = []
+        _readers.add(self)
         logger.info(f"[STREAM] Acquired {len(self._clients)} client(s) from pool")
         return True
 
@@ -117,7 +144,9 @@ class VirtualStreamReader:
         """Try to dynamically acquire one more client from the pool."""
         if len(self._clients) >= MAX_CLIENTS_PER_STREAM:
             return
-        if worker_manager.pool_pressure() > 0.75:
+        # Below scale-down's 0.75: a stream that just scaled up mustn't trip the
+        # scale-down at the next rebalance and flap
+        if worker_manager.pool_pressure() > SCALE_UP_BELOW:
             return
 
         client = await worker_manager.try_acquire_one(spread_from=self._clients)
@@ -144,7 +173,7 @@ class VirtualStreamReader:
         if len(self._clients) <= 1:
             return
         pressure = worker_manager.pool_pressure()
-        if pressure <= 0.75:
+        if pressure <= SCALE_DOWN_ABOVE:
             return
         released = self._clients.pop()
         worker_manager.release_clients([released])
@@ -234,34 +263,41 @@ class VirtualStreamReader:
             if not self._clients:
                 raise RuntimeError("No clients available")
 
-            # This request's clients: a scale-down elsewhere may shrink self._clients
-            clients = list(self._clients)
-            for client in clients:
+            for client in self._clients:
                 await ensure_file_ids_for_client(self._parts, client)
 
             # Keep up to IN_FLIGHT_PER_CLIENT chunks downloading per client and hand them
             # out in order: one client, one request at a time tops out around 9 MB/s;
-            # 4 in flight roughly double it (measured 2026-10-25).
+            # 4 in flight roughly double it (measured 2026-10-25). The client list is read
+            # live, so a client given back (scale-down, reclaim, release) gets no new chunks.
             plan = self._chunk_plan(start, end)
-            window = min(IN_FLIGHT_PER_CLIENT * len(clients), MAX_IN_FLIGHT)
 
             def launch() -> None:
-                step = next(plan, None)
-                if step is not None:
+                while self._clients and len(pending) < min(
+                    IN_FLIGHT_PER_CLIENT * len(self._clients), MAX_IN_FLIGHT
+                ):
+                    step = next(plan, None)
+                    if step is None:
+                        return
                     part, index, skip, take = step
-                    client = clients[self._rr_counter % len(clients)]
+                    client = self._clients[self._rr_counter % len(self._clients)]
                     self._rr_counter += 1
                     pending.append((asyncio.create_task(fetch_chunk(client, part, index)), skip, take))
 
-            for _ in range(window):
-                launch()
-
+            launch()
+            last_rebalance = time.monotonic()
             while pending:
                 task, skip, take = pending.popleft()
                 data = await task
                 if self._force_released:
                     logger.info("[STREAM] Aborting read_range: reader was force-released")
                     return
+                # ffmpeg and browsers keep one request open for a whole film: recheck the
+                # clients here too, not only when a request starts
+                if not self._batch_mode_active and time.monotonic() - last_rebalance >= REBALANCE_SECONDS:
+                    last_rebalance = time.monotonic()
+                    self._try_scale_down()
+                    await self._try_scale_up()
                 launch()
                 yield data[skip : skip + take]
 
