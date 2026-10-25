@@ -19,6 +19,10 @@ INTERNAL_STREAM_TOKEN = hmac.new(
 ).hexdigest()
 
 
+# bcrypt takes ~0.25 s on purpose: callers run these in a thread (asyncio.to_thread), or
+# every login would stall the streams on the event loop for that long
+
+
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
     salt = bcrypt.gensalt()

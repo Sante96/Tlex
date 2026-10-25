@@ -1,5 +1,6 @@
 """Device authorization endpoints for TV / set-top-box login flow."""
 
+import asyncio
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
@@ -91,7 +92,7 @@ async def device_confirm(
     user_result = await session.execute(user_stmt)
     user = user_result.scalar_one_or_none()
 
-    if not user or not verify_password(body.password, user.password_hash):
+    if not user or not await asyncio.to_thread(verify_password, body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

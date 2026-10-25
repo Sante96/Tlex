@@ -1,5 +1,6 @@
 """Authentication API endpoints."""
 
+import asyncio
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
@@ -87,7 +88,7 @@ async def register(request: Request, user_data: UserCreate, session: DBSession) 
 
     user = User(
         email=user_data.email,
-        password_hash=hash_password(user_data.password),
+        password_hash=await asyncio.to_thread(hash_password, user_data.password),
         is_admin=is_first_user,  # otherwise a fresh install has no one who can add workers
     )
     session.add(user)
@@ -110,7 +111,9 @@ async def login(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not await asyncio.to_thread(
+        verify_password, form_data.password, user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -198,7 +201,9 @@ async def change_password(
     current_user: User = Depends(get_current_user),
 ) -> TokenResponse:
     """Change current user's password, end its other sessions, return fresh tokens."""
-    if not verify_password(body.current_password, current_user.password_hash):
+    if not await asyncio.to_thread(
+        verify_password, body.current_password, current_user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -210,7 +215,7 @@ async def change_password(
             detail="New password must be at least 6 characters",
         )
 
-    current_user.password_hash = hash_password(body.new_password)
+    current_user.password_hash = await asyncio.to_thread(hash_password, body.new_password)
     # A stolen refresh token must stop working once the password changes
     await session.execute(delete(RefreshToken).where(RefreshToken.user_id == current_user.id))
 
