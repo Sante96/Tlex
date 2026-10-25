@@ -54,6 +54,10 @@ interface PlayerControlsProps {
   onVolumeChange: (value: number) => void;
   onToggleMute: () => void;
   onToggleFullscreen: () => void;
+  /** False where the page can't go fullscreen (iPhone Safari): no button */
+  canFullscreen?: boolean;
+  /** A click or tap on the empty middle of the picture */
+  onSurfacePointerUp?: (e: React.PointerEvent) => void;
   onTogglePiP?: () => void;
   onBack: () => void;
   isTV?: boolean;
@@ -91,6 +95,8 @@ export function PlayerControls({
   onVolumeChange,
   onToggleMute,
   onToggleFullscreen,
+  canFullscreen = true,
+  onSurfacePointerUp,
   onTogglePiP,
   onBack,
   onAudioChange,
@@ -133,14 +139,17 @@ export function PlayerControls({
         <div className="w-10" />
       </div>
 
-      {/* Center — play/pause + skip (Plex style with blur) */}
-      <div className="flex-1 flex items-center justify-center">
+      {/* Center — play/pause + skip (Plex style with blur). Its empty space is the
+          picture: it took every click while the controls showed */}
+      <div
+        className="flex-1 flex items-center justify-center"
+        onPointerUp={(e) => e.target === e.currentTarget && onSurfacePointerUp?.(e)}
+      >
         <div className="flex items-center gap-8">
           {/* Skip backward */}
           <button
             onClick={() => onSkip(-10)}
             className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-            disabled={isLoading}
           >
             <div className="relative drop-shadow-lg">
               <RotateCcw
@@ -172,8 +181,7 @@ export function PlayerControls({
             )}
             <button
               onClick={onTogglePlay}
-              disabled={isLoading}
-              className={cn(
+                className={cn(
                 "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
                 isLoading
                   ? "bg-black/60"
@@ -195,7 +203,6 @@ export function PlayerControls({
           <button
             onClick={() => onSkip(10)}
             className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-            disabled={isLoading}
           >
             <div className="relative drop-shadow-lg">
               <RotateCw
@@ -281,7 +288,7 @@ export function PlayerControls({
               </PlayerTooltip>
             )}
 
-            {!isTV && (
+            {!isTV && canFullscreen && (
               <PlayerTooltip
                 label={
                   isFullscreen

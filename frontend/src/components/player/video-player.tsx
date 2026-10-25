@@ -44,6 +44,12 @@ function defaultSubtitle(tracks: MediaStream[], prefs: Profile["preferences"]): 
   return track.stream_index;
 }
 
+function storedNumber(key: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  const value = parseFloat(localStorage.getItem(key) ?? "");
+  return Number.isFinite(value) ? value : fallback;
+}
+
 interface VideoPlayerProps {
   mediaId: number;
   title: string;
@@ -84,8 +90,9 @@ export function VideoPlayer({
   const [isSeeking, setIsSeeking] = useState(false);
   const [currentTime, setCurrentTime] = useState(initialPosition);
   const [duration, setDuration] = useState(initialDuration || 0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  // Kept across videos and reloads (they reset to full volume every time)
+  const [volume, setVolume] = useState(() => storedNumber("player_volume", 1));
+  const [isMuted, setIsMuted] = useState(() => storedNumber("player_muted", 0) === 1);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [seekTime, setSeekTime] = useState(initialPosition);
@@ -167,18 +174,33 @@ export function VideoPlayer({
       const newMuted = !isMuted;
       videoRef.current.muted = newMuted;
       setIsMuted(newMuted);
+      localStorage.setItem("player_muted", newMuted ? "1" : "0");
     }
   }, [isMuted]);
 
   const handleVolumeChange = useCallback((value: number) => {
     if (videoRef.current) {
       videoRef.current.volume = value;
+      // Dragging the slider up after muting must unmute the video too, not just the icon
+      videoRef.current.muted = value === 0;
       setVolume(value);
       setIsMuted(value === 0);
+      localStorage.setItem("player_volume", String(value));
+      localStorage.setItem("player_muted", value === 0 ? "1" : "0");
     }
   }, []);
 
+  // The stored volume, once the element exists (mute is applied when playback syncs)
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = volume;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pendingSkip = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentTimeRef = useRef(currentTime);
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
 
   // A new stream means a new request, a new ffmpeg and seconds of rebuffering: when the
   // target is already buffered, just move the playhead
@@ -218,19 +240,20 @@ export function VideoPlayer({
 
   const skip = useCallback(
     (seconds: number) => {
-      const target = Math.max(0, Math.min(currentTime + seconds, duration));
+      const target = Math.max(0, Math.min(currentTimeRef.current + seconds, duration));
       if (!pendingSkip.current && seekLocally(target)) return;
       // Out of the buffer: wait for the skips to stop. isSeeking keeps timeupdate from
       // overwriting the target, so the next skip adds to it
       setIsSeeking(true);
       setCurrentTime(target);
+      currentTimeRef.current = target;
       if (pendingSkip.current) clearTimeout(pendingSkip.current);
       pendingSkip.current = setTimeout(() => {
         pendingSkip.current = null;
         restartStreamAt(target);
       }, SKIP_SETTLE_MS);
     },
-    [currentTime, duration, seekLocally, restartStreamAt],
+    [duration, seekLocally, restartStreamAt],
   );
 
   useEffect(
@@ -241,11 +264,12 @@ export function VideoPlayer({
   );
 
   const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
+    // iPhone Safari has no element fullscreen: requestFullscreen is undefined there
+    if (!containerRef.current || !document.fullscreenEnabled) return;
     if (document.fullscreenElement) {
       document.exitFullscreen();
     } else {
-      containerRef.current.requestFullscreen();
+      containerRef.current.requestFullscreen().catch(() => {});
     }
   }, []);
 
@@ -253,24 +277,44 @@ export function VideoPlayer({
     router.back(); // the unmount effect below releases the stream
   }, [router]);
 
+  const settingsOpenRef = useRef(settingsOpen);
+  useEffect(() => {
+    settingsOpenRef.current = settingsOpen;
+  }, [settingsOpen]);
+
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
     if (hideControlsTimeout.current) {
       clearTimeout(hideControlsTimeout.current);
     }
     hideControlsTimeout.current = setTimeout(() => {
-      if (isPlaying && !settingsOpen) {
+      // Read when the timer fires: the state captured 3 s earlier said "playing" after a
+      // pause with Space, and the controls hid over a paused video
+      if (!videoRef.current?.paused && !settingsOpenRef.current) {
         setShowControls(false);
       }
     }, 3000);
-  }, [isPlaying, settingsOpen]);
+  }, []);
+
+  // A click on the picture: the mouse plays or pauses; a tap shows or hides the controls
+  // (it paused the video, and nothing could hide the controls)
+  const handleSurface = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") togglePlay();
+      else if (showControls) setShowControls(false);
+      else handleMouseMove();
+    },
+    [togglePlay, showControls, handleMouseMove],
+  );
 
   const handleAudioChange = useCallback(
     (index: number) => {
-      setSeekTime(currentTime);
       setSelectedAudio(index);
+      // A new stream with this track, as a seek: spinner, no stale timeupdate from the
+      // old stream (the clock jumped back and could be saved as progress)
+      restartStreamAt(currentTimeRef.current);
     },
-    [currentTime, setSelectedAudio],
+    [setSelectedAudio, restartStreamAt],
   );
 
   // Fullscreen listener
@@ -361,7 +405,8 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black"
-      onMouseMove={handleMouseMove}
+      // Pointer, not mouse, events: a tap's emulated mousemove re-showed the controls
+      onPointerMove={(e) => e.pointerType === "mouse" && handleMouseMove()}
       onMouseLeave={() => isPlaying && !settingsOpen && setShowControls(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -400,7 +445,7 @@ export function VideoPlayer({
           <video
             ref={videoRef}
             className="absolute inset-0 w-full h-full"
-            onClick={togglePlay}
+            onPointerUp={handleSurface}
             playsInline
             autoPlay
           />
@@ -428,7 +473,7 @@ export function VideoPlayer({
       />
 
       <PlayerControls
-        visible={showControls || isLoading || isSeeking || settingsOpen}
+        visible={showControls || !isPlaying || isLoading || isSeeking || settingsOpen}
         isPlaying={isPlaying}
         isLoading={isLoading || isSeeking}
         currentTime={currentTime}
@@ -448,6 +493,8 @@ export function VideoPlayer({
         onVolumeChange={handleVolumeChange}
         onToggleMute={toggleMute}
         onToggleFullscreen={toggleFullscreen}
+        canFullscreen={typeof document !== "undefined" && document.fullscreenEnabled}
+        onSurfacePointerUp={handleSurface}
         onBack={handleBack}
         onAudioChange={handleAudioChange}
         onSubtitleChange={setSelectedSubtitle}

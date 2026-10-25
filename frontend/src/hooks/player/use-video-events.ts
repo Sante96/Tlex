@@ -60,6 +60,9 @@ export function useVideoEvents({
 
     let lastFrameTime = -1;
     let frameCallbackId: number | null = null;
+    // A new stream starts playing by itself; a seek or a rebuffer must keep a pause (every
+    // canplay used to call play(), so a paused video restarted after a seek)
+    let autoplay = true;
 
     const resetDetection = () => {
       videoMovingRef.current = false;
@@ -106,6 +109,7 @@ export function useVideoEvents({
     const onLoadStart = () => {
       resetDetection();
       trackFrame();
+      autoplay = true;
     };
 
     // 'playing' event: clears loading ONLY for rebuffers (after initial sync)
@@ -142,6 +146,8 @@ export function useVideoEvents({
 
     const onCanPlay = () => {
       setIsSeeking(false);
+      if (!autoplay) return;
+      autoplay = false;
       video.play().catch(() => {
         // Video play failed (likely user interaction required)
       });
