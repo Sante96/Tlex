@@ -134,6 +134,8 @@ export function Sidebar() {
           <>
             <DSIconButton
               onClick={toggleCollapsed}
+              aria-label={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
+              aria-expanded={!collapsed}
               icon={<Menu className="h-[22px] w-[22px]" />}
               className="w-10 h-10 flex-shrink-0"
             />

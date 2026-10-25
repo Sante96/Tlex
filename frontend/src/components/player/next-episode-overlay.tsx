@@ -115,6 +115,7 @@ export function NextEpisodeOverlay({
             <div className="absolute left-0 top-0 bottom-0 w-px bg-white/5" />
             <button
               onClick={handleCancel}
+              aria-label={t("common.cancel")}
               className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
               <X className="h-4 w-4 text-white/60" />
@@ -124,6 +125,7 @@ export function NextEpisodeOverlay({
             </p>
             <button
               onClick={onPlay}
+              aria-label={t("player.playNow")}
               className="w-full rounded-xl overflow-hidden aspect-video relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
             >
               {thumbUrl ? (
@@ -157,6 +159,7 @@ export function NextEpisodeOverlay({
             </div>
             <button
               onClick={onPlay}
+              aria-label={t("player.playNow")}
               className="relative flex items-center justify-center w-[72px] h-[72px] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded-full"
             >
               <svg
@@ -193,6 +196,7 @@ export function NextEpisodeOverlay({
               variant="primary"
               icon={<Play className="h-4 w-4 fill-black" />}
               onClick={onPlay}
+              aria-label={t("player.playNow")}
               className="w-full"
             >
               {t("player.playNow")}
@@ -214,10 +218,11 @@ export function NextEpisodeOverlay({
             {/* Label row */}
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500">
-                Prossimo episodio
+                {t("player.nextEpisode")}
               </p>
               <button
                 onClick={handleCancel}
+                aria-label={t("common.cancel")}
                 className="p-1.5 rounded-full bg-white/5"
               >
                 <X className="h-3.5 w-3.5 text-white/50" />
@@ -229,6 +234,7 @@ export function NextEpisodeOverlay({
               {/* Thumbnail */}
               <button
                 onClick={onPlay}
+                aria-label={t("player.playNow")}
                 className="shrink-0 w-32 rounded-lg overflow-hidden aspect-video relative"
               >
                 {thumbUrl ? (
@@ -263,6 +269,7 @@ export function NextEpisodeOverlay({
                 {autoplay && (
                   <button
                     onClick={onPlay}
+                    aria-label={t("player.playNow")}
                     className="relative flex items-center justify-center w-11 h-11"
                   >
                     <svg
@@ -298,6 +305,7 @@ export function NextEpisodeOverlay({
                 )}
                 <button
                   onClick={onPlay}
+                  aria-label={t("player.playNow")}
                   className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-xs font-semibold flex items-center gap-1"
                 >
                   <Play className="h-3 w-3 fill-black" />

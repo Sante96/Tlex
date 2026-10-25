@@ -43,6 +43,7 @@ export function BackupRow({
   onPromote,
 }: BackupRowProps) {
   const t = useTranslations("backup");
+  const tc = useTranslations("common");
 
   return (
     <DSCard
@@ -125,6 +126,7 @@ export function BackupRow({
             onClick={() => onDelete(b.id)}
             disabled={deletingId === b.id}
             className="hover:text-red-400"
+            title={tc("delete")}
             icon={
               deletingId === b.id ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

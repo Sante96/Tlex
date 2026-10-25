@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,7 @@ export function DSDatePicker({
   disabled,
 }: DSDatePickerProps) {
   const locale = useLocale();
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() =>
     value ? new Date(value + "T00:00:00") : new Date(),
@@ -116,6 +117,7 @@ export function DSDatePicker({
             <button
               type="button"
               onClick={prevMonth}
+              aria-label={t("common.previousMonth")}
               className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-[#27272a] transition-colors text-[#a1a1aa] hover:text-white"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -126,6 +128,7 @@ export function DSDatePicker({
             <button
               type="button"
               onClick={nextMonth}
+              aria-label={t("common.nextMonth")}
               className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-[#27272a] transition-colors text-[#a1a1aa] hover:text-white"
             >
               <ChevronRight className="h-4 w-4" />

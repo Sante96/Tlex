@@ -27,7 +27,12 @@
     "retry": "Retry",
     "loadError": "Couldn't load the content",
     "loadMore": "Load more",
-    "actionFailed": "Something went wrong"
+    "actionFailed": "Something went wrong",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "search": "Search"
   },
   "nav": {
     "home": "Home",
@@ -35,7 +40,9 @@
     "movies": "Movies",
     "series": "TV Shows",
     "settings": "Settings",
-    "libraries": "Libraries"
+    "libraries": "Libraries",
+    "expandMenu": "Expand the menu",
+    "collapseMenu": "Collapse the menu"
   },
   "search": {
     "placeholder": "Search movies, shows...",
@@ -345,7 +352,8 @@
     "changeAvatar": "Change Avatar",
     "switchProfile": "Switch Profile",
     "logout": "Sign out",
-    "seasonLabel": "Season"
+    "seasonLabel": "Season",
+    "profileMenu": "Profile menu"
   },
   "person": {
     "notFound": "Person not found",

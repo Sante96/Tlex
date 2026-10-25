@@ -148,18 +148,12 @@ export function EditProfileModal({
 
           {/* Kids toggle */}
           <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => setIsKids(!isKids)}
-              className={`w-5 h-5 rounded flex items-center justify-center transition-colors border ${
-                isKids
-                  ? "bg-[#e5a00d] border-[#e5a00d]"
-                  : "bg-white/5 border-white/20"
-              }`}
-            >
-              {isKids && (
-                <span className="text-[10px] font-bold text-black">✓</span>
-              )}
-            </div>
+            <input
+              type="checkbox"
+              checked={isKids}
+              onChange={(e) => setIsKids(e.target.checked)}
+              className="w-5 h-5 shrink-0 accent-[#e5a00d] cursor-pointer"
+            />
             <div>
               <span className="text-sm text-white">
                 {t("profiles.edit.kidsProfile")}

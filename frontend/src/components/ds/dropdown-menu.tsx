@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useBackToClose } from "@/hooks/use-back-to-close";
 
 interface DropdownItem {
   icon?: React.ReactNode;
@@ -14,16 +15,28 @@ interface DropdownItem {
 interface DSDropdownMenuProps {
   items: DropdownItem[];
   trigger: React.ReactNode;
+  /** What the trigger opens, for screen readers (the trigger is often just an avatar) */
+  label: string;
   align?: "left" | "right";
 }
 
 export function DSDropdownMenu({
   items,
   trigger,
+  label,
   align = "right",
 }: DSDropdownMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useBackToClose(open, () => setOpen(false));
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -37,9 +50,17 @@ export function DSDropdownMenu({
 
   return (
     <div ref={ref} className="relative">
-      <div onClick={() => setOpen(!open)} className="cursor-pointer">
+      {/* A button: the div wasn't reachable with the keyboard or the TV remote */}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+      >
         {trigger}
-      </div>
+      </button>
       {open && (
         <div
           className={cn(

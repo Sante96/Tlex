@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -20,6 +21,7 @@ function PeopleRow({
   title: string;
   members: CastMember[];
 }) {
+  const t = useTranslations();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -59,6 +61,7 @@ function PeopleRow({
             <DSIconButton
               onClick={() => scroll("left")}
               disabled={!canScrollLeft}
+              aria-label={t("common.scrollLeft")}
               className="rounded-full bg-[#27272a] disabled:opacity-30"
               icon={
                 <ChevronLeft
@@ -69,6 +72,7 @@ function PeopleRow({
             <DSIconButton
               onClick={() => scroll("right")}
               disabled={!canScrollRight}
+              aria-label={t("common.scrollRight")}
               className="rounded-full bg-[#27272a] disabled:opacity-30"
               icon={
                 <ChevronRight

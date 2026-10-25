@@ -187,6 +187,7 @@ export function TopBar() {
             <SearchBar className="flex-1 min-w-0" />
             <DSIconButton
               onClick={() => setShowMobileSearch(false)}
+              aria-label={t("common.close")}
               className="shrink-0 w-9 h-9 hover:text-[#fafafa]"
               icon={<X className="h-5 w-5" />}
             />
@@ -227,11 +228,13 @@ export function TopBar() {
               {!breadcrumbItems && (
                 <DSIconButton
                   onClick={() => setShowMobileSearch(true)}
+                  aria-label={t("common.search")}
                   className="md:hidden w-9 h-9 hover:text-[#fafafa]"
                   icon={<Search className="h-5 w-5" />}
                 />
               )}
               <DSDropdownMenu
+                label={t("topbar.profileMenu")}
                 trigger={
                   <DSAvatar
                     letter={profileLetter}

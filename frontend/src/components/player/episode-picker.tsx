@@ -272,6 +272,7 @@ export function EpisodePicker({
                 <DSIconButton
                   onClick={() => scroll("left")}
                   disabled={!canScrollLeft}
+                  aria-label={t("common.scrollLeft")}
                   className={cn(
                     "rounded-full",
                     canScrollLeft
@@ -283,6 +284,7 @@ export function EpisodePicker({
                 <DSIconButton
                   onClick={() => scroll("right")}
                   disabled={!canScrollRight}
+                  aria-label={t("common.scrollRight")}
                   className={cn(
                     "rounded-full",
                     canScrollRight

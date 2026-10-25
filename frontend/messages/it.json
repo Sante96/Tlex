@@ -27,7 +27,12 @@
     "retry": "Riprova",
     "loadError": "Impossibile caricare i contenuti",
     "loadMore": "Carica altri",
-    "actionFailed": "Operazione non riuscita"
+    "actionFailed": "Operazione non riuscita",
+    "scrollLeft": "Scorri a sinistra",
+    "scrollRight": "Scorri a destra",
+    "previousMonth": "Mese precedente",
+    "nextMonth": "Mese successivo",
+    "search": "Cerca"
   },
   "nav": {
     "home": "Home",
@@ -35,7 +40,9 @@
     "movies": "Film",
     "series": "Serie TV",
     "settings": "Impostazioni",
-    "libraries": "Librerie"
+    "libraries": "Librerie",
+    "expandMenu": "Espandi il menu",
+    "collapseMenu": "Comprimi il menu"
   },
   "search": {
     "placeholder": "Cerca film, serie...",
@@ -345,7 +352,8 @@
     "changeAvatar": "Cambia Avatar",
     "switchProfile": "Cambia Profilo",
     "logout": "Esci",
-    "seasonLabel": "Stagione"
+    "seasonLabel": "Stagione",
+    "profileMenu": "Menu profilo"
   },
   "person": {
     "notFound": "Persona non trovata",
