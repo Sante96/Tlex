@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { AuthProvider } from "@/contexts/auth-context";
@@ -6,6 +7,10 @@ import { ProfileProvider } from "@/contexts/profile-context";
 import { ToastProvider } from "@/components/ui/toast";
 import { TVViewportEffect } from "@/components/tv-viewport-effect";
 import "./globals.css";
+
+// The same typeface on every device: the system font made the app look different on
+// Windows, Android, iOS and the TV. next/font serves it from this server, not Google.
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
 
 export const metadata: Metadata = {
   title: "TLEX",
@@ -30,7 +35,7 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} className="dark">
+    <html lang={locale} className={`dark ${geist.variable}`}>
       <body
         className="font-sans bg-zinc-950 text-white min-h-screen"
       >

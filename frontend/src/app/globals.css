@@ -9,6 +9,8 @@
 @theme inline {
   /* The brand colour: every plex-orange utility and variant (ring, /10, focus:) */
   --color-plex-orange: #e5a00d;
+  /* Geist (next/font, app/layout.tsx), then the system font while it loads */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
