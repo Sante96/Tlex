@@ -25,7 +25,8 @@
     "unknown": "Sconosciuto",
     "madeBy": "made by Sante",
     "retry": "Riprova",
-    "loadError": "Impossibile caricare i contenuti"
+    "loadError": "Impossibile caricare i contenuti",
+    "loadMore": "Carica altri"
   },
   "nav": {
     "home": "Home",
@@ -125,8 +126,8 @@
     "series": "Serie TV",
     "season": "Stagione",
     "seasons": "Stagioni",
-    "recentMovies": "Film aggiunti di recente",
-    "recentSeries": "Serie aggiornate di recente",
+    "recentMovies": "Ultimi film",
+    "recentSeries": "Ultime serie",
     "emptyLibraryUser": "La libreria è vuota. Chiedi a un amministratore di scansionare i canali Telegram."
   },
   "settings": {

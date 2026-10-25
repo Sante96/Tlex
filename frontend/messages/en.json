@@ -25,7 +25,8 @@
     "unknown": "Unknown",
     "madeBy": "made by Sante",
     "retry": "Retry",
-    "loadError": "Couldn't load the content"
+    "loadError": "Couldn't load the content",
+    "loadMore": "Load more"
   },
   "nav": {
     "home": "Home",
@@ -125,8 +126,8 @@
     "series": "TV Shows",
     "season": "Season",
     "seasons": "Seasons",
-    "recentMovies": "Recently added movies",
-    "recentSeries": "Recently updated series",
+    "recentMovies": "Latest movies",
+    "recentSeries": "Latest series",
     "emptyLibraryUser": "The library is empty. Ask an admin to scan the Telegram channels."
   },
   "settings": {

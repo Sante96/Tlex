@@ -5,6 +5,7 @@ import { Heart } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PosterCard } from "@/components/ds";
 import { getWatchlist, type WatchlistItem } from "@/lib/api";
+import { POSTER_GRID, TV_POSTER_GRID } from "@/components/layout/library-page";
 import { getTmdbImageUrl } from "@/lib/format";
 import { PosterCardSkeleton } from "@/components/ui/skeleton";
 import { useIsTV } from "@/hooks/use-platform";
@@ -15,10 +16,7 @@ export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const gridClass = isTV
-    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5"
-    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
-  const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
+  const gridClass = isTV ? TV_POSTER_GRID : POSTER_GRID;
 
   useEffect(() => {
     loadWatchlist();
@@ -54,7 +52,7 @@ export default function WatchlistPage() {
       {loading ? (
         <div className={gridClass}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <PosterCardSkeleton key={i} className={cardClass || "w-[130px] md:w-auto"} />
+            <PosterCardSkeleton key={i} />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -84,7 +82,6 @@ export default function WatchlistPage() {
                 subtitle={
                   item.item_type === "series" ? t("home.series") : undefined
                 }
-                className={cardClass}
               />
             );
           })}
