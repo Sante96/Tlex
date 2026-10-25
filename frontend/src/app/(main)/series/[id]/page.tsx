@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, startTransition } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
@@ -102,7 +102,7 @@ export default function SeriesDetailPage() {
     getSeriesDetails(seriesId)
       .then((data) => alive && setSeries(data))
       .catch((e) => alive && setFailed(!(isAxiosError(e) && e.response?.status === 404)))
-      .finally(() => alive && startTransition(() => setLoading(false)));
+      .finally(() => alive && setLoading(false));
     checkSeriesWatchlistStatus(seriesId).then((s) => alive && setInWatchlist(s), () => {});
     getSeriesCast(seriesId).then((c) => alive && setCast(c), () => {});
     getSeriesTrailer(seriesId).then((k) => alive && setTrailerKey(k), () => {});

@@ -3,7 +3,9 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+// 127.0.0.1, not localhost: the rewrite proxy tried IPv6 first, and the backend listens on
+// IPv4 only, so every API call of the dev server waited ~200 ms for the fallback
+const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",

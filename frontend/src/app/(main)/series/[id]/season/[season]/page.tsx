@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, startTransition } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Pencil } from "lucide-react";
@@ -69,8 +69,7 @@ export default function SeasonDetailPage() {
         } catch {}
       } catch {
       } finally {
-        // In a transition: the page fades in (the (main) layout's <ViewTransition>)
-        startTransition(() => setLoading(false));
+        setLoading(false);
       }
     };
 
