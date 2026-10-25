@@ -2,7 +2,7 @@
 
 A scan reads a new file's chapters with its tracks (ffprobe on the first MBs). Titles
 already in the library are read once, in the background after startup: one at a time,
-4 MB each, so they never hold the worker pool for long.
+4 MB each (50 when the header is longer), so they never hold the worker pool for long.
 """
 
 import asyncio
@@ -18,8 +18,9 @@ from app.models.media import MediaItem
 from app.services.ffprobe import ProbeResult, ffprobe_service
 from app.services.streaming import get_virtual_reader
 
-# An MKV keeps its chapters in the header: the scan's 4 MB covers them
-HEAD_BYTES = 4 * 1024 * 1024
+# An MKV keeps its chapters in the header: 4 MB covers it, unless big attachments (fonts)
+# come first; then up to 50 MB, as the scan does
+HEAD_BYTES = (4 * 1024 * 1024, 50 * 1024 * 1024)
 # Between two titles: viewers come first
 PAUSE_SECONDS = 2
 
@@ -32,10 +33,16 @@ async def probe_head(session: AsyncSession, media_id: int) -> ProbeResult | None
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mkv") as tmp:
         path = tmp.name
     try:
-        with open(path, "wb") as f:
-            async for chunk in reader.read_range(0, HEAD_BYTES):
-                f.write(chunk)
-        return await ffprobe_service.probe_file(path)
+        result, downloaded = None, 0
+        for upto in HEAD_BYTES:
+            with open(path, "ab") as f:
+                async for chunk in reader.read_range(downloaded, upto):
+                    f.write(chunk)
+            downloaded = upto
+            result = await ffprobe_service.probe_file(path)
+            if result and result.streams and result.duration_seconds:
+                break
+        return result
     finally:
         os.unlink(path)
 

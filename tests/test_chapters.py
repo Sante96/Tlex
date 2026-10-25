@@ -93,6 +93,27 @@ async def test_backfill_reads_only_the_titles_never_probed(test_session: AsyncSe
     assert rows == {"Old": found, "Done": [], "Broken": None}
 
 
+async def test_probe_head_reads_further_when_the_header_is_longer(mocker):
+    """Fonts attached before the tracks push the header past 4 MB: read on to 50 MB."""
+    from app.services import chapters as chapters_service
+
+    reads = []
+
+    class Reader:
+        async def read_range(self, start, end):
+            reads.append((start, end))
+            yield b"x"
+
+    mocker.patch.object(chapters_service, "get_virtual_reader", return_value=Reader())
+    full = ProbeResult(duration_seconds=1447, streams=[object()], chapters=[])
+    mocker.patch.object(
+        chapters_service.ffprobe_service, "probe_file", side_effect=[None, full]
+    )
+
+    assert await chapters_service.probe_head(None, 78) is full
+    assert reads == [(0, 4 * 1024 * 1024), (4 * 1024 * 1024, 50 * 1024 * 1024)]
+
+
 class _same:
     """The test's session as an async context manager (the service opens its own)."""
 
