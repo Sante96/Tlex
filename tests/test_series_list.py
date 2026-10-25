@@ -37,7 +37,7 @@ async def test_watchlist_lists_movies_and_series(
 ):
     from app.models.user import User
 
-    user = (await test_session.execute(User.__table__.select())).first()
+    user = (await test_session.execute(User.__table__.select())).one()
     movie, show = MediaItem(title="Film", media_type=MediaType.MOVIE), Series(title="Show")
     test_session.add_all([movie, show])
     await test_session.flush()
