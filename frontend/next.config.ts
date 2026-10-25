@@ -8,6 +8,8 @@ const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
+  // `npm run dev:mobile`: let LAN devices load the dev server (wildcards, not CIDR)
+  allowedDevOrigins: ["192.168.*.*"],
   images: {
     remotePatterns: [
       {

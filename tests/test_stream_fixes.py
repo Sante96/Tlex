@@ -342,7 +342,7 @@ class TestStreamGeneratorDisconnect:
             return_value=True,  # always disconnected
         )
         await self._call()
-        mock_release.assert_called_once_with(MEDIA_ID)
+        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
 
     async def test_disconnect_release_called_with_correct_media_id(self, mocker, stream_mocks):
         reader, mock_release = stream_mocks
@@ -382,7 +382,7 @@ class TestStreamGeneratorDisconnect:
         with contextlib.suppress(BaseException):
             await self._call()
 
-        mock_release.assert_called_once_with(MEDIA_ID)
+        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
 
     async def test_normal_complete_then_disconnect_on_second_request(self, mocker, stream_mocks):
         """First request completes normally (no release); second request
@@ -412,7 +412,7 @@ class TestStreamGeneratorDisconnect:
 
         reader.read_range = one_chunk
         await self._call({"Range": "bytes=0-511"})
-        mock_release.assert_called_once_with(MEDIA_ID)
+        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
 
 
 # ---------------------------------------------------------------------------
@@ -599,3 +599,31 @@ class TestCrashLogManagerIntegration:
 
         release_entries = [e for e in crash_log_module._ring if e["event"] == "reader.force_released"]
         assert release_entries[0]["media_id"] == media.id
+
+    async def test_idle_only_release_keeps_reader_in_use(self, mocker, test_session, media_with_parts):
+        media, _ = media_with_parts
+        release = mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
+        reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        reader._clients = [MagicMock()]
+        reader._active_streams = 1  # e.g. ffmpeg's next range request
+
+        await release_reader(media.id, only_if_idle=True)
+        assert not reader._force_released
+        release.assert_not_called()
+
+        reader._active_streams = 0
+        await release_reader(media.id, only_if_idle=True)
+        assert reader._force_released
+        release.assert_called_once()
+
+    async def test_reader_cached_during_query_is_reused(self, test_session, media_with_parts):
+        media, _ = media_with_parts
+        winner = MagicMock()
+        real_execute = test_session.execute
+
+        async def execute_while_other_request_caches(*args, **kwargs):
+            manager_module._reader_cache[media.id] = (winner, time.time())
+            return await real_execute(*args, **kwargs)
+
+        test_session.execute = execute_while_other_request_caches
+        assert await get_virtual_reader(test_session, media.id, persistent=True) is winner

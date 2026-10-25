@@ -63,6 +63,11 @@ async def get_virtual_reader(
         crash_record("reader.not_found", media_id=media_id)
         return None
 
+    # Another request may have cached a reader while we awaited the query; reuse it,
+    # otherwise the one we'd overwrite keeps its clients forever.
+    if persistent and media_id in _reader_cache:
+        return _reader_cache[media_id][0]
+
     if not media_item.parts:
         logger.error(f"Media {media_id} has no parts")
         crash_record("reader.no_parts", media_id=media_id)
@@ -89,15 +94,20 @@ async def get_virtual_reader(
     return reader
 
 
-async def release_reader(media_id: int) -> None:
+async def release_reader(media_id: int, *, only_if_idle: bool = False) -> None:
     """Explicitly release a cached reader and its clients.
 
-    Force-releases immediately regardless of active streams.
+    Force-releases immediately regardless of active streams, unless only_if_idle:
+    then a reader still serving other requests (ffmpeg's next range request,
+    another viewer) is left to them and to cleanup_stale_readers.
     Called when user navigates away — stream is no longer needed.
 
     NOTE: This function has no internal await points and is therefore safe to
     call from within a CancelledError handler or a finally block.
     """
+    entry = _reader_cache.get(media_id)
+    if entry and only_if_idle and entry[0]._active_streams > 0:
+        return
     entry = _reader_cache.pop(media_id, None)
     if entry:
         reader, _ = entry

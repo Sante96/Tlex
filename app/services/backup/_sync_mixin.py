@@ -175,12 +175,6 @@ class BackupSyncMixin:
         """Sync all active backups and run health checks. Called by the scheduler."""
         from app.core.worker_manager import worker_manager
 
-        result = await worker_manager.get_available_clients(limit=1)
-        if not result:
-            logger.warning("[BACKUP] No workers available for sync")
-            return {"error": "No workers available"}
-
-        client = result[0]
         total_synced = 0
         promoted: list[int] = []
         errors: list[str] = []
@@ -190,24 +184,37 @@ class BackupSyncMixin:
                 select(BackupChannel).where(BackupChannel.is_active == True)  # noqa: E712
             )
             backups = backups_result.scalars().all()
+            if not backups:
+                return {"synced": 0, "promoted": [], "errors": []}
 
-            for backup in backups:
-                try:
-                    is_dead = await self.check_health(session, client, backup)
-                    if is_dead:
-                        logger.warning(
-                            f"[BACKUP] Main channel {backup.main_channel_id} declared dead "
-                            f"(failures={backup.failure_count}). Auto-promoting backup id={backup.id}"
-                        )
-                        new_backup = await self.promote_to_main(session, client, backup)
-                        promoted.append(new_backup.id)
-                        continue
+            result = await worker_manager.get_available_clients(limit=1)
+            if not result:
+                logger.warning("[BACKUP] No workers available for sync")
+                return {"error": "No workers available"}
+            client = result[0]
 
-                    count = await self.sync_messages(session, client, backup)
-                    total_synced += count
-                except Exception as e:
-                    msg = f"Backup id={backup.id}: {e}"
-                    logger.error(f"[BACKUP] Sync error — {msg}")
-                    errors.append(msg)
+            try:
+                for backup in backups:
+                    try:
+                        is_dead = await self.check_health(session, client, backup)
+                        if is_dead:
+                            logger.warning(
+                                f"[BACKUP] Main channel {backup.main_channel_id} declared dead "
+                                f"(failures={backup.failure_count}). Auto-promoting backup id={backup.id}"
+                            )
+                            new_backup = await self.promote_to_main(session, client, backup)
+                            promoted.append(new_backup.id)
+                            continue
+
+                        count = await self.sync_messages(session, client, backup)
+                        total_synced += count
+                    except Exception as e:
+                        msg = f"Backup id={backup.id}: {e}"
+                        logger.error(f"[BACKUP] Sync error — {msg}")
+                        errors.append(msg)
+            finally:
+                # get_available_clients marks the client in use; without this every
+                # run leaked one and streaming starved after a few runs.
+                worker_manager.release_clients([client])
 
         return {"synced": total_synced, "promoted": promoted, "errors": errors}

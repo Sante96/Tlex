@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from queue import Empty, Queue
@@ -36,12 +37,11 @@ class FFmpegRemuxer:
     - Audio transcode to AAC (browser compatible)
     - Fragmented MP4 output for streaming
     - Pipe-based streaming (no temp files)
-    - Auto-kill previous process for same media (prevents zombie processes)
+    - Process killed when the client disconnects
     """
 
     def __init__(self) -> None:
         self._ffmpeg_path = find_ffmpeg()
-        self._active_processes: dict[str, subprocess.Popen] = {}  # input_url -> process
 
     def build_command(
         self,
@@ -184,16 +184,9 @@ class FFmpegRemuxer:
             finally:
                 q.put(None)  # Signal end
 
-        # Kill previous process for same input URL (prevents zombie processes on browser refresh)
-        # Use kill() (SIGKILL) instead of terminate+wait to avoid blocking the event loop
-        if input_url in self._active_processes:
-            old_process = self._active_processes[input_url]
-            if old_process.poll() is None:  # Still running
-                logger.debug(f"[FFMPEG] Killing previous process PID={old_process.pid} for {input_url}")
-                old_process.kill()
-                # Reap in background thread to avoid blocking event loop
-                await asyncio.to_thread(old_process.wait)
-
+        # No "kill the previous process for this URL": the URL is the same for every
+        # viewer of a media, so that killed other people's streams. Each request
+        # kills its own ffmpeg on disconnect (CancelledError / finally below).
         logger.info(f"[FFMPEG] Starting remux for {input_url} (seek={options.start_time}, audio={options.audio_stream})")
 
         process = subprocess.Popen(
@@ -201,11 +194,14 @@ class FFmpegRemuxer:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        self._active_processes[input_url] = process
         logger.info(f"[FFMPEG] PID={process.pid} started")
 
         thread = Thread(target=reader_thread, args=(process, queue), daemon=True)
         thread.start()
+        # Drain stderr continuously: a full pipe blocks ffmpeg's warning writes and
+        # freezes stdout. Keep the tail for the error log.
+        stderr_tail: deque[bytes] = deque(maxlen=20)
+        Thread(target=stderr_tail.extend, args=(process.stderr,), daemon=True).start()
 
         try:
             while True:
@@ -224,9 +220,8 @@ class FFmpegRemuxer:
             await asyncio.to_thread(process.wait)
 
             if process.returncode != 0:
-                stderr = await asyncio.to_thread(process.stderr.read)
-                if stderr:
-                    logger.error(f"[FFMPEG] PID={process.pid} error (code {process.returncode}): {stderr.decode()}")
+                stderr = b"".join(stderr_tail).decode(errors="replace")
+                logger.error(f"[FFMPEG] PID={process.pid} error (code {process.returncode}): {stderr}")
             else:
                 logger.info(f"[FFMPEG] PID={process.pid} finished OK")
 
@@ -243,9 +238,6 @@ class FFmpegRemuxer:
             raise
 
         finally:
-            # Remove from active processes
-            if input_url in self._active_processes:
-                del self._active_processes[input_url]
             if process.poll() is None:
                 process.kill()
                 await asyncio.to_thread(process.wait)

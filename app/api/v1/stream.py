@@ -4,6 +4,7 @@ import asyncio
 import bisect
 import json
 import re
+from contextlib import aclosing
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -152,29 +153,30 @@ async def stream_raw(
         """Generate stream chunks, detecting client disconnects promptly."""
         client_disconnected = False
         try:
-            async for chunk in reader.read_range(range_start, range_end + 1):
-                yield chunk
-                # Check after each chunk so we stop pulling from Telegram as
-                # soon as the WebView drops the connection.
-                if await request.is_disconnected():
-                    logger.info(f"[RAW] Client disconnected mid-stream for media {media_id}")
-                    client_disconnected = True
-                    break
+            # aclosing: run read_range's cleanup (active-stream count) before the
+            # idle check below, instead of whenever the generator is GC'd.
+            async with aclosing(reader.read_range(range_start, range_end + 1)) as chunks:
+                async for chunk in chunks:
+                    yield chunk
+                    # Check after each chunk so we stop pulling from Telegram as
+                    # soon as the WebView drops the connection.
+                    if await request.is_disconnected():
+                        logger.info(f"[RAW] Client disconnected mid-stream for media {media_id}")
+                        client_disconnected = True
+                        break
         except asyncio.CancelledError:
             # ASGI layer cancelled the handler (e.g. client closed TCP)
             logger.info(f"[RAW] Request cancelled for media {media_id}")
             client_disconnected = True
             raise
-        except Exception:
-            # Force-release or other transient error — end stream silently
-            pass
         finally:
             if client_disconnected:
                 # Persistent readers hold Pyrogram clients across range requests.
-                # On abrupt disconnect the frontend never calls /release, so we
-                # force-release here to return clients to the pool immediately.
+                # On abrupt disconnect the frontend never calls /release, so give
+                # them back now — unless another request (ffmpeg seeking, another
+                # viewer) is still reading through this reader.
                 # release_reader has no internal awaits — safe inside finally/CancelledError.
-                await release_reader(media_id)
+                await release_reader(media_id, only_if_idle=True)
 
     return StreamingResponse(
         stream_generator(),
@@ -275,7 +277,13 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
     base_url = f"http://127.0.0.1:{settings.app_port}"
     input_url = f"{base_url}/api/v1/stream/raw/{media_id}?internal={INTERNAL_STREAM_TOKEN}"
 
-    keyframes = await extract_keyframes_from_url(input_url, total_size=media.total_size)
+    try:
+        keyframes = await extract_keyframes_from_url(input_url, total_size=media.total_size)
+    except Exception as e:
+        # Don't fail the request: playback still starts, the reported start time
+        # (subtitle sync) may just be off by up to one GOP.
+        logger.warning(f"Keyframe extraction failed for media {media_id}: {e}")
+        return target_time
 
     if keyframes:
         media.keyframes_index = json.dumps(keyframes)

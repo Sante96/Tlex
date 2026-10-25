@@ -124,6 +124,9 @@ app = FastAPI(
     description="Self-hosted streaming platform using Telegram as storage backend",
     version=__version__,
     lifespan=lifespan,
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
 )
 
 # Rate limiting
