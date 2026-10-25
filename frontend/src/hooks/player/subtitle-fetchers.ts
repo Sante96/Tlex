@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 // No cache buster: a track's file never changes once extracted, and the backend lets the
 // browser keep it a day (202 "still extracting" answers are not cached)
-export function getSubtitleUrl(mediaId: number, track: number): string {
+function getSubtitleUrl(mediaId: number, track: number): string {
   return `${API_BASE_URL}/api/v1/subtitles/${mediaId}?track=${track}&format=ass`;
 }
 

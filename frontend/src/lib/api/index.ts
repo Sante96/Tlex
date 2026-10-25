@@ -24,7 +24,6 @@ export type { DeviceCodeResponse, DevicePollResponse } from "./auth";
 export {
   getMediaList,
   getMediaDetails,
-  deleteMedia,
   refreshMetadata,
   getMediaCast,
   getMediaTrailer,
@@ -32,7 +31,6 @@ export {
   updateMediaItem,
   getMediaTmdbImages,
   triggerScan,
-  getScanStatus,
 } from "./media";
 export type {
   MediaItem,
@@ -82,7 +80,6 @@ export type { WatchProgress, ContinueWatchingItem } from "./progress";
 // Profiles
 export {
   getProfiles,
-  getProfile,
   createProfile,
   updateProfile,
   deleteProfile,
@@ -144,7 +141,6 @@ export {
   toggleBackupChannel,
   deleteBackupChannel,
   promoteBackupChannel,
-  setMaxFailures,
   getBackupSyncInterval,
   setBackupSyncInterval,
 } from "./backup";

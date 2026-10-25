@@ -86,10 +86,6 @@ export function getMediaDetails(id: number) {
   return getShared<MediaDetails>(`/api/v1/media/${id}`);
 }
 
-export async function deleteMedia(id: number) {
-  await api.delete(`/api/v1/media/${id}`);
-}
-
 export async function refreshMetadata(id: number) {
   const response = await api.post<{
     message: string;
@@ -175,10 +171,5 @@ export async function getMediaTmdbImages(
 
 export async function triggerScan(limit = 100) {
   const response = await api.post("/api/v1/scanner/scan", { limit });
-  return response.data;
-}
-
-export async function getScanStatus() {
-  const response = await api.get("/api/v1/scanner/status");
   return response.data;
 }

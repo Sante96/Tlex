@@ -16,10 +16,3 @@ export function PosterCardSkeleton({ className }: { className?: string }) {
   );
 }
 
-export function HeroBannerSkeleton() {
-  return (
-    <div className="w-full animate-pulse">
-      <div className="relative w-full aspect-[16/9] md:aspect-[21/9] bg-[#27272a] rounded-none" />
-    </div>
-  );
-}

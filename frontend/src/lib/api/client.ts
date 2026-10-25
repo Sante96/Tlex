@@ -72,7 +72,7 @@ export function endSession() {
  * now, false when the backend refused it; rejects when the backend can't be reached or
  * fails (restarting, 502): that says nothing about the session. Concurrent callers in
  * this tab share one request, since the backend rotates refresh tokens. */
-export function refreshTokens(): Promise<boolean> {
+function refreshTokens(): Promise<boolean> {
   refreshing ??= (async () => {
     const before = Cookies.get("token_exp");
     try {

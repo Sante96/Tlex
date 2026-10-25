@@ -72,15 +72,6 @@ export async function promoteBackupChannel(id: number): Promise<BackupChannel> {
   return data;
 }
 
-export async function setMaxFailures(
-  id: number,
-  maxFailures: number,
-): Promise<BackupChannel> {
-  const { data } = await api.patch<BackupChannel>(
-    `/api/v1/backup/channels/${id}/max-failures?max_failures=${maxFailures}`,
-  );
-  return data;
-}
 
 export async function getBackupSyncInterval(): Promise<{
   interval_hours: number;

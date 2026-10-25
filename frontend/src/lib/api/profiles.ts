@@ -27,11 +27,6 @@ export async function getProfiles(): Promise<ProfileListResponse> {
   return response.data;
 }
 
-export async function getProfile(profileId: number): Promise<Profile> {
-  const response = await api.get<Profile>(`/api/v1/profiles/${profileId}`);
-  return response.data;
-}
-
 export async function createProfile(data: {
   name: string;
   avatar_url?: string | null;
