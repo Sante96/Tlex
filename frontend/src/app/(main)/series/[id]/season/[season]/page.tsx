@@ -79,7 +79,10 @@ export default function SeasonDetailPage() {
     }
   }, [seriesId, seasonNumber]);
 
-  if (loading) return <SeasonSkeleton />;
+  // An invalid id never loads: "not found" instead of a skeleton forever
+  if (loading && Number.isInteger(seriesId) && Number.isInteger(seasonNumber)) {
+    return <SeasonSkeleton />;
+  }
 
   if (!series || !season) {
     return (

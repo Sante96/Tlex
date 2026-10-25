@@ -12,6 +12,7 @@ import {
   Check,
   Clapperboard,
 } from "lucide-react";
+import { isAxiosError } from "axios";
 import {
   HeroBanner,
   ActionButton,
@@ -36,6 +37,7 @@ import {
 import { getTmdbImageUrl } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function SeriesDetailPage() {
   const params = useParams();
@@ -45,6 +47,8 @@ export default function SeriesDetailPage() {
   const [series, setSeries] = useState<SeriesDetails | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false); // a load error, not a 404
+  const [attempt, setAttempt] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -53,6 +57,7 @@ export default function SeriesDetailPage() {
   const toast = useToast();
   const t = useTranslations();
   const isTV = useIsTV();
+  const { user } = useAuth();
 
   const handleToggleWatchlist = async () => {
     if (!series) return;
@@ -79,39 +84,50 @@ export default function SeriesDetailPage() {
       const data = await getSeriesDetails(seriesId);
       setSeries(data);
     } catch {
+      toast(t("common.error"), "error");
     } finally {
       setRefreshing(false);
     }
   };
 
+  // The page shows as soon as the details arrive; watchlist, cast and trailer (TMDB calls)
+  // fill in when they do, instead of four requests one after the other
   useEffect(() => {
-    const loadSeries = async () => {
-      try {
-        setLoading(true);
-        const data = await getSeriesDetails(seriesId);
-        setSeries(data);
-        try {
-          const status = await checkSeriesWatchlistStatus(seriesId);
-          setInWatchlist(status);
-        } catch {}
-        try {
-          const castData = await getSeriesCast(seriesId);
-          setCast(castData);
-        } catch {}
-        try {
-          const key = await getSeriesTrailer(seriesId);
-          setTrailerKey(key);
-        } catch {}
-      } catch {
-      } finally {
-        setLoading(false);
-      }
+    // /series/abc: "not found" instead of a skeleton forever
+    if (!Number.isInteger(seriesId)) return;
+    let alive = true;
+    getSeriesDetails(seriesId)
+      .then((data) => alive && setSeries(data))
+      .catch((e) => alive && setFailed(!(isAxiosError(e) && e.response?.status === 404)))
+      .finally(() => alive && setLoading(false));
+    checkSeriesWatchlistStatus(seriesId).then((s) => alive && setInWatchlist(s), () => {});
+    getSeriesCast(seriesId).then((c) => alive && setCast(c), () => {});
+    getSeriesTrailer(seriesId).then((k) => alive && setTrailerKey(k), () => {});
+    return () => {
+      alive = false;
     };
+  }, [seriesId, attempt]);
 
-    if (seriesId) loadSeries();
-  }, [seriesId]);
+  if (loading && Number.isInteger(seriesId)) return <SeriesSkeleton />;
 
-  if (loading) return <SeriesSkeleton />;
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <p className="text-[#a1a1aa]">{t("common.loadError")}</p>
+        <ActionButton
+          variant="secondary"
+          icon={<RefreshCw className="h-4 w-4" />}
+          onClick={() => {
+            setFailed(false);
+            setLoading(true);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          {t("common.retry")}
+        </ActionButton>
+      </div>
+    );
+  }
 
   if (!series) {
     return (
@@ -239,17 +255,20 @@ export default function SeriesDetailPage() {
               {t("media.edit")}
             </ActionButton>
           )}
-          <ActionButton
-            variant="secondary"
-            icon={
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-            }
-            onClick={handleRefreshMetadata}
-          >
-            {refreshing ? t("media.refreshing") : t("media.refresh")}
-          </ActionButton>
+          {/* Re-reading TMDB takes an admin: it failed silently for everyone else */}
+          {user?.is_admin && (
+            <ActionButton
+              variant="secondary"
+              icon={
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+              }
+              onClick={handleRefreshMetadata}
+            >
+              {refreshing ? t("media.refreshing") : t("media.refresh")}
+            </ActionButton>
+          )}
         </div>
         {series.overview && <ExpandableOverview text={series.overview} />}
       </HeroBanner>

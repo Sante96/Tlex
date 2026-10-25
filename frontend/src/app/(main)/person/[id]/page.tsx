@@ -52,7 +52,8 @@ export default function PersonPage() {
     if (personId) load();
   }, [personId]);
 
-  if (loading) return <PersonSkeleton />;
+  // An invalid id never loads: "not found" instead of a skeleton forever
+  if (loading && Number.isInteger(personId)) return <PersonSkeleton />;
 
   if (!person) {
     return (

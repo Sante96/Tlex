@@ -12,11 +12,11 @@ import {
   RefreshCw,
   Clapperboard,
 } from "lucide-react";
+import { isAxiosError } from "axios";
 import {
   HeroBanner,
   ActionButton,
   MetaRow,
-  PosterCard,
   CastSection,
   DetailPageLayout,
   EditMediaModal,
@@ -24,7 +24,6 @@ import {
 } from "@/components/ds";
 import {
   getMediaDetails,
-  getMediaList,
   getMediaCast,
   getMediaTrailer,
   refreshMetadata,
@@ -32,12 +31,12 @@ import {
   removeFromWatchlist,
   checkWatchlistStatus,
   type MediaDetails,
-  type MediaItem,
   type CastMember,
 } from "@/lib/api";
 import { formatDuration, getTmdbImageUrl } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function MediaDetailPage() {
   const params = useParams();
@@ -45,9 +44,10 @@ export default function MediaDetailPage() {
   const mediaId = Number(params.id);
 
   const [media, setMedia] = useState<MediaDetails | null>(null);
-  const [similar, setSimilar] = useState<MediaItem[]>([]);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false); // a load error, not a 404
+  const [attempt, setAttempt] = useState(0);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,6 +56,7 @@ export default function MediaDetailPage() {
   const toast = useToast();
   const t = useTranslations();
   const isTV = useIsTV();
+  const { user } = useAuth();
 
   const handleRefreshMetadata = async () => {
     if (!media || refreshing) return;
@@ -65,6 +66,7 @@ export default function MediaDetailPage() {
       const data = await getMediaDetails(mediaId);
       setMedia(data);
     } catch {
+      toast(t("common.error"), "error");
     } finally {
       setRefreshing(false);
     }
@@ -87,47 +89,44 @@ export default function MediaDetailPage() {
     }
   };
 
+  // The page shows as soon as the details arrive; watchlist, cast and trailer (TMDB calls)
+  // fill in when they do, instead of five requests one after the other
   useEffect(() => {
-    const loadMedia = async () => {
-      try {
-        setLoading(true);
-        const data = await getMediaDetails(mediaId);
-        setMedia(data);
-
-        try {
-          const status = await checkWatchlistStatus(mediaId);
-          setInWatchlist(status);
-        } catch {}
-
-        try {
-          const allMovies = await getMediaList({
-            media_type: "MOVIE",
-            limit: 20,
-          });
-          setSimilar(
-            allMovies.items.filter((m) => m.id !== mediaId).slice(0, 6),
-          );
-        } catch {
-          // Similar media not available
-        }
-        try {
-          const castData = await getMediaCast(mediaId);
-          setCast(castData);
-        } catch {}
-        try {
-          const key = await getMediaTrailer(mediaId);
-          setTrailerKey(key);
-        } catch {}
-      } catch {
-      } finally {
-        setLoading(false);
-      }
+    // /media/abc: "not found" instead of a skeleton forever
+    if (!Number.isInteger(mediaId)) return;
+    let alive = true;
+    getMediaDetails(mediaId)
+      .then((data) => alive && setMedia(data))
+      .catch((e) => alive && setFailed(!(isAxiosError(e) && e.response?.status === 404)))
+      .finally(() => alive && setLoading(false));
+    checkWatchlistStatus(mediaId).then((s) => alive && setInWatchlist(s), () => {});
+    getMediaCast(mediaId).then((c) => alive && setCast(c), () => {});
+    getMediaTrailer(mediaId).then((k) => alive && setTrailerKey(k), () => {});
+    return () => {
+      alive = false;
     };
+  }, [mediaId, attempt]);
 
-    if (mediaId) loadMedia();
-  }, [mediaId]);
+  if (loading && Number.isInteger(mediaId)) return <DetailSkeleton />;
 
-  if (loading) return <DetailSkeleton />;
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <p className="text-[#a1a1aa]">{t("common.loadError")}</p>
+        <ActionButton
+          variant="secondary"
+          icon={<RefreshCw className="h-4 w-4" />}
+          onClick={() => {
+            setFailed(false);
+            setLoading(true);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          {t("common.retry")}
+        </ActionButton>
+      </div>
+    );
+  }
 
   if (!media) {
     return (
@@ -225,17 +224,20 @@ export default function MediaDetailPage() {
               {t("media.edit")}
             </ActionButton>
           )}
-          <ActionButton
-            variant="secondary"
-            icon={
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-            }
-            onClick={handleRefreshMetadata}
-          >
-            {refreshing ? t("media.refreshing") : t("media.refresh")}
-          </ActionButton>
+          {/* Re-reading TMDB takes an admin: it failed silently for everyone else */}
+          {user?.is_admin && (
+            <ActionButton
+              variant="secondary"
+              icon={
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+              }
+              onClick={handleRefreshMetadata}
+            >
+              {refreshing ? t("media.refreshing") : t("media.refresh")}
+            </ActionButton>
+          )}
         </div>
         {media.overview && <ExpandableOverview text={media.overview} />}
       </HeroBanner>
@@ -245,34 +247,6 @@ export default function MediaDetailPage() {
           youtubeKey={trailerKey}
           onClose={() => setShowTrailer(false)}
         />
-      )}
-
-      {/* Similar Movies */}
-      {similar.length > 0 && (
-        <div className={`flex flex-col gap-6 py-4 md:py-8 ${isTV ? "px-8" : "px-4 md:px-12"}`}>
-          <h2 className="text-2xl font-semibold text-[#fafafa]">
-            {t("media.similarMovies")}
-          </h2>
-          <div className={isTV
-            ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4"
-            : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0"
-          }>
-            {similar.map((item) => (
-              <PosterCard
-                key={item.id}
-                href={`/media/${item.id}`}
-                imageUrl={getTmdbImageUrl(item.poster_path, "w300")}
-                title={item.title}
-                subtitle={
-                  item.release_date
-                    ? new Date(item.release_date).getFullYear().toString()
-                    : ""
-                }
-                className={isTV ? "" : "shrink-0 w-[120px] md:w-full"}
-              />
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Cast */}
