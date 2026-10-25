@@ -6,10 +6,10 @@ import { isAxiosError } from "axios";
 import { AuthGuard } from "@/components/auth-guard";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { MeshGradient } from "@paper-design/shaders-react";
 import { useTranslations } from "next-intl";
 import { DSButton, DSInput } from "@/components/ds";
 import { register } from "@/lib/api";
+import { AppBackground } from "@/components/layout/app-background";
 
 // Signed in already: nothing to register
 export default function RegisterPage() {
@@ -69,22 +69,7 @@ function RegisterForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Animated background */}
-      <div className="fixed inset-0 z-0">
-        <MeshGradient
-          style={{ width: "100%", height: "100%" }}
-          colors={["#09090b", "#1c1500", "#09090b"]}
-          distortion={1}
-          swirl={0.1}
-          grainMixer={0}
-          grainOverlay={0}
-          speed={0.3}
-        />
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
-        />
-      </div>
+      <AppBackground />
 
       {/* Glass card */}
       <div

@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { TVBackground } from "@/components/ds";
 import { CreateProfileModal, EditProfileModal } from "@/components/profiles";
@@ -14,11 +13,8 @@ import { useIsTV } from "@/hooks/use-platform";
 import type { Profile } from "@/lib/api";
 import { assignWorkerToProfile, errorText } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
+import { AppBackground } from "@/components/layout/app-background";
 
-const MeshGradient = dynamic(
-  () => import("@paper-design/shaders-react").then((m) => ({ default: m.MeshGradient })),
-  { ssr: false },
-);
 
 export default function ProfilesPage() {
   const router = useRouter();
@@ -150,22 +146,7 @@ export default function ProfilesPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
-      {/* Animated background */}
-      <div className="fixed inset-0 z-0">
-        <MeshGradient
-          style={{ width: "100%", height: "100%" }}
-          colors={["#09090b", "#1c1500", "#09090b"]}
-          distortion={1}
-          swirl={0.1}
-          grainMixer={0}
-          grainOverlay={0}
-          speed={0.3}
-        />
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: "rgba(9,9,11,0.45)" }}
-        />
-      </div>
+      <AppBackground />
 
       <div className="relative z-10 flex flex-col items-center w-full">
         {/* Heading */}
