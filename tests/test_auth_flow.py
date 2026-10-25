@@ -1,6 +1,7 @@
 """Offline checks for the auth hardening: first-user bootstrap, refresh-token rotation and
 reuse detection, password change, rate-limit key and the login wall on the catalog."""
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -57,11 +58,31 @@ async def test_reused_refresh_token_revokes_every_session(test_session):
     body = RefreshRequest(refresh_token=tokens.refresh_token)
 
     await auth.refresh_tokens(_request(), Response(), test_session, body)
-    with pytest.raises(HTTPException) as exc:  # the same (now rotated-out) token again: a copy
+    # The same token again, long after its rotation: a copy
+    old = (await test_session.execute(select(RefreshToken).where(RefreshToken.revoked))).scalar_one()
+    old.revoked_at = datetime.now(UTC) - timedelta(minutes=5)
+    await test_session.commit()
+    with pytest.raises(HTTPException) as exc:
         await auth.refresh_tokens(_request(), Response(), test_session, body)
 
     assert exc.value.status_code == 401
     assert (await test_session.execute(select(RefreshToken))).scalars().all() == []
+
+
+async def test_concurrent_refresh_from_another_tab_ends_no_session(test_session):
+    # Two tabs renew at the same moment with the same cookie: the second one finds it
+    # rotated a second ago. That isn't theft, and the browser already has the new session.
+    user = await _user(test_session)
+    tokens = await auth.create_tokens(test_session, user)
+    body = RefreshRequest(refresh_token=tokens.refresh_token)
+
+    await auth.refresh_tokens(_request(), Response(), test_session, body)
+    with pytest.raises(HTTPException) as exc:
+        await auth.refresh_tokens(_request(), Response(), test_session, body)
+
+    assert exc.value.status_code == 401
+    live = (await test_session.execute(select(RefreshToken).where(~RefreshToken.revoked))).scalars().all()
+    assert len(live) == 1  # the first tab's new session survives
 
 
 async def test_change_password_revokes_old_refresh_tokens(test_session):

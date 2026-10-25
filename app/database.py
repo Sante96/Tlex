@@ -72,6 +72,7 @@ SCHEMA_UPGRADES = (
     # Keyframe lists also held subtitle cue times: a new column starts them over
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS video_keyframes TEXT",
     "ALTER TABLE media_items DROP COLUMN IF EXISTS keyframes_index",
+    "ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
 )
 
 

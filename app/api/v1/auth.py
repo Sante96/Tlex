@@ -1,7 +1,7 @@
 """Authentication API endpoints."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -78,6 +78,8 @@ async def create_tokens(session: DBSession, user: User) -> TokenResponse:
 # and when to renew the access token, which also authenticates <video> and subtitle
 # requests (those can't refresh and retry on a 401).
 ACCESS_COOKIE, REFRESH_COOKIE, EXPIRY_COOKIE = "token", "refresh_token", "token_exp"
+# A refresh token rotated this recently is a concurrent refresh, not a stolen copy
+REUSE_GRACE = timedelta(seconds=60)
 
 
 def _https(request: Request) -> bool:
@@ -194,6 +196,11 @@ async def refresh_tokens(
     )
 
     if refresh_token and refresh_token.revoked:
+        revoked_at = refresh_token.revoked_at
+        if revoked_at and datetime.now(UTC) - revoked_at.replace(tzinfo=UTC) < REUSE_GRACE:
+            # Rotated a moment ago: another tab (or a parallel request) refreshed with the
+            # same cookie at the same time, and the browser already holds its new session
+            raise invalid
         # A rotated-out token came back: it was copied. End every session of that user.
         await session.execute(
             delete(RefreshToken).where(RefreshToken.user_id == refresh_token.user_id)
@@ -220,6 +227,7 @@ async def refresh_tokens(
     # Revoke old refresh token (rotation). Revoked rows stay until they expire so reuse
     # can be detected; expired ones are purged here so the table doesn't grow forever.
     refresh_token.revoked = True
+    refresh_token.revoked_at = datetime.now(UTC)
     await session.execute(
         delete(RefreshToken)
         .where(RefreshToken.user_id == user.id, RefreshToken.expires_at < datetime.now(UTC))

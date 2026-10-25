@@ -1,4 +1,4 @@
-import axios, { type InternalAxiosRequestConfig } from "axios";
+import axios, { isAxiosError, type InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -43,22 +43,45 @@ export function endSession() {
   for (const name of ["token_exp", "token", "refresh_token"]) Cookies.remove(name);
 }
 
-/** Rotate the refresh token cookie into a new session. Concurrent callers share one
- * request: the backend rotates refresh tokens, so a second parallel refresh would fail. */
+/** Rotate the refresh token cookie into a new session. True when the session is good
+ * now, false when the backend refused it; rejects when the backend can't be reached or
+ * fails (restarting, 502): that says nothing about the session. Concurrent callers in
+ * this tab share one request, since the backend rotates refresh tokens. */
 export function refreshTokens(): Promise<boolean> {
-  refreshing ??= axios
-    .post(`${API_BASE_URL}/api/v1/auth/refresh`, undefined, { withCredentials: true })
-    .then(
-      () => {
-        scheduleRefresh();
-        return true;
-      },
-      () => false,
-    )
-    .finally(() => {
-      refreshing = null;
-    });
+  refreshing ??= (async () => {
+    const before = Cookies.get("token_exp");
+    try {
+      await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, undefined, {
+        withCredentials: true,
+      });
+    } catch (e) {
+      // Another tab renewed the shared cookies a moment earlier: its session is ours too
+      if (Cookies.get("token_exp") === before) {
+        if (isAxiosError(e) && e.response && e.response.status < 500) return false;
+        throw e;
+      }
+    }
+    scheduleRefresh();
+    return true;
+  })().finally(() => {
+    refreshing = null;
+  });
   return refreshing;
+}
+
+/** The backend refused the session: back to the login page. */
+function sessionExpired() {
+  if (!hasSession()) return;
+  endSession();
+  window.location.assign("/login");
+}
+
+/** Timer path: refused means login again; unreachable means try again in 30 s. */
+function renew() {
+  refreshTokens().then(
+    (ok) => ok || sessionExpired(),
+    () => (refreshTimer = setTimeout(renew, 30_000)),
+  );
 }
 
 function scheduleRefresh() {
@@ -66,12 +89,13 @@ function scheduleRefresh() {
   const exp = Number(Cookies.get("token_exp"));
   if (!exp) {
     // A session from before: refresh now to get the httpOnly cookies and token_exp
-    if (Cookies.get("token")) void refreshTokens();
+    if (Cookies.get("token")) renew();
     return;
   }
-  // One minute early; clamp because setTimeout fires at once past ~24.8 days
-  const delay = Math.min(Math.max(0, exp * 1000 - Date.now() - 60_000), 2 ** 31 - 1);
-  refreshTimer = setTimeout(refreshTokens, delay);
+  // One minute early, plus up to 30 s of jitter so tabs don't all renew at the same
+  // instant; clamp because setTimeout fires at once past ~24.8 days
+  const delay = exp * 1000 - Date.now() - 60_000 - Math.random() * 30_000;
+  refreshTimer = setTimeout(renew, Math.min(Math.max(0, delay), 2 ** 31 - 1));
 }
 
 if (typeof window !== "undefined") scheduleRefresh();
@@ -90,10 +114,8 @@ api.interceptors.response.use(undefined, async (error) => {
     throw error;
   }
   config._retried = true;
-  if (await refreshTokens()) return api(config);
-  if (hasSession()) {
-    endSession();
-    window.location.assign("/login");
-  }
+  // A failed refresh (backend down) rejects: this request fails, the session stays
+  if (await refreshTokens().catch(() => Promise.reject(error))) return api(config);
+  sessionExpired();
   throw error;
 });

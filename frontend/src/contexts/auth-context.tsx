@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
+import { isAxiosError } from "axios";
 import {
   login as apiLogin,
   logout as apiLogout,
@@ -45,16 +46,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    try {
-      // An expired access token is renewed by the client's 401 handler first
-      const userData = await getCurrentUser();
-      setUser(userData);
-    } catch {
-      endSession();
-      setUser(null);
-    } finally {
-      setIsLoading(false);
+    // An expired access token is renewed by the client's 401 handler first. Anything but a
+    // 401 (backend unreachable or starting: a 502) says nothing about the session: keep
+    // it and the loader up, and ask again. Logging out there sent the TV back to device
+    // login whenever the stack started.
+    for (;;) {
+      try {
+        setUser(await getCurrentUser());
+        break;
+      } catch (e) {
+        if (isAxiosError(e) && e.response?.status === 401) {
+          endSession();
+          setUser(null);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
     }
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
