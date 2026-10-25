@@ -15,7 +15,7 @@ from app.api.deps import DBSession
 from app.config import get_settings
 from app.core.security import INTERNAL_STREAM_TOKEN
 from app.core.worker_manager import worker_manager
-from app.models.media import MediaItem
+from app.models.media import CodecType, MediaItem, MediaStream
 from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
 from app.services.mkv_cues import extract_keyframes_from_url
 from app.services.streaming import get_virtual_reader, release_reader
@@ -381,11 +381,19 @@ async def stream_play(
         f"pre_seek={pre_seek_time:.2f}s (requested t={t})"
     )
 
+    video_codec = await session.scalar(
+        select(MediaStream.codec_name)
+        .where(MediaStream.media_item_id == media_id, MediaStream.codec_type == CodecType.VIDEO)
+        .order_by(MediaStream.stream_index)
+        .offset(video)
+        .limit(1)
+    )
     options = RemuxOptions(
         video_stream=video,
         audio_stream=audio,
         start_time=keyframe_time if keyframe_time > 0 else None,
         pre_seek_time=pre_seek_time if pre_seek_time > 0 else None,
+        hevc=video_codec == "hevc",
     )
 
     # 200 without ranges: a live remux can't serve byte ranges, and Chromium

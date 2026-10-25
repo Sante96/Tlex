@@ -18,6 +18,15 @@ const VIDEO_CODECS: Record<string, string> = {
   hev1: "hev1.1.6.L93.B0",
 };
 
+// iPhone Safari (iOS 17.1+) has only ManagedMediaSource: MSE where the browser decides
+// when to buffer and may evict, which seekLocally already handles through `buffered`
+function mediaSourceClass(): typeof MediaSource | undefined {
+  return (
+    window.MediaSource ??
+    (window as { ManagedMediaSource?: typeof MediaSource }).ManagedMediaSource
+  );
+}
+
 function mimeFor(init: Uint8Array): string | null {
   const text = new TextDecoder("latin1").decode(init);
   const entries = text.slice(text.indexOf("stsd"));
@@ -25,7 +34,7 @@ function mimeFor(init: Uint8Array): string | null {
   if (!box) return null;
   const codecs = [VIDEO_CODECS[box], ...(entries.includes("mp4a") ? ["mp4a.40.2"] : [])];
   const type = `video/mp4; codecs="${codecs.join(", ")}"`;
-  return MediaSource.isTypeSupported(type) ? type : null;
+  return mediaSourceClass()?.isTypeSupported(type) ? type : null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -104,12 +113,15 @@ export function useMediaSource(
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) return;
-    if (typeof MediaSource === "undefined") {
-      video.src = url; // iPhone Safari
+    const MS = mediaSourceClass();
+    if (!MS) {
+      video.src = url; // iPhones before iOS 17.1
       return;
     }
+    // ManagedMediaSource opens only with AirPlay off (or an HLS source for AirPlay)
+    if (MS !== window.MediaSource) video.disableRemotePlayback = true;
     const controller = new AbortController();
-    const ms = new MediaSource();
+    const ms = new MS();
     const objectUrl = URL.createObjectURL(ms);
     video.src = objectUrl;
     ms.addEventListener(

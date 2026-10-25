@@ -300,6 +300,14 @@ class TestStreamPlayHeaders:
         assert resp.content == b"fmp4"
 
 
+def test_hevc_is_remuxed_as_hvc1_for_safari():
+    from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
+
+    hevc = ffmpeg_remuxer.build_command("in", RemuxOptions(hevc=True))
+    assert hevc[hevc.index("-tag:v") + 1] == "hvc1"
+    assert "-tag:v" not in ffmpeg_remuxer.build_command("in", RemuxOptions())
+
+
 # ---------------------------------------------------------------------------
 # Fix 1 — Resource Leak: disconnect triggers release_reader
 # ---------------------------------------------------------------------------

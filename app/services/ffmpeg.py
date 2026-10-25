@@ -26,6 +26,7 @@ class RemuxOptions:
     audio_bitrate: str = "192k"  # Audio bitrate
     start_time: float | None = None  # Seek position in seconds (for output trim)
     pre_seek_time: float | None = None  # Pre-seek position (before input, for faster load)
+    hevc: bool = False  # video is HEVC
 
 
 class FFmpegRemuxer:
@@ -136,6 +137,9 @@ class FFmpegRemuxer:
                 "copy",
             ]
         )
+        if options.hevc:
+            # Safari (iPhone included) plays HEVC in MP4 only as hvc1; ffmpeg writes hev1
+            cmd.extend(["-tag:v", "hvc1"])
 
         # Audio: transcode to AAC
         cmd.extend(
