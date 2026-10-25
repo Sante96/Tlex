@@ -105,10 +105,8 @@ class TestStreamAuth:
 
     async def test_cookie_token_accepted(self):
         user = MagicMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = user
         session = AsyncMock()
-        session.execute.return_value = result
+        session.get.return_value = user
         request = MagicMock(query_params={}, cookies={"token": create_access_token({"sub": "1"})})
         assert await get_stream_user(request, session, token=None) is user
 
@@ -116,7 +114,7 @@ class TestStreamAuth:
         request = MagicMock(query_params={"internal": INTERNAL_STREAM_TOKEN}, cookies={})
         session = AsyncMock()
         assert await get_stream_user(request, session=session, token=None) is None
-        session.execute.assert_not_awaited()
+        session.get.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

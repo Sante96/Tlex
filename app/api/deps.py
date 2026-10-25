@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
@@ -46,9 +45,9 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
 
-    stmt = select(User).where(User.id == int(user_id))
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    # get, not a SELECT: routers and endpoints both resolve the user on the same request's
+    # session, and the second lookup comes from its identity map
+    user = await session.get(User, int(user_id))
 
     if user is None:
         raise credentials_exception
@@ -93,9 +92,7 @@ async def get_current_user_optional(
     if user_id is None:
         return None
 
-    stmt = select(User).where(User.id == int(user_id))
-    result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    return await session.get(User, int(user_id))
 
 
 async def get_admin_user(
