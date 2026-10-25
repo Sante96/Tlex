@@ -22,11 +22,18 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Response model for authentication token."""
+    """A new session's tokens. Handed to the browser as httpOnly cookies, never in a body."""
 
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class SessionResponse(BaseModel):
+    """Login, refresh and password change answer. The tokens travel as httpOnly cookies: if
+    /refresh returned them, an XSS (whose requests carry the cookies) could read them here."""
+
+    expires_at: int  # access token expiry, unix seconds (also the readable token_exp cookie)
 
 
 class RefreshRequest(BaseModel):
@@ -62,7 +69,4 @@ class DeviceConfirmRequest(BaseModel):
 class DevicePollResponse(BaseModel):
     """Response when TV polls for auth status."""
 
-    status: str  # "pending" | "confirmed" | "expired"
-    access_token: str | None = None
-    refresh_token: str | None = None
-    token_type: str = "bearer"
+    status: str  # "pending" | "confirmed" (the session cookies come with it) | "expired"

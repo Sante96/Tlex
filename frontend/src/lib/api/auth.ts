@@ -1,11 +1,8 @@
-import Cookies from "js-cookie";
+import { api, endSession, sessionStarted } from "./client";
 
-import { api, clearTokens, saveTokens } from "./client";
-
+/** The tokens themselves come back as httpOnly cookies. */
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
+  expires_at: number;
 }
 
 export interface UserResponse {
@@ -52,28 +49,19 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
-  // The backend ends every other session and returns fresh tokens for this one
-  const { data } = await api.put<LoginResponse>("/api/v1/auth/change-password", {
+  // The backend ends every other session and sets fresh cookies for this one
+  await api.put<LoginResponse>("/api/v1/auth/change-password", {
     current_password: currentPassword,
     new_password: newPassword,
   });
-  saveTokens(data.access_token, data.refresh_token);
+  sessionStarted();
 }
 
-/** Clear this device's tokens and revoke its refresh token. Tokens are cleared first so a
- * slow request can't wipe a new login; the server call is best effort. */
+/** Revoke this device's refresh token; the backend also clears the httpOnly cookies,
+ * which this code can't. Best effort. */
 export async function logout(): Promise<void> {
-  const accessToken = Cookies.get("token");
-  const refreshToken = Cookies.get("refresh_token");
-  clearTokens();
-  if (!accessToken) return;
-  await api
-    .post(
-      "/api/v1/auth/logout",
-      refreshToken ? { refresh_token: refreshToken } : undefined,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    )
-    .catch(() => {});
+  endSession();
+  await api.post("/api/v1/auth/logout").catch(() => {});
 }
 
 export async function getRegistrationStatus(): Promise<{ enabled: boolean }> {
@@ -124,11 +112,9 @@ export interface DeviceCodeResponse {
   interval: number;
 }
 
+/** "confirmed" comes with the session cookies. */
 export interface DevicePollResponse {
   status: "pending" | "confirmed" | "expired";
-  access_token?: string;
-  refresh_token?: string;
-  token_type: string;
 }
 
 export async function requestDeviceCode(): Promise<DeviceCodeResponse> {

@@ -8,13 +8,13 @@ import {
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
-import Cookies from "js-cookie";
 import {
   login as apiLogin,
   logout as apiLogout,
   getCurrentUser,
-  saveTokens,
-  clearTokens,
+  hasSession,
+  sessionStarted,
+  endSession,
   type UserResponse,
 } from "@/lib/api";
 
@@ -28,7 +28,8 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
-  loginWithToken: (accessToken: string, refreshToken?: string) => Promise<void>;
+  /** The TV's device login was confirmed: its poll answer set the session cookies */
+  completeDeviceLogin: () => Promise<void>;
   logout: () => void;
 }
 
@@ -39,8 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
-    const token = Cookies.get("token");
-    if (!token) {
+    if (!hasSession()) {
       setIsLoading(false);
       return;
     }
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = await getCurrentUser();
       setUser(userData);
     } catch {
-      clearTokens();
+      endSession();
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -62,13 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   const login = async (credentials: LoginCredentials) => {
-    const response = await apiLogin(credentials.email, credentials.password);
-    saveTokens(response.access_token, response.refresh_token);
+    await apiLogin(credentials.email, credentials.password);
+    sessionStarted();
     await fetchUser();
   };
 
-  const loginWithToken = useCallback(async (accessToken: string, refreshToken?: string) => {
-    saveTokens(accessToken, refreshToken);
+  const completeDeviceLogin = useCallback(async () => {
+    sessionStarted();
     await fetchUser();
   }, [fetchUser]);
 
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
-        loginWithToken,
+        completeDeviceLogin,
         logout,
       }}
     >

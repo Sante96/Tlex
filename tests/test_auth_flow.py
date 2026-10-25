@@ -4,7 +4,7 @@ reuse detection, password change, rate-limit key and the login wall on the catal
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from starlette.requests import Request
@@ -53,11 +53,12 @@ async def test_first_account_registers_as_admin_even_when_closed(test_session, m
 
 async def test_reused_refresh_token_revokes_every_session(test_session):
     user = await _user(test_session)
-    tokens = await auth._create_tokens(test_session, user)
+    tokens = await auth.create_tokens(test_session, user)
+    body = RefreshRequest(refresh_token=tokens.refresh_token)
 
-    await auth.refresh_tokens(_request(), RefreshRequest(refresh_token=tokens.refresh_token), test_session)
+    await auth.refresh_tokens(_request(), Response(), test_session, body)
     with pytest.raises(HTTPException) as exc:  # the same (now rotated-out) token again: a copy
-        await auth.refresh_tokens(_request(), RefreshRequest(refresh_token=tokens.refresh_token), test_session)
+        await auth.refresh_tokens(_request(), Response(), test_session, body)
 
     assert exc.value.status_code == 401
     assert (await test_session.execute(select(RefreshToken))).scalars().all() == []
@@ -65,14 +66,22 @@ async def test_reused_refresh_token_revokes_every_session(test_session):
 
 async def test_change_password_revokes_old_refresh_tokens(test_session):
     user = await _user(test_session, password="oldpass1")
-    await auth._create_tokens(test_session, user)
+    await auth.create_tokens(test_session, user)
 
-    new = await auth.change_password(
-        ChangePassword(current_password="oldpass1", new_password="newpass1"), test_session, user
+    response = Response()
+    await auth.change_password(
+        _request(),
+        response,
+        ChangePassword(current_password="oldpass1", new_password="newpass1"),
+        test_session,
+        user,
     )
 
     tokens = (await test_session.execute(select(RefreshToken.token))).scalars().all()
-    assert tokens == [new.refresh_token]
+    new_cookie = next(
+        c for c in response.headers.getlist("set-cookie") if c.startswith("refresh_token=")
+    )
+    assert len(tokens) == 1 and new_cookie.startswith(f"refresh_token={tokens[0]};")
 
 
 def test_rate_limit_key_uses_real_client_ip():

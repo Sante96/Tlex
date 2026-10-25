@@ -20,7 +20,7 @@ const MeshGradient = dynamic(
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loginWithToken } = useAuth();
+  const { login, completeDeviceLogin } = useAuth();
   const isTV = useIsTV();
 
   const [email, setEmail] = useState("");
@@ -80,10 +80,10 @@ export default function LoginPage() {
     pollRef.current = setInterval(async () => {
       try {
         const res = await pollDeviceCode(deviceCode);
-        if (res.status === "confirmed" && res.access_token) {
+        if (res.status === "confirmed") {
           clearInterval(pollRef.current!);
           clearInterval(countdown);
-          await loginWithToken(res.access_token, res.refresh_token ?? undefined);
+          await completeDeviceLogin();
           router.push("/profiles");
         } else if (res.status === "expired") {
           clearInterval(pollRef.current!);
@@ -98,7 +98,7 @@ export default function LoginPage() {
       clearInterval(pollRef.current!);
       clearInterval(countdown);
     };
-  }, [deviceCode, router, loginWithToken]);
+  }, [deviceCode, router, completeDeviceLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

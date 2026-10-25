@@ -5,82 +5,73 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // the session cookies, also when the API is on another origin (dev)
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Add auth token and locale to requests
 api.interceptors.request.use((config) => {
-  const token = Cookies.get("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   const locale = Cookies.get("TLEX_LOCALE") || "it";
   config.headers["Accept-Language"] = locale === "en" ? "en-US" : "it-IT";
   return config;
 });
 
-// --- Tokens ---------------------------------------------------------------
-// The access token is short-lived. The `token` cookie is also what authenticates
-// <video>, subtitle and font requests, which axios never sees, so it is renewed
-// shortly before it expires instead of only after a 401.
-
-const cookieOptions = () => ({
-  expires: 30,
-  sameSite: "lax" as const,
-  secure: window.location.protocol === "https:",
-});
+// --- Session ----------------------------------------------------------------
+// The backend keeps the tokens in httpOnly cookies, out of this code's reach (and an
+// XSS's), plus a readable `token_exp`: the access token's expiry in unix seconds. The
+// `token` cookie also authenticates <video>, subtitle and font requests, which axios
+// never sees, so it is renewed shortly before it expires instead of only after a 401.
 
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let refreshing: Promise<boolean> | null = null;
 
-export function saveTokens(accessToken: string, refreshToken?: string) {
-  Cookies.set("token", accessToken, cookieOptions());
-  if (refreshToken) Cookies.set("refresh_token", refreshToken, cookieOptions());
+/** Logged in, as far as the page can tell. `token` is the JS cookie of sessions from
+ * before the httpOnly cookies, until their first refresh replaces it. */
+export const hasSession = () => !!(Cookies.get("token_exp") || Cookies.get("token"));
+
+/** After a login, a device login or a password change: the backend set new cookies. */
+export function sessionStarted() {
   scheduleRefresh();
 }
 
-export function clearTokens() {
+/** Forget the session on this page; the backend clears the httpOnly cookies at logout. */
+export function endSession() {
   clearTimeout(refreshTimer);
-  Cookies.remove("token");
-  Cookies.remove("refresh_token");
+  // token and refresh_token: only the JS cookies of a session from before, or hasSession()
+  // would keep bouncing between /login and a failing refresh
+  for (const name of ["token_exp", "token", "refresh_token"]) Cookies.remove(name);
 }
 
-/** Exchange the refresh token for new tokens. Concurrent callers share one request:
- * the backend rotates refresh tokens, so a second parallel refresh would be rejected. */
+/** Rotate the refresh token cookie into a new session. Concurrent callers share one
+ * request: the backend rotates refresh tokens, so a second parallel refresh would fail. */
 export function refreshTokens(): Promise<boolean> {
-  refreshing ??= (async () => {
-    const refreshToken = Cookies.get("refresh_token");
-    if (!refreshToken) return false;
-    try {
-      const { data } = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
-        refresh_token: refreshToken,
-      });
-      saveTokens(data.access_token, data.refresh_token);
-      return true;
-    } catch {
-      return false;
-    }
-  })().finally(() => {
-    refreshing = null;
-  });
+  refreshing ??= axios
+    .post(`${API_BASE_URL}/api/v1/auth/refresh`, undefined, { withCredentials: true })
+    .then(
+      () => {
+        scheduleRefresh();
+        return true;
+      },
+      () => false,
+    )
+    .finally(() => {
+      refreshing = null;
+    });
   return refreshing;
 }
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  const token = Cookies.get("token");
-  if (!token || !Cookies.get("refresh_token")) return;
-  try {
-    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const { exp } = JSON.parse(atob(payload));
-    // One minute early; clamp because setTimeout fires at once past ~24.8 days
-    const delay = Math.min(Math.max(0, exp * 1000 - Date.now() - 60_000), 2 ** 31 - 1);
-    refreshTimer = setTimeout(refreshTokens, delay);
-  } catch {
-    // Not a JWT we can read: the 401 handler below still covers axios calls
+  const exp = Number(Cookies.get("token_exp"));
+  if (!exp) {
+    // A session from before: refresh now to get the httpOnly cookies and token_exp
+    if (Cookies.get("token")) void refreshTokens();
+    return;
   }
+  // One minute early; clamp because setTimeout fires at once past ~24.8 days
+  const delay = Math.min(Math.max(0, exp * 1000 - Date.now() - 60_000), 2 ** 31 - 1);
+  refreshTimer = setTimeout(refreshTokens, delay);
 }
 
 if (typeof window !== "undefined") scheduleRefresh();
@@ -100,8 +91,8 @@ api.interceptors.response.use(undefined, async (error) => {
   }
   config._retried = true;
   if (await refreshTokens()) return api(config);
-  if (Cookies.get("token")) {
-    clearTokens();
+  if (hasSession()) {
+    endSession();
     window.location.assign("/login");
   }
   throw error;

@@ -1,5 +1,3 @@
-import Cookies from "js-cookie";
-
 import { api, API_BASE_URL } from "./client";
 
 export interface WatchProgress {
@@ -61,10 +59,8 @@ export function saveWatchProgressOnExit(
   fetch(`${API_BASE_URL}/api/v1/progress/${mediaId}`, {
     method: "PUT",
     keepalive: true,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${Cookies.get("token") ?? ""}`,
-    },
+    credentials: "include", // the session cookie
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       position_seconds: positionSeconds,
       duration_seconds: durationSeconds,

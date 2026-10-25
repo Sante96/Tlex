@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from loguru import logger
 from sqlalchemy import delete, select
@@ -14,13 +14,21 @@ from app.config import get_settings
 from app.core.rate_limit import AUTH_LIMIT, limiter
 from app.core.security import (
     create_access_token,
+    decode_access_token,
     generate_refresh_token,
     get_refresh_token_expiry,
     hash_password,
     verify_password,
 )
 from app.models.user import RefreshToken, User
-from app.schemas import ChangePassword, RefreshRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas import (
+    ChangePassword,
+    RefreshRequest,
+    SessionResponse,
+    TokenResponse,
+    UserCreate,
+    UserResponse,
+)
 
 router = APIRouter()
 
@@ -46,7 +54,7 @@ async def _registration_enabled() -> bool:
     return get_settings().enable_registration if value is None else value == b"1"
 
 
-async def _create_tokens(session: DBSession, user: User) -> TokenResponse:
+async def create_tokens(session: DBSession, user: User) -> TokenResponse:
     """Create access and refresh tokens for a user."""
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token_value = generate_refresh_token()
@@ -63,6 +71,47 @@ async def _create_tokens(session: DBSession, user: User) -> TokenResponse:
         access_token=access_token,
         refresh_token=refresh_token_value,
     )
+
+
+# Same names and path as the JS cookies the frontend used to write: these replace them, so
+# sessions from before survive. token_exp stays readable: it tells the page it is logged in
+# and when to renew the access token, which also authenticates <video> and subtitle
+# requests (those can't refresh and retry on a 401).
+ACCESS_COOKIE, REFRESH_COOKIE, EXPIRY_COOKIE = "token", "refresh_token", "token_exp"
+
+
+def _https(request: Request) -> bool:
+    """Whether the browser is on HTTPS. Behind the Next.js proxy (and the tunnel) the
+    backend only sees plain HTTP, so ask the browser's own headers: a Secure cookie
+    answered to a page on plain HTTP (the LAN address) would be dropped."""
+    for header in ("origin", "referer"):
+        if value := request.headers.get(header):
+            return value.startswith("https://")
+    return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
+def set_session_cookies(
+    request: Request, response: Response, tokens: TokenResponse
+) -> SessionResponse:
+    """Hand a session's tokens to the browser as httpOnly cookies, out of JavaScript's reach."""
+    payload = decode_access_token(tokens.access_token)
+    expires_at = int(payload["exp"]) if payload else 0
+    max_age = get_settings().jwt_refresh_expire_days * 86400
+    for name, value, httponly in (
+        (ACCESS_COOKIE, tokens.access_token, True),
+        (REFRESH_COOKIE, tokens.refresh_token, True),
+        (EXPIRY_COOKIE, str(expires_at), False),
+    ):
+        response.set_cookie(
+            name,
+            value,
+            max_age=max_age,
+            path="/",
+            secure=_https(request),
+            httponly=httponly,
+            samesite="lax",  # no cookies on cross-site POSTs: the CSRF guard
+        )
+    return SessionResponse(expires_at=expires_at)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -99,14 +148,15 @@ async def register(request: Request, user_data: UserCreate, session: DBSession) 
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=SessionResponse)
 @limiter.limit(AUTH_LIMIT)
 async def login(
     request: Request,
+    response: Response,
     session: DBSession,
     form_data: OAuth2PasswordRequestForm = Depends(),
-) -> TokenResponse:
-    """Login and get access + refresh tokens."""
+) -> SessionResponse:
+    """Login: the session's tokens come back as httpOnly cookies."""
     stmt = select(User).where(User.email == form_data.username)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
@@ -121,17 +171,21 @@ async def login(
         )
 
     logger.info(f"User logged in: {user.email}")
-    return await _create_tokens(session, user)
+    return set_session_cookies(request, response, await create_tokens(session, user))
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=SessionResponse)
 @limiter.limit(AUTH_LIMIT)
 async def refresh_tokens(
-    request: Request, body: RefreshRequest, session: DBSession
-) -> TokenResponse:
-    """Refresh access token using refresh token."""
+    request: Request,
+    response: Response,
+    session: DBSession,
+    body: RefreshRequest | None = None,
+) -> SessionResponse:
+    """Rotate the refresh token (its cookie, or one in the body) into a new session."""
+    token = body.refresh_token if body else request.cookies.get(REFRESH_COOKIE, "")
     # FOR UPDATE: two parallel refreshes with one token must not both succeed
-    stmt = select(RefreshToken).where(RefreshToken.token == body.refresh_token).with_for_update()
+    stmt = select(RefreshToken).where(RefreshToken.token == token).with_for_update()
     result = await session.execute(stmt)
     refresh_token = result.scalar_one_or_none()
     invalid = HTTPException(
@@ -174,33 +228,38 @@ async def refresh_tokens(
 
     # Create new tokens
     logger.info(f"Token refreshed for: {user.email}")
-    return await _create_tokens(session, user)
+    return set_session_cookies(request, response, await create_tokens(session, user))
 
 
 @router.post("/logout")
 async def logout(
+    request: Request,
+    response: Response,
     session: DBSession,
     body: RefreshRequest | None = None,
-    current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Logout: revoke this device's refresh token, or all of the user's without one."""
-    stmt = delete(RefreshToken).where(RefreshToken.user_id == current_user.id)
-    if body:
-        stmt = stmt.where(RefreshToken.token == body.refresh_token)
-    await session.execute(stmt)
-    await session.commit()
+    """Logout: revoke this device's refresh token and clear the session cookies.
 
-    logger.info(f"User logged out: {current_user.email}")
+    No access token needed: it may have expired already, and only the backend can remove
+    httpOnly cookies. Revoking takes the refresh token itself.
+    """
+    if token := body.refresh_token if body else request.cookies.get(REFRESH_COOKIE):
+        await session.execute(delete(RefreshToken).where(RefreshToken.token == token))
+        await session.commit()
+    for name in (ACCESS_COOKIE, REFRESH_COOKIE, EXPIRY_COOKIE):
+        response.delete_cookie(name, path="/")
     return {"message": "Logged out successfully"}
 
 
-@router.put("/change-password", response_model=TokenResponse)
+@router.put("/change-password", response_model=SessionResponse)
 async def change_password(
+    request: Request,
+    response: Response,
     body: ChangePassword,
     session: DBSession,
     current_user: User = Depends(get_current_user),
-) -> TokenResponse:
-    """Change current user's password, end its other sessions, return fresh tokens."""
+) -> SessionResponse:
+    """Change current user's password, end its other sessions, start a fresh one."""
     if not await asyncio.to_thread(
         verify_password, body.current_password, current_user.password_hash
     ):
@@ -220,7 +279,7 @@ async def change_password(
     await session.execute(delete(RefreshToken).where(RefreshToken.user_id == current_user.id))
 
     logger.info(f"Password changed for: {current_user.email}")
-    return await _create_tokens(session, current_user)
+    return set_session_cookies(request, response, await create_tokens(session, current_user))
 
 
 @router.get("/registration-status")

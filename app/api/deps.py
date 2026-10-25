@@ -19,15 +19,17 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# Optional: the browser's session is the httpOnly `token` cookie; the header serves API
+# clients (and the docs' Authorize button)
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     session: DBSession,
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme_optional),
 ):
-    """Get the current authenticated user from JWT token."""
+    """Get the current authenticated user from the JWT: Authorization header or cookie."""
     from app.core.security import decode_access_token
     from app.models.user import User
 
@@ -37,7 +39,8 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = decode_access_token(token)
+    token = token or request.cookies.get("token")
+    payload = decode_access_token(token) if token else None
     if payload is None:
         raise credentials_exception
 
@@ -60,24 +63,24 @@ async def get_stream_user(
     session: DBSession,
     token: str | None = Depends(oauth2_scheme_optional),
 ):
-    """get_current_user for stream/subtitle routes.
-
-    Also accepts the `token` cookie, since <video> and the libass worker can't send an
-    Authorization header, and the internal token ffmpeg uses to read /stream/raw.
+    """get_current_user for stream/subtitle routes, which also take the internal token
+    ffmpeg uses to read /stream/raw. <video> and the libass worker send the cookie.
     """
     from app.core.security import INTERNAL_STREAM_TOKEN
 
     internal = request.query_params.get("internal", "")
     if internal and secrets.compare_digest(internal, INTERNAL_STREAM_TOKEN):
         return None
-    return await get_current_user(session, token or request.cookies.get("token") or "")
+    return await get_current_user(request, session, token)
 
 
 async def get_current_user_optional(
+    request: Request,
     session: DBSession,
     token: str | None = Depends(oauth2_scheme_optional),
 ):
     """Get the current user if authenticated, otherwise return None."""
+    token = token or request.cookies.get("token")
     if not token:
         return None
 

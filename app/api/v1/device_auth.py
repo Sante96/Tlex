@@ -5,19 +5,15 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DBSession
+from app.api.v1.auth import create_tokens, set_session_cookies
 from app.core.rate_limit import AUTH_LIMIT, limiter
-from app.core.security import (
-    create_access_token,
-    generate_refresh_token,
-    get_refresh_token_expiry,
-    verify_password,
-)
-from app.models.user import DeviceCode, RefreshToken, User
+from app.core.security import verify_password
+from app.models.user import DeviceCode, User
 from app.schemas.auth import DeviceCodeResponse, DeviceConfirmRequest, DevicePollResponse
 
 router = APIRouter()
@@ -106,7 +102,9 @@ async def device_confirm(
 
 
 @router.get("/device/poll", response_model=DevicePollResponse)
-async def device_poll(device_code: str, session: DBSession) -> DevicePollResponse:
+async def device_poll(
+    request: Request, response: Response, device_code: str, session: DBSession
+) -> DevicePollResponse:
     """TV polls to check if the user has confirmed the device code."""
     stmt = select(DeviceCode).where(DeviceCode.device_code == device_code)
     result = await session.execute(stmt)
@@ -115,7 +113,7 @@ async def device_poll(device_code: str, session: DBSession) -> DevicePollRespons
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device code not found")
 
-    if entry.expires_at < datetime.now(UTC):
+    if entry.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):  # naive from SQLite
         await session.delete(entry)
         await session.commit()
         return DevicePollResponse(status="expired")
@@ -131,19 +129,6 @@ async def device_poll(device_code: str, session: DBSession) -> DevicePollRespons
     if not user:
         return DevicePollResponse(status="pending")
 
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token_value = generate_refresh_token()
-    refresh_token = RefreshToken(
-        user_id=user.id,
-        token=refresh_token_value,
-        expires_at=get_refresh_token_expiry(),
-    )
-    session.add(refresh_token)
-    await session.delete(entry)
-    await session.commit()
-
-    return DevicePollResponse(
-        status="confirmed",
-        access_token=access_token,
-        refresh_token=refresh_token_value,
-    )
+    await session.delete(entry)  # committed with the new refresh token
+    set_session_cookies(request, response, await create_tokens(session, user))
+    return DevicePollResponse(status="confirmed")
