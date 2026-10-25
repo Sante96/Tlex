@@ -4,6 +4,18 @@ import { useEffect, useRef } from "react";
 
 // How many overlays are open: Back closes only the top one
 let openOverlays = 0;
+// The Back that removes a closed overlay's history entry, until it lands
+let settling: Promise<void> | null = null;
+
+/**
+ * Run an action once the overlay that just closed has removed its history entry: a
+ * navigation started at once raced that Back (the profile menu's "Switch profile" landed
+ * back on the home page, behind the profile check's spinner). Call it after closing.
+ */
+export function afterOverlayClose(action: () => void) {
+  // The overlay's cleanup runs when React commits the close, after this event handler
+  setTimeout(() => (settling ? settling.then(action) : action()));
+}
 
 /**
  * While `open`, Back closes the overlay instead of leaving the page: the TV remote's Back
@@ -40,8 +52,14 @@ export function useBackToClose(open: boolean, close: () => void) {
       openOverlays--;
       clearTimeout(timer);
       window.removeEventListener("popstate", onPop);
-      if (pushed && !popped && history.state?.tlexOverlay === level)
+      if (pushed && !popped && history.state?.tlexOverlay === level) {
+        settling = new Promise<void>((resolve) =>
+          window.addEventListener("popstate", () => resolve(), { once: true }),
+        ).then(() => {
+          settling = null;
+        });
         history.back();
+      }
     };
   }, [open]);
 }

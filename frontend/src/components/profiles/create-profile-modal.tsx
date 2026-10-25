@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DSButton, DSInput, DSModal } from "@/components/ds";
+import { afterOverlayClose } from "@/hooks/use-back-to-close";
 import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 
@@ -37,7 +38,8 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
 
     try {
       await createNewProfile(name.trim(), selectedAvatar, isKids);
-      router.push("/");
+      onClose();
+      afterOverlayClose(() => router.push("/"));
     } catch {
       setError(t("common.error"));
     } finally {

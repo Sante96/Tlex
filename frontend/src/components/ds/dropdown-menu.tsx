@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useBackToClose } from "@/hooks/use-back-to-close";
+import { afterOverlayClose, useBackToClose } from "@/hooks/use-back-to-close";
 
 interface DropdownItem {
   icon?: React.ReactNode;
@@ -66,14 +66,9 @@ export function DSDropdownMenu({
           className={cn(
             "absolute top-full mt-2 z-50 rounded-xl p-1 w-[200px]",
             "flex flex-col gap-0.5",
-            "shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
+            "shadow-[0_8px_32px_rgba(0,0,0,0.5)] glass",
             align === "right" ? "right-0" : "left-0",
           )}
-          style={{
-            backgroundColor: "rgba(10,10,10,0.75)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
         >
           {items.map((item, i) =>
             item.separator ? (
@@ -82,8 +77,8 @@ export function DSDropdownMenu({
               <button
                 key={i}
                 onClick={() => {
-                  item.onClick?.();
                   setOpen(false);
+                  if (item.onClick) afterOverlayClose(item.onClick);
                 }}
                 className={cn(
                   "flex items-center gap-3 h-9 px-3 rounded-lg text-sm transition-colors w-full text-left",

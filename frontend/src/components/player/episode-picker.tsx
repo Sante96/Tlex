@@ -21,7 +21,7 @@ import {
   formatDuration,
   cleanEpisodeTitle,
 } from "@/lib/format";
-import { useBackToClose } from "@/hooks/use-back-to-close";
+import { afterOverlayClose, useBackToClose } from "@/hooks/use-back-to-close";
 
 interface EpisodePickerProps {
   open: boolean;
@@ -160,7 +160,10 @@ export function EpisodePicker({
         onClose();
         return;
       }
-      onEpisodeSelect(mediaId);
+      // Close first: the picker's history entry stayed behind the new episode, and Back
+      // led to the previous one instead of out of the player
+      onClose();
+      afterOverlayClose(() => onEpisodeSelect(mediaId));
     },
     [currentMediaId, onClose, onEpisodeSelect],
   );
