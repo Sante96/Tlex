@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
   experimental: {
     // Page changes animate through React's <ViewTransition> (see the (main) layout)
     viewTransition: true,
+    // Dev only: Turbopack's on-disk cache kept serving an old globals.css after edits
+    // (and after restarts), so styling changes never showed up
+    turbopackFileSystemCacheForDev: false,
   },
   // `npm run dev:mobile`: let LAN devices load the dev server (wildcards, not CIDR)
   allowedDevOrigins: ["192.168.*.*"],

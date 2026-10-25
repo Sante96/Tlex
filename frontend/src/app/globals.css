@@ -97,14 +97,23 @@
 :active-view-transition .vt-bottombar {
   view-transition-name: bottombar;
 }
+/* The settings tabs stay put while their panel changes (the highlight slides live) */
+:active-view-transition .vt-tabs {
+  view-transition-name: tabs;
+}
 ::view-transition-old(sidebar),
 ::view-transition-old(topbar),
-::view-transition-old(bottombar) {
+::view-transition-old(bottombar),
+::view-transition-old(tabs) {
   display: none;
 }
 ::view-transition-new(sidebar),
 ::view-transition-new(topbar),
-::view-transition-new(bottombar) {
+::view-transition-new(bottombar),
+::view-transition-new(tabs) {
+  animation: none;
+}
+::view-transition-group(tabs) {
   animation: none;
 }
 

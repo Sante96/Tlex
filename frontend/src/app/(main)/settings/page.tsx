@@ -122,7 +122,7 @@ function WebSettings() {
         <div
           role="tablist"
           aria-label={t("nav.settings")}
-          className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-full md:w-fit"
+          className="vt-tabs flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-full md:w-fit"
         >
           {tabs.map((id) => (
             <button
@@ -144,7 +144,8 @@ function WebSettings() {
                   transition={{ type: "spring", stiffness: 500, damping: 40 }}
                 />
               )}
-              <span className="relative">{t(`settings.tabs.${id}`)}</span>
+              {/* Above the highlight, which belongs to the next button while it slides past */}
+              <span className="relative z-10">{t(`settings.tabs.${id}`)}</span>
             </button>
           ))}
         </div>
