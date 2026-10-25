@@ -7,10 +7,11 @@ Coverage:
     extract_via_scan  → NO batch_mode (documented design trade-off)
     _parallel_fetch_and_parse → uses batch_mode correctly
 - Integration: extract_all_subtitles on a synthetic MKV (subtitle Cues read block by
-  block, fallback to reading the clusters, image tracks skipped)
+  block, fallback to reading the clusters, PGS blocks only through their Cues)
 - read_small: Telegram's GetFile alignment rules
 """
 
+import zlib
 
 import pytest
 
@@ -19,6 +20,7 @@ from app.services.subtitles.builders import (
     _format_srt_time,
     build_ass_content,
     build_srt_content,
+    build_sup_content,
 )
 from app.services.subtitles.cluster_reader import (
     _build_read_ranges,
@@ -587,6 +589,8 @@ class TestParallelFetchBatchMode:
 # ─────────────────────────────────────────────────────────────────────────────
 
 LINES = [(1000, 2000, b"First line"), (61000, 1500, b"Second line"), (125000, 3000, b"Third line")]
+# A PGS display set as an MKV block holds it: a composition segment and the end segment
+PGS_SEGMENTS = b"\x16\x00\x03abc" + b"\x80\x00\x00"
 
 
 def _size(n: int, length: int) -> bytes:
@@ -594,10 +598,12 @@ def _size(n: int, length: int) -> bytes:
     return ((1 << (7 * length)) | n).to_bytes(length, "big")
 
 
-def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8) -> bytes:
+def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8, pgs_blocks: bool = False) -> bytes:
     """Video track 1, text subtitle track 3, PGS track 4; one cluster per line in LINES, the
     subtitle BlockGroup between two video blocks; Cues for the video, and for the subtitles
     (with relative position and duration, like mkvmerge) unless subtitle_cues=False.
+    pgs_blocks: a zlib-compressed PGS block (PGS_SEGMENTS) right after each text line,
+    with its own cue (no duration: PGS has none) when subtitle_cues is set.
     TimecodeScale is 500 µs: 2 units per ms. Over 3 MB, so the cluster-Cues fallback runs.
     """
     info = _elem(b"\x15\x49\xa9\x66", _elem(b"\x2a\xd7\xb1", (500_000).to_bytes(4, "big")))
@@ -623,7 +629,8 @@ def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8) -> bytes:
         before = _elem(b"\xe7", cluster_time.to_bytes(4, "big")) + _simple_block(1, 0, video)
         block = bytes([0x83]) + (100).to_bytes(2, "big") + b"\x00" + text
         group = _elem(b"\xa0", _elem(b"\xa1", block) + _elem(b"\x9b", (duration_ms * 2).to_bytes(2, "big")))
-        content = before + group + _simple_block(1, 10, b"\x00" * 1000)
+        pgs = _simple_block(4, 100, zlib.compress(PGS_SEGMENTS)) if pgs_blocks else b""
+        content = before + group + pgs + _simple_block(1, 10, b"\x00" * 1000)
         clusters.append(b"\x1f\x43\xb6\x75" + _size(len(content), cluster_size_len) + content)
 
         cluster_pos = _elem(b"\xf1", position.to_bytes(4, "big"))
@@ -635,6 +642,12 @@ def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8) -> bytes:
                 _elem(b"\xf7", b"\x03") + cluster_pos
                 + _elem(b"\xf0", len(before).to_bytes(4, "big"))
                 + _elem(b"\xb2", (duration_ms * 2).to_bytes(4, "big")),
+            ))
+        if subtitle_cues and pgs_blocks:
+            points += _elem(b"\xbb", _elem(b"\xb3", (start_ms * 2).to_bytes(4, "big")) + _elem(
+                b"\xb7",
+                _elem(b"\xf7", b"\x04") + cluster_pos
+                + _elem(b"\xf0", (len(before) + len(group)).to_bytes(4, "big")),
             ))
         position += len(clusters[-1])
 
@@ -657,7 +670,7 @@ class TestExtractAllSubtitles:
 
         assert [t.track_number for t, _ in result] == [3, 4]
         assert _lines(result[0][1]) == LINES
-        assert result[1][1] is None  # PGS: not extracted
+        assert result[1][1] is None  # PGS without cues: not extracted
         assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
         assert sum(end - start for start, end in reader.read_window_calls) < 64 * 1024
         assert reader.batch_mode_entered == 1
@@ -678,6 +691,27 @@ class TestExtractAllSubtitles:
         assert result is not None
         assert [events for _, events in result] == [None, None]  # no cues: left for a request
         assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
+
+    async def test_pgs_blocks_read_through_their_cues(self):
+        reader = MockReader(_mkv(pgs_blocks=True))
+        result = await extract_all_subtitles(reader)
+        assert result is not None
+
+        assert _lines(result[0][1]) == LINES
+        pgs = result[1][1]
+        assert pgs is not None
+        assert [(e.timestamp_ms, zlib.decompress(e.data)) for e in pgs] == [
+            (start, PGS_SEGMENTS) for start, _, _ in LINES
+        ]
+        assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
+
+    async def test_pgs_without_cues_is_not_read(self):
+        reader = MockReader(_mkv(subtitle_cues=False, pgs_blocks=True))
+        result = await extract_all_subtitles(reader, full_read=False)
+
+        assert result is not None
+        assert result[1][1] is None
+        assert reader.read_range_calls == [(0, 1024 * 1024)]
 
     async def test_header_read_failure_returns_none(self):
         class FailReader(MockReader):
@@ -702,6 +736,34 @@ class TestCacheAllSubtitleTracks:
         assert b"First line" in (tmp_path / "7_2.ass").read_bytes()
         assert b"00:01:01,000 --> 00:01:02,500" in (tmp_path / "7_2.srt").read_bytes()
         assert not (tmp_path / "7_5.ass").exists()  # the PGS track
+        assert not (tmp_path / "7_5.sup").exists()  # without cues: not read
+
+    async def test_writes_sup_per_pgs_track(self, tmp_path, monkeypatch):
+        from app.services.subtitles import cache
+
+        monkeypatch.setattr(cache, "SUBTITLE_CACHE_DIR", tmp_path)
+        cached = await cache.cache_all_subtitle_tracks(MockReader(_mkv(pgs_blocks=True)), 7, [2, 5])
+
+        assert cached == 2
+        sup = (tmp_path / "7_5.sup").read_bytes()
+        assert sup.startswith(b"PG" + (1000 * 90).to_bytes(4, "big") + bytes(4) + b"\x16\x00\x03abc")
+        assert sup.count(b"PG") == 2 * len(LINES)
+        assert not (tmp_path / "7_5.ass").exists()
+
+
+class TestBuildSupContent:
+    def test_each_segment_gets_the_sup_header(self):
+        events = [
+            SubtitleEvent(timestamp_ms=2000, duration_ms=None, data=b"\x80\x00\x00"),  # stored
+            SubtitleEvent(timestamp_ms=1000, duration_ms=None, data=zlib.compress(PGS_SEGMENTS)),
+        ]
+
+        def pg(ms: int) -> bytes:
+            return b"PG" + (ms * 90).to_bytes(4, "big") + bytes(4)
+
+        assert build_sup_content(events) == (
+            pg(1000) + b"\x16\x00\x03abc" + pg(1000) + b"\x80\x00\x00" + pg(2000) + b"\x80\x00\x00"
+        )
 
 
 class TestVideoKeyframes:

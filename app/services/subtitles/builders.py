@@ -1,5 +1,6 @@
-"""ASS and SRT subtitle content builders."""
+"""ASS, SRT and SUP subtitle content builders."""
 
+import zlib
 from io import BytesIO
 
 from app.services.subtitles.ebml_parser import MkvSubtitleTrack, SubtitleEvent
@@ -108,6 +109,32 @@ def build_ass_content(track: MkvSubtitleTrack, events: list[SubtitleEvent]) -> b
             line = f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}\n"
 
         output.write(line.encode("utf-8"))
+
+    return output.getvalue()
+
+
+def build_sup_content(events: list[SubtitleEvent]) -> bytes:
+    """Build a .sup (PGS) file from the blocks of a PGS track.
+
+    An MKV block holds one display set: its segments (type, 16-bit size, data) without
+    the header a .sup puts before each one: "PG", the PTS (90 kHz), a DTS (0).
+    """
+    output = BytesIO()
+
+    for event in sorted(events, key=lambda e: e.timestamp_ms):
+        data = event.data
+        try:
+            # mkvmerge zlib-compresses PGS tracks by default. A stored block can't pass
+            # for zlib: no segment type (0x14-0x17, 0x80) is a zlib header byte (0x78)
+            data = zlib.decompress(data)
+        except zlib.error:
+            pass
+        header = b"PG" + (event.timestamp_ms * 90).to_bytes(4, "big") + bytes(4)
+        p = 0
+        while p + 3 <= len(data):
+            end = p + 3 + int.from_bytes(data[p + 1 : p + 3], "big")
+            output.write(header + data[p:end])
+            p = end
 
     return output.getvalue()
 

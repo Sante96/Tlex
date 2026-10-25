@@ -12,8 +12,12 @@ from sqlalchemy.orm import selectinload
 from app.models.media import CodecType, MediaItem
 from app.services.streaming import get_virtual_reader
 from app.services.subtitles import subtitle_extractor
-from app.services.subtitles.builders import build_ass_content, build_srt_content
-from app.services.subtitles.mkv_extractor import extract_all_subtitles
+from app.services.subtitles.builders import (
+    build_ass_content,
+    build_srt_content,
+    build_sup_content,
+)
+from app.services.subtitles.mkv_extractor import PGS_CODEC, extract_all_subtitles
 
 # Cache directories
 SUBTITLE_CACHE_DIR = Path("cache/subtitles")
@@ -25,7 +29,7 @@ FONT_CACHE_DIR = Path("cache/fonts")
 MAX_CONCURRENT = 1
 
 # One extraction per media at a time, shared by player requests and the warm-up. A media
-# whose extraction ended without a track (failure, image subtitles) isn't retried for
+# whose extraction ended without a track (failure, VobSub, PGS without cues) isn't retried for
 # RETRY_AFTER seconds, so the player's polling gets a 404 instead of restarting it.
 _tasks: dict[int, asyncio.Task] = {}
 _finished_at: dict[int, float] = {}
@@ -34,6 +38,13 @@ RETRY_AFTER = 60
 
 def subtitle_file(media_id: int, stream_index: int, fmt: str) -> Path:
     return SUBTITLE_CACHE_DIR / f"{media_id}_{stream_index}.{fmt}"
+
+
+def has_cached_track(media_id: int, stream_indexes: list[int]) -> bool:
+    """Every track is cached in the same pass: one on disk means the media is done."""
+    return any(
+        subtitle_file(media_id, i, fmt).exists() for i in stream_indexes for fmt in ("ass", "sup")
+    )
 
 
 def is_extracting(media_id: int) -> bool:
@@ -88,7 +99,8 @@ async def _extract(media_id: int, full_read: bool = True) -> int:
 async def cache_all_subtitle_tracks(
     reader, media_id: int, stream_indexes: list[int], full_read: bool = True
 ) -> int:
-    """Extract every text subtitle track in one pass and cache each as .ass and .srt.
+    """Extract every subtitle track in one pass and cache each: text as .ass and .srt,
+    PGS as .sup.
 
     stream_indexes: the media's subtitle stream indexes in order (the MKV lists its
     subtitle tracks in the same order). Returns how many tracks were cached.
@@ -101,7 +113,11 @@ async def cache_all_subtitle_tracks(
     SUBTITLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cached = 0
     for stream_index, (track, events) in zip(stream_indexes, extracted, strict=False):
-        if events is None:  # image subtitles
+        if events is None:  # VobSub, PGS without cues
+            continue
+        if track.codec_id == PGS_CODEC:
+            subtitle_file(media_id, stream_index, "sup").write_bytes(build_sup_content(events))
+            cached += 1
             continue
         subtitle_file(media_id, stream_index, "ass").write_bytes(build_ass_content(track, events))
         # An empty file reads as "not cached": keep a track without lines servable
@@ -162,8 +178,7 @@ async def pre_extract_subtitles(media_id: int, session: AsyncSession) -> int:
         return 0
 
     indexes = [s.stream_index for s in media.streams if s.codec_type == CodecType.SUBTITLE]
-    # Every text track is cached in the same pass: one on disk means the media is done
-    if not indexes or any(subtitle_file(media_id, i, "ass").exists() for i in indexes):
+    if not indexes or has_cached_track(media_id, indexes):
         return 0
     # shield: our caller giving up mustn't cancel an extraction the player may be waiting on
     return await asyncio.shield(extraction_task(media_id, full_read=False))
@@ -190,22 +205,15 @@ async def populate_all_caches(session: AsyncSession) -> None:
     media_needing_cache = []
 
     for media in all_media:
-        has_subtitles = any(s.codec_type == CodecType.SUBTITLE for s in media.streams)
-        if not has_subtitles:
+        indexes = [s.stream_index for s in media.streams if s.codec_type == CodecType.SUBTITLE]
+        if not indexes:
             continue
 
         # Check if fonts were already checked (dir exists = already processed)
         font_cache = FONT_CACHE_DIR / str(media.id)
         fonts_cached = font_cache.exists()
 
-        # Check if any subtitle is cached
-        subtitle_cached = any(
-            (SUBTITLE_CACHE_DIR / f"{media.id}_{s.stream_index}.ass").exists()
-            for s in media.streams
-            if s.codec_type == CodecType.SUBTITLE
-        )
-
-        if not fonts_cached or not subtitle_cached:
+        if not fonts_cached or not has_cached_track(media.id, indexes):
             media_needing_cache.append(media.id)
 
     if not media_needing_cache:

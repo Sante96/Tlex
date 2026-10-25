@@ -152,8 +152,13 @@ async def extract_cued_blocks(
     cues_by_track: dict[int, list[SubtitleCue]],
     segment_data_start: int,
     timecode_scale: int,
+    block_window: int = BLOCK_WINDOW,
 ) -> dict[int, list[SubtitleEvent]]:
-    """Read only the indexed subtitle blocks: a small window per block, nearby ones merged."""
+    """Read only the indexed subtitle blocks: a small window per block, nearby ones merged.
+
+    block_window: bytes read past each block's start. A longer block is read again on its
+    own, so it should cover the track's usual block (a text line, a whole PGS picture).
+    """
 
     def scale(units: int) -> int:
         return int(units * timecode_scale / 1_000_000)
@@ -170,7 +175,7 @@ async def extract_cued_blocks(
     windows: list[list[int]] = []
     placed = []  # (window index, base, track, cue)
     for base, track, cue in wanted:
-        start, end = base + 1, base + 8 + BLOCK_WINDOW
+        start, end = base + 1, base + 8 + block_window
         if windows and start <= windows[-1][1] + MERGE_GAP and end - windows[-1][0] <= MAX_MERGED:
             windows[-1][1] = max(windows[-1][1], end)
         else:

@@ -22,6 +22,13 @@ from app.services.subtitles.cache import (
 settings = get_settings()
 router = APIRouter(tags=["subtitles"])
 
+# The cached formats: text tracks as ass/srt, PGS (Blu-ray pictures) as sup
+FORMATS = {
+    "ass": "text/x-ssa",
+    "srt": "text/plain",
+    "sup": "application/octet-stream",
+}
+
 # Lock to prevent parallel font extraction for same media_id
 _font_extraction_locks: dict[int, asyncio.Lock] = {}
 
@@ -35,22 +42,22 @@ async def get_subtitle(
     media_id: int,
     session: DBSession,
     track: int = Query(0, description="Subtitle track index"),
-    format: str = Query("ass", description="Output format: ass or srt"),
+    format: str = Query("ass", description="Output format: ass, srt, or sup for a PGS track"),
 ) -> Response:
     """
     Extract and return a subtitle track.
 
     Query params:
     - track: Subtitle track index (default: 0)
-    - format: Output format - 'ass' or 'srt' (default: ass)
+    - format: Output format - 'ass' or 'srt' for a text track, 'sup' for a PGS one
 
     Returns:
-    - ASS/SRT file content (original, unmodified)
+    - ASS/SRT file content (original, unmodified), or the PGS track's .sup
     """
     logger.debug(f"Subtitle request: media={media_id}, track={track}, format={format}")
 
-    if format not in ("ass", "srt"):
-        raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
+    if format not in FORMATS:
+        raise HTTPException(status_code=400, detail="Format must be 'ass', 'srt' or 'sup'")
 
     # Check cache first (must exist AND have content)
     cache_file = subtitle_file(media_id, track, format)
@@ -91,19 +98,11 @@ async def get_subtitle(
                 headers={"Retry-After": "2"},
             )
 
-    # Determine content type and filename
-    if format == "ass":
-        content_type = "text/x-ssa"
-        filename = f"subtitle_{media_id}_{track}.ass"
-    else:
-        content_type = "text/plain"
-        filename = f"subtitle_{media_id}_{track}.srt"
-
     return Response(
         content=content,
-        media_type=content_type,
+        media_type=FORMATS[format],
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="subtitle_{media_id}_{track}.{format}"',
             "Cache-Control": "public, max-age=86400",
         },
     )
@@ -116,8 +115,8 @@ async def get_subtitle_status(
     format: str = Query("ass"),
 ) -> dict:
     """Poll extraction status for a subtitle track."""
-    if format not in ("ass", "srt"):
-        raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
+    if format not in FORMATS:
+        raise HTTPException(status_code=400, detail="Format must be 'ass', 'srt' or 'sup'")
     if _cached(subtitle_file(media_id, track, format)):
         return {"status": "ready"}
     if is_extracting(media_id):

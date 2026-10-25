@@ -26,7 +26,12 @@ from app.services.subtitles.ebml_parser import MkvSubtitleTrack, SubtitleEvent, 
 
 HEADER_SIZE = 1024 * 1024  # Tracks sit in the first KBs
 FALLBACK_HEADER_SIZE = 31_457_280  # 30 MB, for files that put them later
-TEXT_CODECS = ("S_TEXT/", "S_ASS", "S_SSA")  # not PGS/VobSub images
+TEXT_CODECS = ("S_TEXT/", "S_ASS", "S_SSA")
+# Blu-ray subtitles: pictures, copied out block by block into a .sup (builders.build_sup)
+PGS_CODEC = "S_HDMV/PGS"
+# A PGS block is a whole picture, 4-19 KB (zlib) in a concert remux: one window takes it,
+# and the next language's block of the same line, which mkvmerge writes right after it
+PGS_BLOCK_WINDOW = 32 * 1024
 
 
 async def extract_all_subtitles(
@@ -34,10 +39,11 @@ async def extract_all_subtitles(
 ) -> list[tuple[MkvSubtitleTrack, list[SubtitleEvent] | None]] | None:
     """Every subtitle track of the MKV, in file order, with its events.
 
-    Image tracks get None instead of events: they can't become ASS/SRT. So do text
-    tracks without subtitle cues when full_read is False: reading them means reading
-    about the whole file, which background warm-ups leave to an actual request.
-    Returns None if the header can't be read; later read errors propagate.
+    PGS events are the raw blocks, read through the subtitle cues only: without them a
+    track gets None, as VobSub does (a picture track isn't worth reading the whole
+    file). So do text tracks without subtitle cues when full_read is False: reading them
+    means reading about the whole file, which background warm-ups leave to an actual
+    request. Returns None if the header can't be read; later read errors propagate.
     """
     async with reader.batch_mode():
         try:
@@ -51,15 +57,22 @@ async def extract_all_subtitles(
             return None
 
         text = {t.track_number for t in tracks if t.codec_id.startswith(TEXT_CODECS)}
+        pgs = {t.track_number for t in tracks if t.codec_id == PGS_CODEC}
         events: dict[int, list[SubtitleEvent]] = {}
-        if text:
+        if text or pgs:
             timecode_scale = extract_timecode_scale(header)
             segment_data_start = find_segment_data_start(header)
 
             cues = await read_cues(reader, header, segment_data_start)
-            cued = {n: c for n, c in parse_subtitle_cues(cues, text).items() if c} if cues else {}
+            indexed = parse_subtitle_cues(cues, text | pgs) if cues else {}
+            cued = {n: c for n, c in indexed.items() if c and n in text}
             if cued:
                 events = await extract_cued_blocks(reader, cued, segment_data_start, timecode_scale)
+            cued = {n: c for n, c in indexed.items() if c and n in pgs}
+            if cued:
+                events |= await extract_cued_blocks(
+                    reader, cued, segment_data_start, timecode_scale, PGS_BLOCK_WINDOW
+                )
 
             rest = text - events.keys()
             if rest and not full_read:

@@ -99,6 +99,19 @@ class TestGetSubtitle:
         assert resp.status_code == 200
         assert b"[Script Info]" in resp.body
 
+    async def test_pgs_track_served_as_sup(self):
+        import app.api.v1.subtitles as mod
+
+        cache.subtitle_file(1, 5, "sup").write_bytes(b"PG\x00\x01")
+
+        resp = await mod.get_subtitle(
+            media_id=1, session=_make_session(_make_media([_make_stream(5)])), track=5, format="sup"
+        )
+
+        assert resp.status_code == 200
+        assert resp.media_type == "application/octet-stream"
+        assert resp.body == b"PG\x00\x01"
+
     async def test_requests_for_two_tracks_share_one_task(self, monkeypatch):
         import app.api.v1.subtitles as mod
 
@@ -268,6 +281,14 @@ class TestPreExtractSubtitles:
 
         media = _make_media([_make_stream(2), _make_stream(6)])
         assert await cache.pre_extract_subtitles(1, _make_session(media)) == 0
+        start.assert_not_called()
+
+    async def test_skips_media_with_a_cached_pgs_track(self, monkeypatch):
+        cache.subtitle_file(1, 6, "sup").write_bytes(b"PG")
+        start = MagicMock()
+        monkeypatch.setattr(cache, "extraction_task", start)
+
+        assert await cache.pre_extract_subtitles(1, _make_session(_make_media([_make_stream(6)]))) == 0
         start.assert_not_called()
 
     async def test_waits_for_the_shared_task(self, monkeypatch):
