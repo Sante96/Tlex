@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
 
@@ -21,6 +22,7 @@ export function VideoSeekbar({
   onActivity,
   className,
 }: VideoSeekbarProps) {
+  const t = useTranslations();
   const trackRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -203,7 +205,7 @@ export function VideoSeekbar({
       {/* Focus hint label */}
       {isFocused && pendingTime !== null && (
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/50 pointer-events-none whitespace-nowrap">
-          ← → sposta · Enter conferma · Esc annulla
+          {t("player.seekHint")}
         </div>
       )}
     </div>

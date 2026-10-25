@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { isAxiosError } from "axios";
 import { ArrowLeft } from "lucide-react";
 import { DSButton } from "@/components/ds";
 import { VideoPlayer } from "@/components/player";
@@ -26,6 +28,7 @@ export default function WatchPage() {
 function Watch() {
   const params = useParams();
   const router = useRouter();
+  const t = useTranslations();
   const mediaId = Number(params.id);
   // The player picks audio and subtitles from the profile's Settings: wait for it, or a
   // late profile would switch the audio track (and restart the stream) right after start
@@ -38,7 +41,7 @@ function Watch() {
 
   useEffect(() => {
     if (!mediaId || isNaN(mediaId)) {
-      setError("Invalid media ID");
+      setError(t("media.notFound"));
       setLoading(false);
       return;
     }
@@ -54,15 +57,19 @@ function Watch() {
         if (progress && !progress.completed && progress.position_seconds > 0) {
           setInitialPosition(progress.position_seconds);
         }
-      } catch {
-        setError("Failed to load media");
+      } catch (e) {
+        setError(
+          isAxiosError(e) && e.response?.status === 404
+            ? t("media.notFound")
+            : t("common.loadError"),
+        );
       } finally {
         setLoading(false);
       }
     };
 
     loadMedia();
-  }, [mediaId]);
+  }, [mediaId, t]);
 
   // The player releases the old stream when it unmounts (this page shows a loader
   // while the next episode loads)
@@ -90,13 +97,13 @@ function Watch() {
   if (error || !media) {
     return (
       <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white text-xl">{error || "Media not found"}</p>
+        <p className="text-white text-xl">{error || t("media.notFound")}</p>
         <DSButton
           variant="secondary"
           onClick={() => router.push("/")}
           icon={<ArrowLeft className="h-4 w-4" />}
         >
-          Back to Home
+          {t("nav.home")}
         </DSButton>
       </div>
     );

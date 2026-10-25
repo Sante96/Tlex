@@ -78,7 +78,7 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Es. Mario"
+          placeholder={t("profiles.create.namePlaceholder")}
           maxLength={20}
           data-autofocus
         />

@@ -96,7 +96,8 @@
       "loading": "Autorizzazione in corso...",
       "error": "Codice non valido o credenziali errate",
       "success": "TV autorizzata!",
-      "successSubtitle": "Puoi tornare al televisore, verrà effettuato l'accesso automaticamente."
+      "successSubtitle": "Puoi tornare al televisore, verrà effettuato l'accesso automaticamente.",
+      "emailPlaceholder": "tu@esempio.com"
     },
     "tv": {
       "title": "Accedi alla TV",
@@ -423,7 +424,8 @@
     "poolWarning": "Connessione lenta",
     "noClientsWarning": "Nessun client disponibile. Lo streaming potrebbe non avviarsi.",
     "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento.",
-    "streamError": "Impossibile riprodurre il video"
+    "streamError": "Impossibile riprodurre il video",
+    "seekHint": "← → sposta · Enter conferma · Esc annulla"
   },
   "errors": {
     "crashTitle": "Qualcosa è andato storto",

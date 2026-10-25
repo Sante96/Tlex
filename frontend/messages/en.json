@@ -96,7 +96,8 @@
       "loading": "Authorizing...",
       "error": "Invalid code or wrong credentials",
       "success": "TV authorized!",
-      "successSubtitle": "You can go back to your TV, it will sign in automatically."
+      "successSubtitle": "You can go back to your TV, it will sign in automatically.",
+      "emailPlaceholder": "you@example.com"
     },
     "tv": {
       "title": "Sign in on the TV",
@@ -423,7 +424,8 @@
     "poolWarning": "Slow connection",
     "noClientsWarning": "No clients available. Streaming may not start.",
     "highPressureWarning": "Client pool almost full. Streaming may be slower.",
-    "streamError": "Couldn't play the video"
+    "streamError": "Couldn't play the video",
+    "seekHint": "← → move · Enter confirm · Esc cancel"
   },
   "errors": {
     "crashTitle": "Something went wrong",

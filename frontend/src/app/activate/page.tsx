@@ -129,7 +129,7 @@ export default function ActivatePage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="tu@esempio.com"
+            placeholder={t("emailPlaceholder")}
             required
             autoComplete="email"
           />

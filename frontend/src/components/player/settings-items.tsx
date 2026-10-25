@@ -1,4 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 
@@ -21,9 +22,10 @@ export function SyncSubmenu({
   onSubtitleOffsetChange: (offset: number) => void;
   onBack: () => void;
 }) {
+  const t = useTranslations();
   return (
     <>
-      <SubMenuHeader label="Sync sottotitoli" onBack={onBack} />
+      <SubMenuHeader label={t("player.syncSubtitles")} onBack={onBack} />
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <input

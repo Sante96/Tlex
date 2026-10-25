@@ -383,7 +383,7 @@ function WebSettings() {
 
       {/* Credit — mobile only (desktop has it in the sidebar) */}
       <p className="md:hidden text-[10px] text-[#3f3f46] text-center pt-6 tracking-wide select-none">
-        made by Sante
+        {t("common.madeBy")}
       </p>
 
       {showChangePassword && (

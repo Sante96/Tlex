@@ -137,8 +137,8 @@ export function PlayerSettingsDropdown({
   const selectedSubLabel =
     selectedSubtitle !== null
       ? subtitleTracks.find((t) => t.stream_index === selectedSubtitle)
-          ?.language || "On"
-      : "Off";
+          ?.language || t("common.on")
+      : t("player.disabledSubtitles");
 
   return (
     <div className="relative">

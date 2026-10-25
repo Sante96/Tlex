@@ -61,7 +61,7 @@ export function HeroBanner({
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-[#52525b]">
-          No Poster
+          {posterAlt}
         </div>
       )}
     </div>
