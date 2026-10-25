@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useLocale } from "next-intl";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,11 @@ interface DSDatePickerProps {
   disabled?: boolean;
 }
 
-const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+/** Monday-first short weekday names: 1 January 2024 was a Monday. */
+function dayLabels(locale: string): string[] {
+  const format = new Intl.DateTimeFormat(locale, { weekday: "short" });
+  return Array.from({ length: 7 }, (_, i) => format.format(new Date(2024, 0, 1 + i)));
+}
 
 function buildCells(year: number, month: number): (number | null)[] {
   const firstDay = new Date(year, month, 1);
@@ -37,6 +42,7 @@ export function DSDatePicker({
   className,
   disabled,
 }: DSDatePickerProps) {
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() =>
     value ? new Date(value + "T00:00:00") : new Date(),
@@ -59,7 +65,7 @@ export function DSDatePicker({
   const selected = value ? new Date(value + "T00:00:00") : null;
   const cells = buildCells(year, month);
 
-  const monthLabel = new Intl.DateTimeFormat(undefined, {
+  const monthLabel = new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
   }).format(viewDate);
@@ -68,8 +74,9 @@ export function DSDatePicker({
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
   const selectDay = (day: number) => {
-    const d = new Date(year, month, day);
-    onChange(d.toISOString().split("T")[0]);
+    // From the local parts: toISOString() is UTC, and local midnight in Italy is the
+    // previous day there
+    onChange(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
     setOpen(false);
   };
 
@@ -127,7 +134,7 @@ export function DSDatePicker({
 
           {/* Day headers */}
           <div className="grid grid-cols-7 mb-1">
-            {DAY_LABELS.map((d) => (
+            {dayLabels(locale).map((d) => (
               <div
                 key={d}
                 className="text-center text-[11px] font-medium text-[#52525b] py-1"
