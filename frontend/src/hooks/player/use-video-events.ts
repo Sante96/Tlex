@@ -67,6 +67,13 @@ export function useVideoEvents({
       lastFrameTime = -1;
     };
 
+    // Sync point reached — audio/video/subs are aligned
+    const markSynced = () => {
+      videoMovingRef.current = true;
+      video.muted = isMutedRef.current;
+      setIsLoading(false);
+    };
+
     // Fake loader: video starts from keyframe BEFORE requested time.
     // We keep spinner visible + audio muted until video.currentTime reaches
     // localSeekOffset (the point where audio/video/subs are in sync).
@@ -86,10 +93,7 @@ export function useVideoEvents({
             currentVideoTime > lastFrameTime + 0.01 &&
             currentVideoTime >= localSeekOffsetRef.current
           ) {
-            // Sync point reached — audio/video/subs are aligned
-            videoMovingRef.current = true;
-            video.muted = isMutedRef.current;
-            setIsLoading(false);
+            markSynced();
           }
 
           lastFrameTime = currentVideoTime;
@@ -110,24 +114,18 @@ export function useVideoEvents({
       if (videoMovingRef.current) {
         setIsLoading(false);
       }
-      // Fallback for browsers without requestVideoFrameCallback
-      if (!("requestVideoFrameCallback" in video) && !videoMovingRef.current) {
-        const checkSync = () => {
-          const v = videoRef.current;
-          if (!v) return;
-          if (v.currentTime >= localSeekOffsetRef.current && !v.paused) {
-            videoMovingRef.current = true;
-            v.muted = isMutedRef.current;
-            setIsLoading(false);
-          } else if (!v.paused) {
-            setTimeout(checkSync, 50);
-          }
-        };
-        checkSync();
-      }
     };
 
     const onTimeUpdate = () => {
+      // Frame callbacks can be missing or stay silent (seen in headless Chrome while
+      // the video played): playback moving past the sync point also ends the wait
+      if (
+        !videoMovingRef.current &&
+        !video.paused &&
+        video.currentTime > localSeekOffsetRef.current
+      ) {
+        markSynced();
+      }
       if (!isSeekingRef.current && videoMovingRef.current) {
         setCurrentTime(streamStartTimeRef.current + video.currentTime);
       }

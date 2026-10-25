@@ -144,6 +144,10 @@ class FFmpegRemuxer:
                 f"0:a:{options.audio_stream}",
                 "-c:a",
                 options.audio_codec,
+                # Standard AAC layouts: 5.1(side) from E-AC3 used to come out as an
+                # AAC with a PCE (channel config 0), which MSE refuses to parse
+                "-af",
+                "aformat=channel_layouts=5.1|stereo|mono",
                 "-b:a",
                 options.audio_bitrate,
             ]

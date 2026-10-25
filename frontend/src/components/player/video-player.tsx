@@ -13,6 +13,7 @@ import { releaseStream, type MediaStream } from "@/lib/api";
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
 import { usePoolStatus } from "@/hooks/player/use-pool-status";
 import { useVideoSync } from "@/hooks/player/use-video-sync";
+import { useMediaSource } from "@/hooks/player/use-media-source";
 import { useVideoEvents } from "@/hooks/player/use-video-events";
 import { useVideoHotkeys } from "@/hooks/player/use-video-hotkeys";
 import { useProgressSaving } from "@/hooks/player/use-progress-saving";
@@ -23,6 +24,11 @@ import { useNextEpisode } from "@/hooks/player/use-next-episode";
 import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV } from "@/hooks/use-platform";
 import { useProfile } from "@/contexts/profile-context";
+
+// A seek this close to the end of the buffered data still restarts the stream
+const BUFFER_MARGIN = 0.5;
+// Skips (arrow keys, ±10 buttons) in a row restart the stream once, where they stop
+const SKIP_SETTLE_MS = 400;
 
 // Saved from the Settings page into the profile
 interface ProfilePlaybackPrefs {
@@ -139,6 +145,8 @@ export function VideoPlayer({
     seekId,
   );
 
+  useMediaSource(videoRef, videoUrl);
+
   useVideoEvents({
     videoRef,
     streamStartTime,
@@ -190,7 +198,28 @@ export function VideoPlayer({
     }
   }, []);
 
-  const handleSeek = useCallback((time: number) => {
+  const pendingSkip = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A new stream means a new request, a new ffmpeg and seconds of rebuffering: when the
+  // target is already buffered, just move the playhead
+  const seekLocally = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video || isLoading || isSeeking) return false;
+      const local = time - streamStartTime;
+      for (let i = 0; i < video.buffered.length; i++) {
+        if (local >= video.buffered.start(i) && local <= video.buffered.end(i) - BUFFER_MARGIN) {
+          video.currentTime = local;
+          setCurrentTime(time);
+          return true;
+        }
+      }
+      return false;
+    },
+    [isLoading, isSeeking, streamStartTime],
+  );
+
+  const restartStreamAt = useCallback((time: number) => {
     setIsSeeking(true);
     setIsLoading(true);
     setCurrentTime(time);
@@ -198,12 +227,37 @@ export function VideoPlayer({
     setSeekId((id) => id + 1);
   }, []);
 
+  const handleSeek = useCallback(
+    (time: number) => {
+      if (pendingSkip.current) clearTimeout(pendingSkip.current);
+      pendingSkip.current = null;
+      if (!seekLocally(time)) restartStreamAt(time);
+    },
+    [seekLocally, restartStreamAt],
+  );
+
   const skip = useCallback(
     (seconds: number) => {
-      const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
-      handleSeek(newTime);
+      const target = Math.max(0, Math.min(currentTime + seconds, duration));
+      if (!pendingSkip.current && seekLocally(target)) return;
+      // Out of the buffer: wait for the skips to stop. isSeeking keeps timeupdate from
+      // overwriting the target, so the next skip adds to it
+      setIsSeeking(true);
+      setCurrentTime(target);
+      if (pendingSkip.current) clearTimeout(pendingSkip.current);
+      pendingSkip.current = setTimeout(() => {
+        pendingSkip.current = null;
+        restartStreamAt(target);
+      }, SKIP_SETTLE_MS);
     },
-    [currentTime, duration, handleSeek],
+    [currentTime, duration, seekLocally, restartStreamAt],
+  );
+
+  useEffect(
+    () => () => {
+      if (pendingSkip.current) clearTimeout(pendingSkip.current);
+    },
+    [],
   );
 
   const toggleFullscreen = useCallback(() => {
@@ -365,7 +419,6 @@ export function VideoPlayer({
         >
           <video
             ref={videoRef}
-            src={videoUrl}
             className="absolute inset-0 w-full h-full"
             onClick={togglePlay}
             playsInline
