@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DSButton, DSInput, DSModal } from "@/components/ds";
 import { afterOverlayClose } from "@/hooks/use-back-to-close";
-import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
+import { AvatarChoices, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 
 interface CreateProfileModalProps {
@@ -59,18 +59,7 @@ export function CreateProfileModal({ onClose }: CreateProfileModalProps) {
           <label className="block text-sm text-white/70 mb-3">
             {t("profiles.create.chooseAvatar")}
           </label>
-          <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 justify-items-center">
-            {PROFILE_AVATARS.map((avatar) => (
-              <ProfileAvatar
-                key={avatar.id}
-                src={avatar.src}
-                name={avatar.name}
-                size="md"
-                selected={selectedAvatar === avatar.src}
-                onClick={() => setSelectedAvatar(avatar.src)}
-              />
-            ))}
-          </div>
+          <AvatarChoices selected={selectedAvatar} onSelect={setSelectedAvatar} />
         </div>
 
         <DSInput

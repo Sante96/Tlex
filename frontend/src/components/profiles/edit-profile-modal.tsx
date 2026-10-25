@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Trash2, X, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, DSIconButton, DSInput, DSModal } from "@/components/ds";
-import { ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
+import { AvatarChoices, ProfileAvatar, PROFILE_AVATARS } from "@/components/ui/profile-avatar";
 import { useProfile } from "@/contexts/profile-context";
 import { deleteProfile, updateProfile, type Profile } from "@/lib/api";
 
@@ -123,18 +123,10 @@ export function EditProfileModal({
             <label className="block text-sm text-white/70 mb-3">
               {t("profiles.edit.avatar")}
             </label>
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 justify-items-center">
-              {PROFILE_AVATARS.map((avatar) => (
-                <ProfileAvatar
-                  key={avatar.id}
-                  src={avatar.src}
-                  name={avatar.name}
-                  size="md"
-                  selected={selectedAvatar === avatar.src}
-                  onClick={() => setSelectedAvatar(avatar.src)}
-                />
-              ))}
-            </div>
+            <AvatarChoices
+              selected={selectedAvatar}
+              onSelect={setSelectedAvatar}
+            />
           </div>
 
           <DSInput

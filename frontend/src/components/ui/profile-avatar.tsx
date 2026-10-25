@@ -121,3 +121,36 @@ export const PROFILE_AVATARS = [
 ] as const;
 
 export type ProfileAvatarId = (typeof PROFILE_AVATARS)[number]["id"];
+
+/** The avatars to choose from: the avatar picker and the profile modals */
+export function AvatarChoices({
+  selected,
+  onSelect,
+  size = "md",
+  className,
+}: {
+  selected: string | undefined;
+  onSelect: (src: string) => void;
+  size?: ProfileAvatarProps["size"];
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-4 sm:grid-cols-5 gap-2 justify-items-center",
+        className,
+      )}
+    >
+      {PROFILE_AVATARS.map((avatar) => (
+        <ProfileAvatar
+          key={avatar.id}
+          src={avatar.src}
+          name={avatar.name}
+          size={size}
+          selected={selected === avatar.src}
+          onClick={() => onSelect(avatar.src)}
+        />
+      ))}
+    </div>
+  );
+}

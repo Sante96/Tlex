@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, DSModal } from "@/components/ds";
-import { ProfileAvatar, PROFILE_AVATARS } from "./profile-avatar";
+import { AvatarChoices } from "./profile-avatar";
 
 interface AvatarPickerProps {
   currentAvatar?: string;
@@ -49,19 +49,12 @@ export function AvatarPicker({
         {t("profiles.avatar.title")}
       </h2>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {PROFILE_AVATARS.map((avatar) => (
-          <div key={avatar.id} className="flex justify-center">
-            <ProfileAvatar
-              src={avatar.src}
-              name={avatar.name}
-              size="lg"
-              selected={selected === avatar.src}
-              onClick={() => handleSelect(avatar.src)}
-            />
-          </div>
-        ))}
-      </div>
+      <AvatarChoices
+        selected={selected}
+        onSelect={handleSelect}
+        size="lg"
+        className="grid-cols-3 sm:grid-cols-3 gap-4 mb-6"
+      />
 
       <div className="flex gap-3">
         <DSButton variant="ghost" onClick={onClose} className="flex-1">
