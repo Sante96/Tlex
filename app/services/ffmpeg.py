@@ -3,7 +3,7 @@
 import asyncio
 import subprocess
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Thread
@@ -181,7 +181,7 @@ class FFmpegRemuxer:
         self,
         input_url: str,
         options: RemuxOptions | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes]:
         """
         Stream remuxed video.
 
