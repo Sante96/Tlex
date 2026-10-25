@@ -43,7 +43,6 @@ class AutoScanScheduler:
 
     def __init__(self):
         self._running = False
-        self._task: asyncio.Task | None = None
         self._last_scan: datetime | None = None
         self._next_scan: datetime | None = None
         self._interval_hours: int = settings.scanner_auto_interval_hours
@@ -122,17 +121,6 @@ class AutoScanScheduler:
                 logger.error(f"Auto-scan scheduler error: {e}")
                 # Wait a bit before retrying
                 await asyncio.sleep(60)
-
-    async def stop(self) -> None:
-        """Stop the auto-scan scheduler."""
-        self._running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Auto-scan scheduler stopped")
 
     async def _run_scan(self) -> None:
         """Run a scan."""
@@ -234,9 +222,6 @@ class BackupSyncScheduler:
             except Exception as e:
                 logger.error(f"Backup sync scheduler error: {e}")
                 await asyncio.sleep(60)
-
-    async def stop(self) -> None:
-        self._running = False
 
     async def get_status(self) -> dict:
         interval = await self.get_interval_hours()

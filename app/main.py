@@ -52,18 +52,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Background cache population failed: {e}")
 
-    asyncio.create_task(populate_caches_background())
+    # Kept: the loop holds only weak references to tasks, and shutdown cancels them
+    background = [asyncio.create_task(populate_caches_background())]
     logger.info("Background subtitle cache population started")
 
     # Start auto-scan scheduler (always on: it idles while the interval is 0, and the
     # interval can be enabled later from the admin UI)
     from app.services.scheduler import auto_scan_scheduler, backup_sync_scheduler
 
-    asyncio.create_task(auto_scan_scheduler.start())
+    background.append(asyncio.create_task(auto_scan_scheduler.start()))
     logger.info("Auto-scan scheduler started")
 
     # Start backup sync scheduler (always on, interval managed via Redis)
-    asyncio.create_task(backup_sync_scheduler.start())
+    background.append(asyncio.create_task(backup_sync_scheduler.start()))
     logger.info("Backup sync scheduler started")
 
     # Background cleanup for stale stream readers (safety net)
@@ -77,14 +78,14 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Stream reader cleanup error: {e}")
 
-    cleanup_task = asyncio.create_task(stream_reader_cleanup_loop())
+    background.append(asyncio.create_task(stream_reader_cleanup_loop()))
 
     yield
 
-    cleanup_task.cancel()
-
     # Shutdown
     logger.info("Shutting down TLEX...")
+    for task in background:
+        task.cancel()
     await worker_manager.shutdown()
     await engine.dispose()
     logger.info("Goodbye!")

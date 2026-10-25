@@ -435,12 +435,14 @@ class WorkerManager:
 
     async def shutdown(self) -> None:
         """Gracefully shutdown all worker clients."""
-        # Stop all clients in the pool
-        for worker_id, client in self._client_pool:
-            try:
-                await client.stop()
-            except Exception as e:
-                logger.error(f"Error stopping client for worker {worker_id}: {e}")
+        # All at once: one after the other, ten clients could outlast Docker's 10 s stop
+        # timeout and get SIGKILLed with their session files open
+        results = await asyncio.gather(
+            *(client.stop() for _, client in self._client_pool), return_exceptions=True
+        )
+        for (worker_id, _), result in zip(self._client_pool, results, strict=True):
+            if isinstance(result, Exception):
+                logger.error(f"Error stopping client for worker {worker_id}: {result}")
 
         logger.info(f"Stopped {len(self._client_pool)} clients")
         self._clients.clear()
