@@ -8,6 +8,7 @@ import { PosterCardSkeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
 import { useIsTV } from "@/hooks/use-platform";
 import { triggerScan } from "@/lib/api";
+import { useDelayed } from "@/hooks/use-delayed";
 
 /** Poster grids of the library pages: a real grid on phones too (it used to be the home
  * rows' single horizontal strip, so a whole library was one long row). */
@@ -32,6 +33,7 @@ export function LibraryPage<T>({ title, emptyText, load, renderItem }: LibraryPa
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -85,11 +87,10 @@ export function LibraryPage<T>({ title, emptyText, load, renderItem }: LibraryPa
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#fafafa]">{title}</h1>
-          {!loading && !failed && (
-            <p className="text-sm text-[#a1a1aa]">
-              {total} {title.toLowerCase()}
-            </p>
-          )}
+          {/* The count's line is kept while loading: the header moved down when it arrived */}
+          <p className="text-sm text-[#a1a1aa] min-h-5">
+            {!loading && !failed && `${total} ${title.toLowerCase()}`}
+          </p>
         </div>
         {/* Scanning takes an admin: the button used to fail silently for everyone else */}
         {!isTV && user?.is_admin && (
@@ -106,11 +107,13 @@ export function LibraryPage<T>({ title, emptyText, load, renderItem }: LibraryPa
       </div>
 
       {loading ? (
-        <div className={grid}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <PosterCardSkeleton key={i} />
-          ))}
-        </div>
+        showSkeleton && (
+          <div className={grid}>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <PosterCardSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : failed ? (
         <div className="flex flex-col items-center gap-6 py-12 text-[#a1a1aa]">
           {t("common.loadError")}

@@ -11,6 +11,7 @@ import { PosterCard } from "@/components/ds";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsTV } from "@/hooks/use-platform";
 import { POSTER_GRID, TV_POSTER_GRID } from "@/components/layout/library-page";
+import { useDelayed } from "@/hooks/use-delayed";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -37,6 +38,7 @@ export default function PersonPage() {
 
   const [person, setPerson] = useState<PersonDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const [bioExpanded, setBioExpanded] = useState(false);
   const isTV = useIsTV();
 
@@ -55,7 +57,7 @@ export default function PersonPage() {
   }, [personId]);
 
   // An invalid id never loads: "not found" instead of a skeleton forever
-  if (loading && Number.isInteger(personId)) return <PersonSkeleton />;
+  if (loading && Number.isInteger(personId)) return showSkeleton ? <PersonSkeleton /> : null;
 
   if (!person) {
     return (
@@ -277,10 +279,11 @@ function PersonSkeleton() {
   return (
     <div className="px-4 md:px-12 py-6 md:py-10">
       <Skeleton className="h-5 w-24 mb-8 rounded" />
-      <div className="flex gap-8 md:gap-12 mb-12">
+      {/* Stacked on phones like the page (side by side it ran off the screen) */}
+      <div className="flex flex-col sm:flex-row gap-8 md:gap-12 mb-12">
         <Skeleton className="w-36 md:w-48 aspect-[2/3] rounded-2xl shrink-0" />
-        <div className="flex flex-col gap-4 flex-1 pt-1">
-          <Skeleton className="h-9 w-56 rounded-lg" />
+        <div className="flex flex-col gap-4 flex-1 min-w-0 pt-1">
+          <Skeleton className="h-9 w-56 max-w-full rounded-lg" />
           <Skeleton className="h-4 w-40 rounded" />
           <Skeleton className="h-4 w-32 rounded" />
           <div className="flex gap-2">

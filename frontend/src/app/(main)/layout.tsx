@@ -19,6 +19,7 @@ import { useProfile } from "@/contexts/profile-context";
 import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV, useTVTier } from "@/hooks/use-platform";
 import { AppBackground } from "@/components/layout/app-background";
+import { useDelayed } from "@/hooks/use-delayed";
 
 
 /** Progress and the watchlist belong to a profile: a device that hasn't picked one goes
@@ -26,6 +27,7 @@ import { AppBackground } from "@/components/layout/app-background";
 function ProfileGate({ children }: { children: React.ReactNode }) {
   const { needsProfileSelection, isLoading, profiles, selectProfile } = useProfile();
   const router = useRouter();
+  const showLoader = useDelayed(isLoading || needsProfileSelection);
 
   useEffect(() => {
     if (!needsProfileSelection) return;
@@ -36,7 +38,7 @@ function ProfileGate({ children }: { children: React.ReactNode }) {
   if (isLoading || needsProfileSelection) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 text-plex-orange animate-spin" />
+        {showLoader && <Loader2 className="h-8 w-8 text-plex-orange animate-spin" />}
       </div>
     );
   }

@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/lib/breakpoints";
 
@@ -69,18 +68,7 @@ export function HeroBanner({
 
   return (
     <div className="relative" style={isMobile ? undefined : { height }}>
-      {/* A slide without a fade: the action buttons are blurred glass, and an ancestor's
-          opacity turns their blur off until the fade ends */}
-      <motion.div
-        initial={{ y: 20 }}
-        animate={{ y: 0 }}
-        transition={{
-          duration: 0.4,
-          delay: 0.15,
-          ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
-        }}
-        className="relative z-10 h-full"
-      >
+      <div className="relative z-10 h-full">
         {isMobile ? (
           /* ── Mobile layout ── */
           <div className="flex flex-col gap-4 px-4 pt-5 pb-4 text-shadow">
@@ -119,7 +107,45 @@ export function HeroBanner({
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
     </div>
+  );
+}
+
+const Bar = ({ className }: { className: string }) => (
+  <div className={cn("bg-[#27272a] rounded", className)} />
+);
+
+/**
+ * A detail page while it loads: the hero itself with placeholders, so the poster, title
+ * and buttons land exactly where the page draws them (the old skeletons were drawn by
+ * hand and the page jumped when it arrived). Inside the page skeleton's animate-pulse.
+ */
+export function HeroBannerSkeleton({ buttons = 3 }: { buttons?: number }) {
+  return (
+      <HeroBanner
+        height={432}
+        posterUrl={null}
+        posterAlt=""
+        posterWidth={200}
+        posterHeight={300}
+        mobileInfoSlot={
+          <>
+            <Bar className="h-7 md:h-10 w-48 md:w-80" />
+            <Bar className="h-4 w-32 md:w-64" />
+            <Bar className="h-4 w-24 md:w-40" />
+          </>
+        }
+      >
+        <div className="flex flex-wrap gap-2 md:gap-3">
+          {Array.from({ length: buttons }).map((_, i) => (
+            <Bar key={i} className="h-10 md:h-11 w-28 md:w-36 rounded-[10px]" />
+          ))}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Bar className="h-4 w-full max-w-2xl" />
+          <Bar className="h-4 w-4/5 max-w-xl" />
+        </div>
+      </HeroBanner>
   );
 }

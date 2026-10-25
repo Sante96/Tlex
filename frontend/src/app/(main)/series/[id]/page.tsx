@@ -22,6 +22,7 @@ import {
   DetailPageLayout,
   EditMediaModal,
   TrailerModal,
+  HeroBannerSkeleton,
 } from "@/components/ds";
 import {
   getSeriesDetails,
@@ -38,6 +39,7 @@ import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
 import { useAuth } from "@/contexts/auth-context";
+import { useDelayed } from "@/hooks/use-delayed";
 
 export default function SeriesDetailPage() {
   const params = useParams();
@@ -47,6 +49,7 @@ export default function SeriesDetailPage() {
   const [series, setSeries] = useState<SeriesDetails | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const [failed, setFailed] = useState(false); // a load error, not a 404
   const [attempt, setAttempt] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -108,7 +111,7 @@ export default function SeriesDetailPage() {
     };
   }, [seriesId, attempt]);
 
-  if (loading && Number.isInteger(seriesId)) return <SeriesSkeleton />;
+  if (loading && Number.isInteger(seriesId)) return showSkeleton ? <SeriesSkeleton /> : null;
 
   if (failed) {
     return (
@@ -345,43 +348,7 @@ export default function SeriesDetailPage() {
 function SeriesSkeleton() {
   return (
     <div className="animate-pulse">
-      {/* Hero — matches HeroBanner height=432 with backdrop gradient */}
-      <div className="relative h-auto md:h-[432px] bg-[#18181b]">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-transparent hidden md:block" />
-
-        {/* Mobile layout: poster + info row */}
-        <div className="flex md:hidden flex-col gap-4 px-4 pt-5 pb-4">
-          <div className="flex items-end gap-3">
-            <div className="w-[90px] h-[135px] bg-[#27272a] rounded-xl shrink-0" />
-            <div className="flex flex-col gap-2 flex-1 min-w-0 pb-1">
-              <div className="h-6 w-40 bg-[#27272a] rounded" />
-              <div className="h-4 w-24 bg-[#27272a] rounded" />
-              <div className="h-4 w-32 bg-[#27272a] rounded" />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <div className="h-10 w-36 bg-[#27272a] rounded-[10px]" />
-            <div className="h-10 w-28 bg-[#27272a] rounded-[10px]" />
-          </div>
-          <div className="h-3 w-full bg-[#27272a] rounded" />
-          <div className="h-3 w-4/5 bg-[#27272a] rounded" />
-        </div>
-
-        {/* Desktop layout: poster + info at bottom */}
-        <div className="hidden md:flex absolute bottom-0 left-0 right-0 items-end gap-8 px-12 pb-8">
-          <div className="w-[200px] h-[300px] bg-[#27272a] rounded-xl shrink-0" />
-          <div className="flex flex-col gap-4 flex-1 min-w-0">
-            <div className="h-10 w-72 bg-[#27272a] rounded" />
-            <div className="h-5 w-48 bg-[#27272a] rounded" />
-            <div className="h-4 w-full max-w-lg bg-[#27272a] rounded" />
-            <div className="flex gap-3">
-              <div className="h-11 w-44 bg-[#27272a] rounded-[10px]" />
-              <div className="h-11 w-32 bg-[#27272a] rounded-[10px]" />
-              <div className="h-11 w-24 bg-[#27272a] rounded-[10px]" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <HeroBannerSkeleton buttons={4} />
 
       {/* Seasons — matches flex overflow-x-auto md:grid md:grid-cols-3 lg:grid-cols-5 */}
       <div className="px-4 md:px-12 py-4 md:py-8">

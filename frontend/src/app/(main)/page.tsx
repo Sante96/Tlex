@@ -17,7 +17,8 @@ import {
   type SeriesItem,
 } from "@/lib/api";
 import { cleanEpisodeTitle, getTmdbImageUrl, yearOf } from "@/lib/format";
-import { PosterCardSkeleton } from "@/components/ui/skeleton";
+import { PosterCardSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { useDelayed } from "@/hooks/use-delayed";
 
 // Posters per home row
 const ROW = 7;
@@ -32,6 +33,7 @@ export default function HomePage() {
     ContinueWatchingItem[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const [failed, setFailed] = useState(false);
   const [scanning, setScanning] = useState(false);
 
@@ -79,15 +81,9 @@ export default function HomePage() {
   };
 
   if (loading) {
-    return (
-      <div className={isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}>
-        <div className={isTV ? gridClass : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0"}>
-          {Array.from({ length: isTV ? 8 : 6 }).map((_, i) => (
-            <PosterCardSkeleton key={i} className={isTV ? "" : "w-[130px] md:w-auto"} />
-          ))}
-        </div>
-      </div>
-    );
+    return showSkeleton ? (
+      <HomeSkeleton isTV={isTV} gridClass={gridClass} cardClass={cardClass} />
+    ) : null;
   }
 
   if (failed) {
@@ -240,5 +236,31 @@ function ContinueWatchingCard({
         <Play className="h-10 w-10 text-white fill-white" />
       </div>
     </PosterCard>
+  );
+}
+
+/** The home while it loads: three titled rows like the page's (one untitled row jumped) */
+function HomeSkeleton({
+  isTV,
+  gridClass,
+  cardClass,
+}: {
+  isTV: boolean;
+  gridClass: string;
+  cardClass: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
+      {[0, 1, 2].map((row) => (
+        <section key={row}>
+          <Skeleton className="h-8 w-48 mb-5" />
+          <div className={gridClass}>
+            {Array.from({ length: ROW }).map((_, i) => (
+              <PosterCardSkeleton key={i} className={cardClass} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }

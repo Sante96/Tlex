@@ -15,7 +15,7 @@ export { DSModal } from "./modal";
 export { PosterCard } from "./poster-card";
 export { SectionHeader } from "./section-header";
 export { RatingBadge } from "./rating-badge";
-export { HeroBanner } from "./hero-banner";
+export { HeroBanner, HeroBannerSkeleton } from "./hero-banner";
 export { ActionButton } from "./action-button";
 export { MetaRow } from "./meta-row";
 export { EpisodeCard } from "./episode-card";

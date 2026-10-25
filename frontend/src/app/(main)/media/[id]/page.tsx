@@ -21,6 +21,7 @@ import {
   DetailPageLayout,
   EditMediaModal,
   TrailerModal,
+  HeroBannerSkeleton,
 } from "@/components/ds";
 import {
   getMediaDetails,
@@ -37,6 +38,7 @@ import { formatDuration, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
 import { useAuth } from "@/contexts/auth-context";
+import { useDelayed } from "@/hooks/use-delayed";
 
 export default function MediaDetailPage() {
   const params = useParams();
@@ -46,6 +48,7 @@ export default function MediaDetailPage() {
   const [media, setMedia] = useState<MediaDetails | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const [failed, setFailed] = useState(false); // a load error, not a 404
   const [attempt, setAttempt] = useState(0);
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -107,7 +110,7 @@ export default function MediaDetailPage() {
     };
   }, [mediaId, attempt]);
 
-  if (loading && Number.isInteger(mediaId)) return <DetailSkeleton />;
+  if (loading && Number.isInteger(mediaId)) return showSkeleton ? <DetailSkeleton /> : null;
 
   if (failed) {
     return (
@@ -278,18 +281,7 @@ export default function MediaDetailPage() {
 function DetailSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="flex items-end gap-8 h-[374px] px-4 md:px-12 pb-8">
-        <div className="w-[180px] h-[270px] bg-[#27272a] rounded-xl hidden md:block" />
-        <div className="flex-1 space-y-4">
-          <div className="h-10 w-72 bg-[#27272a] rounded" />
-          <div className="h-5 w-48 bg-[#27272a] rounded" />
-          <div className="h-4 w-full max-w-lg bg-[#27272a] rounded" />
-          <div className="flex gap-3">
-            <div className="h-11 w-36 bg-[#27272a] rounded-[10px]" />
-            <div className="h-11 w-32 bg-[#27272a] rounded-[10px]" />
-          </div>
-        </div>
-      </div>
+      <HeroBannerSkeleton buttons={4} />
     </div>
   );
 }

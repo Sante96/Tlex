@@ -12,6 +12,7 @@ import {
   CastSection,
   DetailPageLayout,
   EditMediaModal,
+  HeroBannerSkeleton,
 } from "@/components/ds";
 import {
   getSeriesDetails,
@@ -23,6 +24,7 @@ import {
 import { cleanEpisodeTitle, formatDurationShort, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
 import { useIsTV } from "@/hooks/use-platform";
+import { useDelayed } from "@/hooks/use-delayed";
 
 export default function SeasonDetailPage() {
   const t = useTranslations();
@@ -39,6 +41,7 @@ export default function SeasonDetailPage() {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useDelayed(loading);
   const isTV = useIsTV();
   const [editingSeason, setEditingSeason] = useState(false);
   const [editingEpisode, setEditingEpisode] = useState<{
@@ -77,7 +80,7 @@ export default function SeasonDetailPage() {
 
   // An invalid id never loads: "not found" instead of a skeleton forever
   if (loading && Number.isInteger(seriesId) && Number.isInteger(seasonNumber)) {
-    return <SeasonSkeleton />;
+    return showSkeleton ? <SeasonSkeleton /> : null;
   }
 
   if (!series || !season) {
@@ -257,14 +260,7 @@ export default function SeasonDetailPage() {
 function SeasonSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="flex items-center gap-6 h-[200px] px-4 md:px-12">
-        <div className="w-[100px] h-[150px] bg-[#27272a] rounded-lg hidden md:block" />
-        <div className="flex-1 space-y-3">
-          <div className="h-8 w-48 bg-[#27272a] rounded" />
-          <div className="h-5 w-32 bg-[#27272a] rounded" />
-          <div className="h-4 w-full max-w-md bg-[#27272a] rounded" />
-        </div>
-      </div>
+      <HeroBannerSkeleton buttons={1} />
       <div className="px-4 md:px-12 py-4 md:py-8">
         <div className="h-7 w-20 bg-[#27272a] rounded mb-6" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">

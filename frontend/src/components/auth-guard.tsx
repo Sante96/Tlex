@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useDelayed } from "@/hooks/use-delayed";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ export function AuthGuard({
   redirectTo = requireAuth ? "/login" : "/",
 }: AuthGuardProps) {
   const { isAuthenticated, isLoading } = useAuth();
+  const showLoader = useDelayed(isLoading);
   const router = useRouter();
 
   // replace, not push: a redirect must not leave a history entry, or Back from
@@ -37,7 +39,7 @@ export function AuthGuard({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 text-plex-orange animate-spin" />
+        {showLoader && <Loader2 className="h-8 w-8 text-plex-orange animate-spin" />}
       </div>
     );
   }
