@@ -13,6 +13,7 @@ import {
   SyncSubmenu,
 } from "./settings-items";
 import { useIsTV } from "@/hooks/use-platform";
+import { useBackToClose } from "@/hooks/use-back-to-close";
 
 interface PlayerSettingsProps {
   audioTracks: MediaStream[];
@@ -82,6 +83,14 @@ export function PlayerSettingsDropdown({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
+  // Back (the TV remote, a phone) closes the menu instead of leaving the player
+  useBackToClose(open, () => {
+    setOpen(false);
+    onOpenChange?.(false);
+    setTimeout(() => setView("main"), 200);
+    buttonRef.current?.focus();
+  });
+
   // Close on click outside
   useEffect(() => {
     if (!open) return;
@@ -136,6 +145,9 @@ export function PlayerSettingsDropdown({
       <button
         ref={buttonRef}
         onClick={toggle}
+        aria-label={t("player.settings")}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className={cn(
           "p-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
           open ? "bg-white/10" : "hover:bg-white/10",

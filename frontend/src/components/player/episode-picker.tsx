@@ -21,6 +21,7 @@ import {
   formatDuration,
   cleanEpisodeTitle,
 } from "@/lib/format";
+import { useBackToClose } from "@/hooks/use-back-to-close";
 
 interface EpisodePickerProps {
   open: boolean;
@@ -135,6 +136,9 @@ export function EpisodePicker({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open, onClose, toggleButtonRef]);
+
+  // Back (the TV remote, a phone) closes the picker instead of leaving the player
+  useBackToClose(open, onClose);
 
   // Close on Escape
   useEffect(() => {

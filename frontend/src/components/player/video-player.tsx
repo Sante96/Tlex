@@ -349,16 +349,19 @@ export function VideoPlayer({
     };
   }, [mediaId]);
 
+  const isMobile = useIsMobile();
+  const isTV = useIsTV();
+  const controlsVisible = showControls || !isPlaying || isLoading || isSeeking || settingsOpen;
+
   useVideoHotkeys({
     togglePlay,
     toggleFullscreen,
     toggleMute,
     skip,
     onActivity: handleMouseMove,
+    controlsVisible,
+    isTV,
   });
-
-  const isMobile = useIsMobile();
-  const isTV = useIsTV();
 
   const togglePiP = useCallback(async () => {
     const video = videoRef.current;
@@ -488,7 +491,7 @@ export function VideoPlayer({
       />
 
       <PlayerControls
-        visible={showControls || !isPlaying || isLoading || isSeeking || settingsOpen}
+        visible={controlsVisible}
         isPlaying={isPlaying}
         isLoading={isLoading || isSeeking}
         currentTime={currentTime}
