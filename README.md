@@ -26,16 +26,16 @@
 
 ### 🚀 Core Architecture
 - **Telegram as Storage**: Uses Telegram channels as a persistent, unlimited storage layer. No local hard drives required for media.
-- **Worker Pool System**: Manages multiple Telegram accounts ("workers") to parallelize downloads and bypass bandwidth limits or `FloodWait` (Rate Limits) automatically.
+- **Worker Pool System**: Manages multiple Telegram accounts ("workers"), each with several clients, and spreads streams across them to raise throughput. A client that hits `FloodWait` waits it out while the others keep serving.
 - **Virtual Streaming**: Streams video files directly from Telegram to the client without downloading the entire file first. Supports seeking and range requests.
-- **Smart Caching**: Hybrid caching system (Redis + Disk) to optimize frequent access and reduce API calls.
+- **Caching**: Extracted subtitles and fonts are cached on disk; recently streamed chunks are kept in memory.
 
 ### 🎥 Media Experience
 - **Modern Web Player**: Custom video player built with React, supporting multiple audio tracks and subtitles.
 - **TMDB Integration**: Automatically fetches high-quality metadata, posters, and backdrops for Movies and TV Series.
 - **Advanced Subtitles**: Native support for SSA/ASS subtitles using **SubtitleOctopus (via libass-wasm)**, fully preserving complex anime-style typesetting, fonts, and animations in the browser.
 - **Subtitle Sync**: Manual audio/subtitle synchronization offset adjustment (+/- 20s) directly in the player.
-- **Transcoding**: Automatic conversion of unsupported formats (e.g., mkv container features) to browser-compatible streams.
+- **Remuxing**: MKV files are remuxed on the fly into fragmented MP4 for the browser (video copied as-is, audio converted to AAC).
 
 ### � Backup & Resilience
 - **Automatic Backup Channels**: Mirror entire Telegram channels (topics + messages) to a backup supergroup automatically.
@@ -44,14 +44,14 @@
 - **Fallback Streaming**: If a file is unavailable on the main channel, the streaming engine transparently fetches it from the backup.
 
 ### �👤 User Experience
-- **Multi-Profile**: Create multiple profiles per account (Netflix-style), including Kids Mode and separate language preferences.
+- **Multi-Profile**: Create multiple profiles per account (Netflix-style), each with its own avatar and playback preferences (audio/subtitle language, autoplay).
 - **Continue Watching**: Automatic progress tracking. Resume movies and episodes exactly where you left off across devices.
 - **Watchlist**: Save content to your personal list for later viewing.
 
 ### 🛠️ Tech Stack
 - **Backend**: Python (FastAPI), SQLAlchemy (Async), Pyrogram (Telegram MTProto Client).
 - **Frontend**: Next.js, React, Tailwind CSS v4, Framer Motion — custom Design System (DSButton, DSCard, DSInput, DSDatePicker).
-- **Infrastructure**: Docker, PostgreSQL (Data), Redis (Cache/Locks), Cloudflared (Tunneling).
+- **Infrastructure**: Docker, PostgreSQL (data), Redis (rate limits, scheduler and admin settings), Cloudflared (tunneling).
 
 ---
 
@@ -71,15 +71,15 @@ graph TD
             Backend[🚀 FastAPI Backend]
             
             DB[(🐘 PostgreSQL)]
-            Redis[(⚡ Redis Cache)]
+            Redis[(⚡ Redis)]
             
+            Frontend <-->|API / stream proxy| Backend
             Backend <-->|ORM| DB
-            Backend <-->|Pub/Sub| Redis
+            Backend <-->|Rate limits / settings| Redis
         end
         
         Browser <-->|Secure Tunnel| Tunnel
         Tunnel <-->|HTTP| Frontend
-        Tunnel <-->|API / Stream| Backend
     end
 
     subgraph External ["🌍 External Services"]
@@ -126,9 +126,11 @@ graph TD
     ```
 
 4.  **Access the Platform**
-    - **Web UI**: [http://localhost:3000](http://localhost:3000)
-    - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-    - **pgAdmin**: [http://localhost:5050](http://localhost:5050) (Login with email/pass from `.env`)
+    - **Web UI**: [http://localhost:3000](http://localhost:3000) (also from other devices on your network, e.g. the Android TV app: `http://<this-pc-ip>:3000`)
+    - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs), only with `DEBUG=true`
+    - **pgAdmin**: [http://localhost:5050](http://localhost:5050) (desktop mode, no login)
+
+    Postgres, Redis, pgAdmin and the backend API listen on `127.0.0.1` only: they are reachable from this machine, not from the rest of the network.
     - **Remote Access (Quick Tunnel)**:
         Check the logs to get your temporary `trycloudflare.com` URL:
         ```bash
@@ -154,11 +156,15 @@ Key environment variables in `.env`:
 |----------|-------------|---------|
 | `API_ID` | Telegram API ID | Required |
 | `API_HASH` | Telegram API Hash | Required |
+| `JWT_SECRET` | Token signing key, 32+ random characters | Required |
 | `POSTGRES_USER` | Database User | `tlex` |
 | `POSTGRES_DB` | Database Name | `tlex_db` |
 | `SCANNER_CHANNEL_IDS` | Comma-separated list of Channel/Group IDs to scan | |
 | `SCANNER_MOVIES_TOPIC_ID` | Specific Topic ID where you upload Movies | |
 | `TMDB_API_KEY` | Key for fetching media metadata | |
+| `ENABLE_REGISTRATION` | Let new users sign up (the first account always can) | `false` |
+| `JWT_EXPIRE_MINUTES` | Access token lifetime; the app renews it with a 30-day refresh token | `30` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated origins allowed to call the API directly | `http://localhost:3000` |
 
 ### 📚 Library Setup
 

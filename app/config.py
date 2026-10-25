@@ -83,17 +83,11 @@ class Settings(BaseSettings):
     # ============================================
     tmdb_api_key: str = ""
     tmdb_language: str = "it-IT"
-    tmdb_image_base_url: str = "https://image.tmdb.org/t/p"
 
     # ============================================
     # Application
     # ============================================
-    app_host: str = "0.0.0.0"
-    app_port: int = 8000
-
-    # Worker Pool Settings
-    max_workers_standard: int = 1
-    max_workers_premium: int = 10
+    app_port: int = 8000  # where ffmpeg reaches this backend over loopback
     chunk_size_bytes: int = 1048576  # 1MB
 
     # ============================================

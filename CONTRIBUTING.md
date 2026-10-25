@@ -21,12 +21,15 @@ The following is a set of guidelines for contributing to TLEX. These are mostly 
 ## 💻 Development Workflow
 
 ### Backend (Python/FastAPI)
+- Dependencies are managed with **uv**: `uv sync` installs everything, dev tools included.
 - Uses **Ruff** for linting and formatting.
-- Ensure all tests pass (if any).
-- Run linting before committing:
+- Run the tests and the linter before committing. The suite runs offline (SQLite, no Redis or
+  Telegram); tests that need the real database and Telegram are marked `integration` and
+  skipped unless you pass `-m integration`.
   ```bash
-  ruff check .
-  ruff format .
+  uv run pytest
+  uv run ruff check app/
+  uv run ruff format app/
   ```
 
 ### Frontend (Next.js)
