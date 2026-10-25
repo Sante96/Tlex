@@ -15,6 +15,8 @@ import {
   type AutoScanStatus,
   type ScanStatus,
 } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { errorText } from "@/lib/api";
 
 interface ScannerCardProps {
   autoScanData: AutoScanStatus | null;
@@ -36,6 +38,7 @@ export function ScannerCard({
   onAutoScanChange,
 }: ScannerCardProps) {
   const t = useTranslations();
+  const toast = useToast();
   return (
     <DSCard
       icon={<Clock className="w-5 h-5 text-[#e5a00d]" />}
@@ -73,8 +76,8 @@ export function ScannerCard({
               try {
                 const result = await setAutoScanInterval(parseInt(value));
                 onAutoScanChange(result);
-              } catch {
-                // Failed to set interval
+              } catch (e) {
+                toast(errorText(e, t("common.actionFailed")), "error");
               }
             }}
           >

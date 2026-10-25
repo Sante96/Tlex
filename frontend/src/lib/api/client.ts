@@ -19,6 +19,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/** A failed request's message for the admin screens: the text, plus the backend's
+ * `detail` when it sent one (a Telegram error, say). */
+export function errorText(e: unknown, text: string): string {
+  const detail = isAxiosError(e) ? e.response?.data?.detail : undefined;
+  return typeof detail === "string" ? `${text}: ${detail}` : text;
+}
+
 // --- Session ----------------------------------------------------------------
 // The backend keeps the tokens in httpOnly cookies, out of this code's reach (and an
 // XSS's), plus a readable `token_exp`: the access token's expiry in unix seconds. The

@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
 import { useIsTV, useTVTier } from "@/hooks/use-platform";
 import { updateProfile, getSeriesDetails, getMediaDetails } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_AVATAR = "/avatars/avatar-01.png";
 
@@ -90,6 +91,7 @@ export function TopBar() {
   const tvTier = useTVTier();
   const avatarSize = tvTier === "4k" ? 36 : tvTier === "1080" ? 28 : 24;
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const toast = useToast();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const breadcrumbItems = useBreadcrumbItems();
 
@@ -98,7 +100,9 @@ export function TopBar() {
     try {
       await updateProfile(profile.id, { avatar_url: newAvatarSrc });
       await refreshProfiles();
-    } catch {}
+    } catch {
+      toast(t("common.actionFailed"), "error");
+    }
   };
 
   const handleSwitchProfile = () => {

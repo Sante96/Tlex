@@ -26,7 +26,8 @@
     "madeBy": "made by Sante",
     "retry": "Retry",
     "loadError": "Couldn't load the content",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "actionFailed": "Something went wrong"
   },
   "nav": {
     "home": "Home",

@@ -23,11 +23,16 @@ import {
   type BackupChannel,
 } from "@/lib/api/backup";
 import { getConfiguredChannels } from "@/lib/api/scanner";
+import { errorText } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import { BackupRow } from "./backup-row";
 import { BackupForm } from "./backup-form";
 
 export function BackupCard() {
   const t = useTranslations("backup");
+  const tc = useTranslations("common");
+  const toast = useToast();
+  const fail = (e: unknown) => toast(errorText(e, tc("actionFailed")), "error");
 
   const [backups, setBackups] = useState<BackupChannel[]>([]);
   const [channelIds, setChannelIds] = useState<number[]>([]);
@@ -47,29 +52,28 @@ export function BackupCard() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [promotingId, setPromotingId] = useState<number | null>(null);
 
-  const load = async () => {
-    try {
-      const [channels, interval, configured] = await Promise.all([
-        listBackupChannels(),
-        getBackupSyncInterval(),
-        getConfiguredChannels(),
-      ]);
-      setBackups(channels);
-      setIntervalHours(interval.interval_hours);
-      setChannelIds(configured.channel_ids);
-      if (configured.channel_ids.length > 0) {
-        setMainChannelId(String(configured.channel_ids[0]));
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const load = async () => {
+      try {
+        const [channels, interval, configured] = await Promise.all([
+          listBackupChannels(),
+          getBackupSyncInterval(),
+          getConfiguredChannels(),
+        ]);
+        setBackups(channels);
+        setIntervalHours(interval.interval_hours);
+        setChannelIds(configured.channel_ids);
+        if (configured.channel_ids.length > 0) {
+          setMainChannelId(String(configured.channel_ids[0]));
+        }
+      } catch {
+        toast(tc("loadError"), "error");
+      } finally {
+        setLoading(false);
+      }
+    };
     void load();
-  }, []);
+  }, [tc, toast]);
 
   const handleCreate = async () => {
     const id = parseInt(mainChannelId);
@@ -85,8 +89,8 @@ export function BackupCard() {
       setMainChannelId("");
       setBackupTitle("");
       setShowForm(false);
-    } catch {
-      // silent
+    } catch (e) {
+      fail(e);
     }
     setCreating(false);
   };
@@ -106,8 +110,8 @@ export function BackupCard() {
             : b,
         ),
       );
-    } catch {
-      // silent
+    } catch (e) {
+      fail(e);
     }
     setSyncingId(null);
   };
@@ -117,8 +121,8 @@ export function BackupCard() {
     try {
       const updated = await toggleBackupChannel(id);
       setBackups((prev) => prev.map((b) => (b.id === id ? updated : b)));
-    } catch {
-      // silent
+    } catch (e) {
+      fail(e);
     }
     setTogglingId(null);
   };
@@ -130,8 +134,8 @@ export function BackupCard() {
     try {
       await deleteBackupChannel(id, deleteTelegram);
       setBackups((prev) => prev.filter((b) => b.id !== id));
-    } catch {
-      // silent
+    } catch (e) {
+      fail(e);
     }
     setDeletingId(null);
   };
@@ -148,19 +152,21 @@ export function BackupCard() {
           )
           .concat(newBackup),
       );
-    } catch {
-      // silent
+    } catch (e) {
+      fail(e);
     }
     setPromotingId(null);
   };
 
   const handleIntervalChange = async (value: string) => {
     const hours = parseInt(value);
+    const previous = intervalHours;
     setIntervalHours(hours);
     try {
       await setBackupSyncInterval(hours);
-    } catch {
-      // silent
+    } catch (e) {
+      setIntervalHours(previous); // it was shown as saved
+      fail(e);
     }
   };
 

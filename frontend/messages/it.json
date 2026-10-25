@@ -26,7 +26,8 @@
     "madeBy": "made by Sante",
     "retry": "Riprova",
     "loadError": "Impossibile caricare i contenuti",
-    "loadMore": "Carica altri"
+    "loadMore": "Carica altri",
+    "actionFailed": "Operazione non riuscita"
   },
   "nav": {
     "home": "Home",

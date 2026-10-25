@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { DSButton, DSCard } from "@/components/ds";
 import { Switch } from "@/components/ui/switch";
 import { toggleUserAdmin, deleteUser, type UserInfo } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { errorText } from "@/lib/api";
 
 interface UsersCardProps {
   users: UserInfo[];
@@ -23,13 +25,16 @@ export function UsersCard({
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const t = useTranslations();
+  const toast = useToast();
 
   const handleToggleAdmin = async (userId: number, newValue: boolean) => {
     setTogglingId(userId);
     try {
       await toggleUserAdmin(userId, newValue);
       onRefresh();
-    } catch {}
+    } catch (e) {
+      toast(errorText(e, t("common.actionFailed")), "error");
+    }
     setTogglingId(null);
   };
 
@@ -44,7 +49,9 @@ export function UsersCard({
     try {
       await deleteUser(user.id);
       onRefresh();
-    } catch {}
+    } catch (e) {
+      toast(errorText(e, t("common.actionFailed")), "error");
+    }
     setDeletingId(null);
   };
 

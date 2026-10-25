@@ -23,6 +23,7 @@ import {
   type MediaUpdateBody,
 } from "@/lib/api";
 import { GeneralTab, ImagePickerTab, InfoTab } from "./edit-media-tabs";
+import { useToast } from "@/components/ui/toast";
 
 export type EntityType = "media" | "series" | "season";
 
@@ -66,6 +67,7 @@ export function EditMediaModal({
   onSaved,
 }: EditMediaModalProps) {
   const t = useTranslations();
+  const toast = useToast();
 
   const MEDIA_TABS: Tab[] = [
     {
@@ -196,7 +198,9 @@ export function EditMediaModal({
       }
       onSaved();
       onClose();
-    } catch {}
+    } catch {
+      toast(t("common.actionFailed"), "error");
+    }
     setSaving(false);
   };
 
