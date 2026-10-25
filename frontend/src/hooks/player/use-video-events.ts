@@ -73,6 +73,10 @@ export function useVideoEvents({
     // requestVideoFrameCallback gives us frame-accurate detection.
     const trackFrame = () => {
       if ("requestVideoFrameCallback" in video) {
+        // One loop at a time: every loadstart (seek) used to start another
+        if (frameCallbackId !== null) {
+          (video as VFCVideo).cancelVideoFrameCallback(frameCallbackId);
+        }
         frameCallbackId = (video as VFCVideo).requestVideoFrameCallback(() => {
           const currentVideoTime = video.currentTime;
 

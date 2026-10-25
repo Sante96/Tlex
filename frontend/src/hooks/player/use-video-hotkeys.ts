@@ -20,6 +20,16 @@ export function useVideoHotkeys({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      // Enter/Space on a focused button (Back, settings, episode cards, TV remote OK)
+      // must press it, not toggle playback and swallow the click
+      if (
+        (e.key === " " || e.key === "Enter") &&
+        (e.target as HTMLElement | null)?.closest?.(
+          "button, a, [role='button'], [role='menuitem'], [role='option']",
+        )
+      ) {
+        return;
+      }
 
       onActivity?.();
       switch (e.key) {

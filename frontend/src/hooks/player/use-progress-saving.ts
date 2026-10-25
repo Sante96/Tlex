@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { updateWatchProgress } from "@/lib/api";
+import { saveWatchProgressOnExit, updateWatchProgress } from "@/lib/api";
 
 interface UseProgressSavingOptions {
   mediaId: number;
@@ -11,8 +11,8 @@ interface UseProgressSavingOptions {
 }
 
 /**
- * Saves watch progress periodically (every 10s while playing),
- * on page unload, and on component unmount.
+ * Saves watch progress periodically (every 10s while playing), when the page is
+ * hidden or closed, and on component unmount.
  */
 export function useProgressSaving({
   mediaId,
@@ -44,7 +44,8 @@ export function useProgressSaving({
         isPlayingRef.current &&
         time > 0 &&
         dur > 0 &&
-        time - lastSavedRef.current >= 10
+        // abs: after seeking back from 50:00 to 10:00 keep saving, not from 50:10 on
+        Math.abs(time - lastSavedRef.current) >= 10
       ) {
         lastSavedRef.current = time;
         updateWatchProgress(mediaId, Math.floor(time), Math.floor(dur)).catch(
@@ -55,22 +56,34 @@ export function useProgressSaving({
     return () => clearInterval(interval);
   }, [mediaId]);
 
-  // Save on beforeunload + cleanup
+  // Save when the tab is hidden or closed (mobile browsers often never fire
+  // beforeunload, and an async axios call there may never be sent) + on unmount
   useEffect(() => {
-    const saveProgress = () => {
+    const current = () => {
       const time = currentTimeRef.current;
       const dur = durationRef.current;
-      if (time > 0 && dur > 0) {
-        updateWatchProgress(mediaId, Math.floor(time), Math.floor(dur)).catch(
-          () => {},
-        );
+      return time > 0 && dur > 0
+        ? { position: Math.floor(time), duration: Math.floor(dur) }
+        : null;
+    };
+    const saveOnExit = () => {
+      const p = current();
+      if (p) {
+        lastSavedRef.current = p.position;
+        saveWatchProgressOnExit(mediaId, p.position, p.duration);
       }
     };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") saveOnExit();
+    };
 
-    window.addEventListener("beforeunload", saveProgress);
+    window.addEventListener("pagehide", saveOnExit);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("beforeunload", saveProgress);
-      saveProgress();
+      window.removeEventListener("pagehide", saveOnExit);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      const p = current();
+      if (p) updateWatchProgress(mediaId, p.position, p.duration).catch(() => {});
     };
   }, [mediaId]);
 }

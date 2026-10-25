@@ -22,6 +22,14 @@ import { NextEpisodeOverlay } from "./next-episode-overlay";
 import { useNextEpisode } from "@/hooks/player/use-next-episode";
 import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV } from "@/hooks/use-platform";
+import { useProfile } from "@/contexts/profile-context";
+
+// Saved from the Settings page into the profile
+interface ProfilePlaybackPrefs {
+  default_audio?: string;
+  default_subtitle?: string;
+  subtitles_enabled?: boolean;
+}
 
 interface VideoPlayerProps {
   mediaId: number;
@@ -68,6 +76,8 @@ export function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [seekTime, setSeekTime] = useState(initialPosition);
+  // Bumped on every seek so seeking to the current target still reloads the stream
+  const [seekId, setSeekId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [episodePickerOpen, setEpisodePickerOpen] = useState(false);
 
@@ -78,30 +88,55 @@ export function VideoPlayer({
   });
 
   // Custom Hooks
+  const { profile } = useProfile();
+  const prefs = (profile?.preferences ?? {}) as ProfilePlaybackPrefs;
   const {
     selectedAudio,
     selectedSubtitle,
+    subtitleChosen,
     subtitleOffset,
     setSelectedAudio,
     setSelectedSubtitle,
     setSubtitleOffset,
-  } = usePlayerPreferences(mediaId);
+  } = usePlayerPreferences(
+    mediaId,
+    Math.max(0, audioTracks.findIndex((t) => t.language === prefs.default_audio)),
+  );
 
-  // Auto-select first subtitle track if none saved
+  // First time on this media: pick subtitles from the Settings preferences.
+  // A saved choice, including "off", always wins.
   useEffect(() => {
-    if (selectedSubtitle === null && subtitleTracks.length > 0) {
-      const defaultTrack = subtitleTracks.find((t) => t.is_default);
-      setSelectedSubtitle(
-        defaultTrack?.stream_index ?? subtitleTracks[0].stream_index,
-      );
+    if (subtitleChosen || subtitleTracks.length === 0) return;
+    const enabled =
+      prefs.subtitles_enabled ??
+      localStorage.getItem("pref_subtitles_enabled") !== "false";
+    if (!enabled || prefs.default_subtitle === "none") {
+      setSelectedSubtitle(null);
+      return;
     }
-  }, [selectedSubtitle, subtitleTracks, setSelectedSubtitle]);
+    const inLanguage = subtitleTracks.filter(
+      (t) => t.language === prefs.default_subtitle,
+    );
+    const track =
+      inLanguage.find((t) => t.is_default) ??
+      inLanguage[0] ??
+      subtitleTracks.find((t) => t.is_default) ??
+      subtitleTracks[0];
+    setSelectedSubtitle(track.stream_index);
+  }, [
+    subtitleChosen,
+    subtitleTracks,
+    prefs.subtitles_enabled,
+    prefs.default_subtitle,
+    setSelectedSubtitle,
+  ]);
 
   const { videoUrl, streamStartTime, localSeekOffset } = useVideoSync(
     mediaId,
     selectedAudio,
     seekTime,
     initialPosition,
+    seekId,
   );
 
   useVideoEvents({
@@ -160,6 +195,7 @@ export function VideoPlayer({
     setIsLoading(true);
     setCurrentTime(time);
     setSeekTime(time);
+    setSeekId((id) => id + 1);
   }, []);
 
   const skip = useCallback(
@@ -180,9 +216,8 @@ export function VideoPlayer({
   }, []);
 
   const handleBack = useCallback(() => {
-    releaseStream(mediaId);
-    router.back();
-  }, [router, mediaId]);
+    router.back(); // the unmount effect below releases the stream
+  }, [router]);
 
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
@@ -217,13 +252,17 @@ export function VideoPlayer({
   // Watch Progress Saving
   useProgressSaving({ mediaId, currentTime, duration, isPlaying });
 
-  // Release Telegram stream clients on tab/browser close (pagehide)
-  // Note: don't use useEffect cleanup — React StrictMode in dev triggers spurious unmounts
-  // For SPA navigation, releaseStream is called in handleBack instead
+  // Release the Telegram clients however the player goes away: back button, browser/OS
+  // back, swipe, episode switch (the page remounts the player) or tab close (pagehide).
+  // StrictMode's dev-only double mount just releases a stream that hasn't started.
+  // Releasing the reader also ends the backend ffmpeg (its input stops).
   useEffect(() => {
     const handlePageHide = () => releaseStream(mediaId);
     window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      releaseStream(mediaId);
+    };
   }, [mediaId]);
 
   useVideoHotkeys({

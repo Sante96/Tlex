@@ -1,4 +1,6 @@
-import { api } from "./client";
+import Cookies from "js-cookie";
+
+import { api, API_BASE_URL } from "./client";
 
 export interface WatchProgress {
   media_item_id: number;
@@ -48,6 +50,26 @@ export async function updateWatchProgress(
     duration_seconds: durationSeconds,
   });
   return response.data;
+}
+
+/** For pagehide/tab-hidden: a keepalive fetch survives the page going away; axios doesn't. */
+export function saveWatchProgressOnExit(
+  mediaId: number,
+  positionSeconds: number,
+  durationSeconds: number,
+) {
+  fetch(`${API_BASE_URL}/api/v1/progress/${mediaId}`, {
+    method: "PUT",
+    keepalive: true,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${Cookies.get("token") ?? ""}`,
+    },
+    body: JSON.stringify({
+      position_seconds: positionSeconds,
+      duration_seconds: durationSeconds,
+    }),
+  }).catch(() => {});
 }
 
 export async function getContinueWatching(

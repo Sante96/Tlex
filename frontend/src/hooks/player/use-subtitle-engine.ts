@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import {
-  fetchAvailableFonts,
-  fetchSubtitleContent,
-  getSubtitleUrl,
-} from "./subtitle-fetchers";
+import { fetchAvailableFonts, fetchSubtitleContent } from "./subtitle-fetchers";
 import { useCanvasSync } from "./use-canvas-sync";
 
 interface SubtitlesOctopusOptions {
@@ -56,7 +52,9 @@ export function useSubtitleEngine({
   initialManualOffset,
 }: UseSubtitleEngineOptions) {
   const octopusRef = useRef<SubtitlesOctopus | null>(null);
-  const initializingRef = useRef(false);
+  // Bumped by every init and dispose: an init that resumes after its track changed
+  // (fonts/subtitle fetches are slow) sees it's stale and creates nothing
+  const generationRef = useRef(0);
   const manualOffsetRef = useRef(initialManualOffset);
   const rafIdRef = useRef<number | null>(null);
   const rafTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,40 +125,42 @@ export function useSubtitleEngine({
     }
   }, []);
 
+  // Also invalidates any init still in flight
+  const disposeOctopus = useCallback(() => {
+    generationRef.current++;
+    const instance = octopusRef.current as
+      | (SubtitlesOctopus & { _cleanup?: () => void })
+      | null;
+    if (instance) {
+      instance._cleanup?.();
+      instance.dispose();
+      octopusRef.current = null;
+    }
+    stopRenderLoop();
+  }, [stopRenderLoop]);
+
   // Initialize SubtitlesOctopus
   const initOctopus = useCallback(async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !enabled || subtitleTrack === null) return;
-    if (initializingRef.current) return;
-    initializingRef.current = true;
-
-    // Cleanup previous instance
-    if (octopusRef.current) {
-      octopusRef.current.dispose();
-      octopusRef.current = null;
-    }
-    stopRenderLoop();
+    disposeOctopus();
+    const generation = ++generationRef.current;
+    const isStale = () => generation !== generationRef.current;
 
     try {
       const availableFonts = await fetchAvailableFonts(mediaId);
-      if (!videoRef.current || !canvasRef.current) return;
+      if (isStale() || !videoRef.current || !canvasRef.current) return;
 
-      const subContent = await fetchSubtitleContent(mediaId, subtitleTrack);
-      if (!subContent) {
-        initializingRef.current = false;
-        return;
-      }
+      const subContent = await fetchSubtitleContent(mediaId, subtitleTrack, isStale);
+      if (!subContent || isStale()) return;
 
       const SubtitlesOctopusModule = await import("libass-wasm");
       const SubtitlesOctopusLib =
         SubtitlesOctopusModule.default || SubtitlesOctopusModule;
 
       const currentCanvas = canvasRef.current;
-      if (!currentCanvas) {
-        initializingRef.current = false;
-        return;
-      }
+      if (isStale() || !currentCanvas) return;
 
       const options: SubtitlesOctopusOptions = {
         video: null,
@@ -213,8 +213,6 @@ export function useSubtitleEngine({
       if (!video.paused) startRenderLoop();
     } catch {
       // Failed to initialize SubtitlesOctopus
-    } finally {
-      initializingRef.current = false;
     }
   }, [
     videoRef,
@@ -226,43 +224,19 @@ export function useSubtitleEngine({
     updateSubtitles,
     startRenderLoop,
     stopRenderLoop,
+    disposeOctopus,
   ]);
 
   // Lifecycle: init/cleanup on track change or enable/disable
   useEffect(() => {
     if (enabled && subtitleTrack !== null && canvasReady) {
       initOctopus();
-    } else if (octopusRef.current) {
-      const instance = octopusRef.current as SubtitlesOctopus & {
-        _cleanup?: () => void;
-      };
-      instance._cleanup?.();
-      instance.dispose();
-      octopusRef.current = null;
-      stopRenderLoop();
+    } else {
+      disposeOctopus();
     }
 
-    return () => {
-      if (octopusRef.current) {
-        const instance = octopusRef.current as SubtitlesOctopus & {
-          _cleanup?: () => void;
-        };
-        instance._cleanup?.();
-        instance.dispose();
-        octopusRef.current = null;
-      }
-      stopRenderLoop();
-      initializingRef.current = false;
-    };
-  }, [enabled, subtitleTrack, canvasReady, initOctopus, stopRenderLoop]);
-
-  // Change track without full reinit
-  useEffect(() => {
-    if (octopusRef.current && subtitleTrack !== null) {
-      octopusRef.current.setTrackByUrl(getSubtitleUrl(mediaId, subtitleTrack));
-      updateSubtitles();
-    }
-  }, [subtitleTrack, mediaId, updateSubtitles]);
+    return disposeOctopus;
+  }, [enabled, subtitleTrack, canvasReady, initOctopus, disposeOctopus]);
 
   // Manual offset setter (triggers immediate render)
   const setManualOffset = useCallback(

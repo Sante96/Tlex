@@ -75,6 +75,7 @@ export type {
 export {
   getWatchProgress,
   updateWatchProgress,
+  saveWatchProgressOnExit,
   getContinueWatching,
 } from "./progress";
 export type { WatchProgress, ContinueWatchingItem } from "./progress";

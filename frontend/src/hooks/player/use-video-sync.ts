@@ -15,6 +15,7 @@ export function useVideoSync(
   selectedAudio: number,
   seekTime: number,
   initialPosition: number,
+  seekId = 0,
 ): VideoSyncState {
   const [isWarmed, setIsWarmed] = useState(false);
   const [streamStartTime, setStreamStartTime] = useState(initialPosition);
@@ -33,18 +34,24 @@ export function useVideoSync(
   const videoUrl = useMemo(
     () =>
       isWarmed
-        ? getStreamUrl(mediaId, { audio: selectedAudio, t: seekTime })
+        ? getStreamUrl(mediaId, { audio: selectedAudio, t: seekTime, seek: seekId })
         : undefined,
-    [isWarmed, mediaId, selectedAudio, seekTime],
+    [isWarmed, mediaId, selectedAudio, seekTime, seekId],
   );
 
   // Fetch stream headers for subtitle sync and local seek calculation
   useEffect(() => {
     if (!videoUrl) return;
+    // Quick successive seeks race their HEADs: drop the answer of a superseded one
+    const controller = new AbortController();
 
     const fetchStreamHeaders = async () => {
       try {
-        const response = await fetch(videoUrl, { method: "HEAD" });
+        const response = await fetch(videoUrl, {
+          method: "HEAD",
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         const startTime = response.headers.get("X-Stream-Start-Time");
         const requestedTime = response.headers.get("X-Requested-Time");
 
@@ -74,11 +81,13 @@ export function useVideoSync(
           setLocalSeekOffset(0);
         }
       } catch {
+        if (controller.signal.aborted) return;
         setStreamStartTime(seekTime);
         setLocalSeekOffset(0);
       }
     };
     fetchStreamHeaders();
+    return () => controller.abort();
   }, [videoUrl, seekTime]);
 
   return { videoUrl, streamStartTime, localSeekOffset, isWarmed };

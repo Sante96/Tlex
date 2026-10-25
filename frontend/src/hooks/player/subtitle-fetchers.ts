@@ -52,13 +52,25 @@ export async function fetchAvailableFonts(
   return fonts;
 }
 
+/**
+ * The backend answers 202 (+ Retry-After) while it extracts a track that isn't cached
+ * yet; keep asking until it's ready or the caller no longer wants it (isStale).
+ */
 export async function fetchSubtitleContent(
   mediaId: number,
   track: number,
+  isStale: () => boolean = () => false,
 ): Promise<string | null> {
   try {
-    const resp = await fetch(getSubtitleUrl(mediaId, track));
-    if (resp.ok) return await resp.text();
+    while (!isStale()) {
+      const resp = await fetch(getSubtitleUrl(mediaId, track));
+      if (resp.status === 202) {
+        const retryAfter = Number(resp.headers.get("Retry-After")) || 5;
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+      return resp.ok ? await resp.text() : null;
+    }
   } catch {
     // Error fetching subtitles
   }

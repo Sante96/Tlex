@@ -6,12 +6,15 @@ export function getStreamUrl(
     audio?: number;
     video?: number;
     t?: number;
+    /** Seek counter: makes the URL change even when seeking to the same time */
+    seek?: number;
   },
 ) {
   const params = new URLSearchParams();
   if (options?.audio !== undefined) params.set("audio", String(options.audio));
   if (options?.video !== undefined) params.set("video", String(options.video));
   if (options?.t !== undefined) params.set("t", String(options.t));
+  if (options?.seek) params.set("s", String(options.seek));
 
   const query = params.toString();
   // Use Next.js route handler (/api/stream/*) for proper streaming support

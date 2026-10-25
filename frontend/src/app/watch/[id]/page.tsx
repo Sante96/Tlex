@@ -8,7 +8,6 @@ import { VideoPlayer } from "@/components/player";
 import {
   getMediaDetails,
   getWatchProgress,
-  releaseStream,
   type MediaDetails,
 } from "@/lib/api";
 import { cleanEpisodeTitle } from "@/lib/format";
@@ -51,12 +50,13 @@ export default function WatchPage() {
     loadMedia();
   }, [mediaId]);
 
+  // The player releases the old stream when it unmounts (this page shows a loader
+  // while the next episode loads)
   const handleEpisodeSelect = useCallback(
     (newMediaId: number) => {
-      releaseStream(mediaId);
       router.replace(`/watch/${newMediaId}`);
     },
-    [mediaId, router],
+    [router],
   );
 
   const audioTracks =
