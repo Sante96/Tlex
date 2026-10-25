@@ -149,7 +149,11 @@
     "seasons": "Seasons",
     "recentMovies": "Latest movies",
     "recentSeries": "Latest series",
-    "emptyLibraryUser": "The library is empty. Ask an admin to scan the Telegram channels."
+    "emptyLibraryUser": "The library is empty. Ask an admin to scan the Telegram channels.",
+    "resume": "Resume",
+    "details": "Details",
+    "timeLeft": "{time} left",
+    "recentlyAdded": "Recently added"
   },
   "settings": {
     "audio": {

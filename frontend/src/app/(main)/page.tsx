@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Play } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, TVButton, PosterCard, SectionHeader } from "@/components/ds";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
@@ -17,11 +17,68 @@ import {
   type SeriesItem,
 } from "@/lib/api";
 import { cleanEpisodeTitle, getTmdbImageUrl, yearOf } from "@/lib/format";
+import { HomeHero, type HeroItem } from "@/components/home/home-hero";
+import { ContinueWatchingCard } from "@/components/home/continue-watching-card";
 import { PosterCardSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useDelayed } from "@/hooks/use-delayed";
 
 // Posters per home row
 const ROW = 7;
+
+// Continue Watching: landscape cards, fewer per row; a strip on phones
+const CONTINUE_GRID =
+  "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
+const TV_CONTINUE_GRID = "grid grid-cols-4 gap-5";
+const CONTINUE_CARD = "shrink-0 w-[260px] md:w-full";
+
+/** What the hero shows: the title last watched, else the newest one with a backdrop */
+function heroItem(
+  watching: ContinueWatchingItem[],
+  movies: MediaItem[],
+  series: SeriesItem[],
+  t: ReturnType<typeof useTranslations>,
+): HeroItem | null {
+  const current = watching.find((w) => w.backdrop_path);
+  if (current) {
+    return {
+      label: t("home.continueWatching"),
+      title: current.series_title || current.title,
+      subtitle:
+        current.season_number && current.episode_number
+          ? `S${current.season_number} · E${current.episode_number} · ${cleanEpisodeTitle(current.title)}`
+          : undefined,
+      overview: current.overview,
+      backdropUrl: getTmdbImageUrl(current.backdrop_path, "original")!,
+      playHref: `/watch/${current.id}`,
+      detailsHref: current.series_id ? `/series/${current.series_id}` : `/media/${current.id}`,
+      progressPercent: current.progress_percent,
+      remainingSeconds: current.duration_seconds - current.position_seconds,
+    };
+  }
+  const movie = movies.find((m) => m.backdrop_path);
+  if (movie) {
+    return {
+      label: t("home.recentlyAdded"),
+      title: movie.title,
+      overview: movie.overview,
+      backdropUrl: getTmdbImageUrl(movie.backdrop_path, "original")!,
+      playHref: `/watch/${movie.id}`,
+      detailsHref: `/media/${movie.id}`,
+    };
+  }
+  const show = series.find((s) => s.backdrop_path);
+  if (show) {
+    return {
+      label: t("home.recentlyAdded"),
+      title: show.title,
+      overview: show.overview,
+      backdropUrl: getTmdbImageUrl(show.backdrop_path, "original")!,
+      playHref: `/series/${show.id}`,
+      detailsHref: `/series/${show.id}`,
+    };
+  }
+  return null;
+}
 
 export default function HomePage() {
   const t = useTranslations();
@@ -134,17 +191,21 @@ export default function HomePage() {
     );
   }
 
+  const hero = heroItem(continueWatching, media, series, t);
+
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
+      {hero && <HomeHero item={hero} />}
+
       {/* Continue Watching */}
       {continueWatching.length > 0 && (
         <section>
           <SectionHeader title={t("home.continueWatching")} />
-          <StaggerGrid className={gridClass}>
+          <div className={isTV ? TV_CONTINUE_GRID : CONTINUE_GRID}>
             {continueWatching.map((item) => (
-              <ContinueWatchingCard key={item.id} item={item} isTV={isTV} className={cardClass} />
+              <ContinueWatchingCard key={item.id} item={item} className={isTV ? "" : CONTINUE_CARD} />
             ))}
-          </StaggerGrid>
+          </div>
         </section>
       )}
 
@@ -197,48 +258,6 @@ export default function HomePage() {
   );
 }
 
-function ContinueWatchingCard({
-  item,
-  isTV,
-  className,
-}: {
-  item: ContinueWatchingItem;
-  isTV?: boolean;
-  className?: string;
-}) {
-  const imageUrl = item.series_id
-    ? getTmdbImageUrl(item.series_poster_path ?? null, "w300") ||
-      getTmdbImageUrl(item.poster_path, "w300")
-    : getTmdbImageUrl(item.poster_path, "w300");
-
-  const title = item.series_title || item.title;
-  const subtitle = item.series_id ? cleanEpisodeTitle(item.title) : undefined;
-  const episodeIndicator =
-    item.season_number && item.episode_number
-      ? `S${item.season_number} · E${item.episode_number}`
-      : undefined;
-
-  const combinedSubtitle = [subtitle, episodeIndicator]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <PosterCard
-      href={`/watch/${item.id}`}
-      imageUrl={imageUrl}
-      title={title}
-      subtitle={combinedSubtitle || undefined}
-      progress={item.progress_percent}
-      className={className}
-    >
-      {/* Play overlay — visible on hover (mouse) and focus-visible (D-pad) */}
-      <div className={`absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center ${isTV ? "opacity-0 group-focus-visible:opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
-        <Play className="h-10 w-10 text-white fill-white" />
-      </div>
-    </PosterCard>
-  );
-}
-
 /** The home while it loads: three titled rows like the page's (one untitled row jumped) */
 function HomeSkeleton({
   isTV,
@@ -251,7 +270,19 @@ function HomeSkeleton({
 }) {
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
-      {[0, 1, 2].map((row) => (
+      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 h-[46vh] md:h-[56vh] min-h-[300px] max-h-[560px] bg-[#18181b] animate-pulse" />
+      <section>
+        <Skeleton className="h-8 w-48 mb-5" />
+        <div className={isTV ? TV_CONTINUE_GRID : CONTINUE_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className={isTV ? "" : CONTINUE_CARD}>
+              <Skeleton className="aspect-video" />
+              <Skeleton className="h-4 w-3/4 mt-2" />
+            </div>
+          ))}
+        </div>
+      </section>
+      {[0, 1].map((row) => (
         <section key={row}>
           <Skeleton className="h-8 w-48 mb-5" />
           <div className={gridClass}>

@@ -149,7 +149,11 @@
     "seasons": "Stagioni",
     "recentMovies": "Ultimi film",
     "recentSeries": "Ultime serie",
-    "emptyLibraryUser": "La libreria è vuota. Chiedi a un amministratore di scansionare i canali Telegram."
+    "emptyLibraryUser": "La libreria è vuota. Chiedi a un amministratore di scansionare i canali Telegram.",
+    "resume": "Riprendi",
+    "details": "Dettagli",
+    "timeLeft": "Mancano {time}",
+    "recentlyAdded": "Aggiunto di recente"
   },
   "settings": {
     "audio": {

@@ -17,6 +17,10 @@ export interface ContinueWatchingItem {
   position_seconds: number;
   duration_seconds: number;
   progress_percent: number;
+  /** The landscape picture: an episode's still, a movie's backdrop */
+  still_path?: string | null;
+  /** The episode's or movie's synopsis */
+  overview?: string | null;
   // Series metadata for Plex-style grouping
   series_id?: number | null;
   series_title?: string | null;
