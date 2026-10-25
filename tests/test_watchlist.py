@@ -13,7 +13,6 @@ async def sample_media(test_session: AsyncSession) -> MediaItem:
     media = MediaItem(
         title="Test Movie",
         media_type=MediaType.MOVIE,
-        total_size=1000000,
     )
     test_session.add(media)
     await test_session.commit()
@@ -24,7 +23,7 @@ async def sample_media(test_session: AsyncSession) -> MediaItem:
 @pytest.mark.asyncio
 async def test_get_empty_watchlist(client: AsyncClient, auth_headers: dict):
     """Test getting empty watchlist."""
-    response = await client.get("/api/v1/watchlist/", headers=auth_headers)
+    response = await client.get("/api/v1/watchlist", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["items"] == []
@@ -120,5 +119,5 @@ async def test_remove_from_watchlist(
 @pytest.mark.asyncio
 async def test_watchlist_requires_auth(client: AsyncClient):
     """Test watchlist endpoints require authentication."""
-    response = await client.get("/api/v1/watchlist/")
+    response = await client.get("/api/v1/watchlist")
     assert response.status_code == 401

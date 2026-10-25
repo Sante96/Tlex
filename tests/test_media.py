@@ -14,13 +14,11 @@ async def sample_movies(test_session: AsyncSession) -> list[MediaItem]:
         MediaItem(
             title="Movie One",
             media_type=MediaType.MOVIE,
-            total_size=1000000,
             overview="First movie description",
         ),
         MediaItem(
             title="Movie Two",
             media_type=MediaType.MOVIE,
-            total_size=2000000,
             overview="Second movie description",
         ),
     ]
@@ -33,9 +31,9 @@ async def sample_movies(test_session: AsyncSession) -> list[MediaItem]:
 
 
 @pytest.mark.asyncio
-async def test_list_media(client: AsyncClient, sample_movies: list[MediaItem]):
+async def test_list_media(client: AsyncClient, auth_headers: dict, sample_movies: list[MediaItem]):
     """Test listing media items."""
-    response = await client.get("/api/v1/media/")
+    response = await client.get("/api/v1/media", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2
@@ -44,20 +42,20 @@ async def test_list_media(client: AsyncClient, sample_movies: list[MediaItem]):
 
 @pytest.mark.asyncio
 async def test_list_media_with_type_filter(
-    client: AsyncClient, sample_movies: list[MediaItem]
+    client: AsyncClient, auth_headers: dict, sample_movies: list[MediaItem]
 ):
     """Test listing media with type filter."""
-    response = await client.get("/api/v1/media/?media_type=MOVIE")
+    response = await client.get("/api/v1/media?media_type=MOVIE", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert all(item["media_type"] == "MOVIE" for item in data["items"])
 
 
 @pytest.mark.asyncio
-async def test_get_media_detail(client: AsyncClient, sample_movies: list[MediaItem]):
+async def test_get_media_detail(client: AsyncClient, auth_headers: dict, sample_movies: list[MediaItem]):
     """Test getting media details."""
     media_id = sample_movies[0].id
-    response = await client.get(f"/api/v1/media/{media_id}")
+    response = await client.get(f"/api/v1/media/{media_id}", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Movie One"
@@ -65,9 +63,9 @@ async def test_get_media_detail(client: AsyncClient, sample_movies: list[MediaIt
 
 
 @pytest.mark.asyncio
-async def test_get_media_not_found(client: AsyncClient):
+async def test_get_media_not_found(client: AsyncClient, auth_headers: dict):
     """Test getting non-existent media."""
-    response = await client.get("/api/v1/media/99999")
+    response = await client.get("/api/v1/media/99999", headers=auth_headers)
     assert response.status_code == 404
 
 
@@ -97,5 +95,5 @@ async def test_delete_media_as_admin(
     assert response.status_code == 200
     
     # Verify deleted
-    get_response = await client.get(f"/api/v1/media/{media_id}")
+    get_response = await client.get(f"/api/v1/media/{media_id}", headers=admin_headers)
     assert get_response.status_code == 404

@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml uv.lock ./
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy application code
 COPY . .

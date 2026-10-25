@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored, minified libass/SubtitlesOctopus workers (~2 MB): linting them ran out of memory
+    "public/lib/**",
   ]),
 ]);
 

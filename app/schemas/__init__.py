@@ -1,6 +1,15 @@
 """Pydantic schemas for API request/response models."""
 
-from app.schemas.auth import ChangePassword, DeviceCodeResponse, DeviceConfirmRequest, DevicePollResponse, RefreshRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas.auth import (
+    ChangePassword,
+    DeviceCodeResponse,
+    DeviceConfirmRequest,
+    DevicePollResponse,
+    RefreshRequest,
+    TokenResponse,
+    UserCreate,
+    UserResponse,
+)
 from app.schemas.media import (
     MediaItemDetailResponse,
     MediaItemResponse,

@@ -99,9 +99,9 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./data:/app/data # Persist data
-      - ./cache:/app/cache # Persist cache
-      - ./sessions:/app/sessions # Persist sessions
+      # Subtitle/font cache. The backend writes nothing else to disk (Telegram sessions
+      # live in the database); ./data holds the other services' databases.
+      - ./cache:/app/cache
 
   # ============================================
   # Frontend (Next.js)

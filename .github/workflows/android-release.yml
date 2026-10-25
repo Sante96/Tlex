@@ -30,7 +30,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "wrapper"
+          # No gradlew/wrapper jar is committed, so "wrapper" provisioned nothing;
+          # keep in sync with gradle/wrapper/gradle-wrapper.properties
+          gradle-version: "9.4.0"
           cache-read-only: false
 
       - name: Extract version from package.json
@@ -45,10 +47,21 @@ jobs:
           echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Refuse to reuse an existing release tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists: bump the version in frontend/package.json"
+            exit 1
+          fi
+
       - name: Create local.properties
         working-directory: android-tv
+        env:
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
         run: |
-          echo "DEFAULT_SERVER_URL=${{ secrets.DEFAULT_SERVER_URL || '' }}" > local.properties
+          echo "DEFAULT_SERVER_URL=$DEFAULT_SERVER_URL" > local.properties
 
       - name: Build Release APK
         working-directory: android-tv
@@ -58,17 +71,24 @@ jobs:
             -PversionCode=${{ steps.version.outputs.code }}
 
       - name: Sign APK
+        # Secrets via env, not ${{ }} interpolation into the script text
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
           BUILD_TOOLS=$(ls /usr/local/lib/android/sdk/build-tools/ | sort -V | tail -1)
           UNSIGNED="android-tv/app/build/outputs/apk/release/app-release-unsigned.apk"
-          SIGNED="tlex-tv-${{ steps.version.outputs.tag }}.apk"
+          SIGNED="tlex-tv-$TAG.apk"
           /usr/local/lib/android/sdk/build-tools/$BUILD_TOOLS/zipalign -v 4 "$UNSIGNED" aligned.apk
           /usr/local/lib/android/sdk/build-tools/$BUILD_TOOLS/apksigner sign \
             --ks keystore.jks \
-            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-            --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
-            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:STORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
             --out "$SIGNED" aligned.apk
           rm keystore.jks aligned.apk
 

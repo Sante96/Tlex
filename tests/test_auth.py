@@ -15,7 +15,13 @@ async def test_register_user(client: AsyncClient):
     data = response.json()
     assert data["email"] == "newuser@example.com"
     assert "id" in data
-    assert data["is_admin"] is False
+    assert data["is_admin"] is True  # the first account administers the server
+
+    second = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "second@example.com", "password": "securepass123"},
+    )
+    assert second.json()["is_admin"] is False
 
 
 @pytest.mark.asyncio

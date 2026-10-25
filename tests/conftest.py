@@ -17,6 +17,10 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base
 from app.main import app
 from app.api.deps import get_db
+from app.core.rate_limit import limiter
+
+# The limiter stores its counters in Redis; tests run against in-memory SQLite only
+limiter.enabled = False
 
 
 # Test database URL (in-memory SQLite)
