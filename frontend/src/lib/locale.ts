@@ -9,11 +9,12 @@ import {
   defaultLocale,
 } from "@/i18n/config";
 
+/** The page's locale, as the server chose it (cookie, else the browser's language) and
+ * wrote it into <html lang>. Reading the cookie alone missed the browser fallback: the
+ * UI, the settings page and the TMDB language sent to the backend could disagree. */
 export function getClientLocale(): Locale {
-  const raw = Cookies.get(LOCALE_COOKIE);
-  return raw && locales.includes(raw as Locale)
-    ? (raw as Locale)
-    : defaultLocale;
+  const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
+  return locales.includes(lang as Locale) ? (lang as Locale) : defaultLocale;
 }
 
 export function useSetLocale() {

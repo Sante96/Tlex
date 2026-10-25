@@ -1,6 +1,8 @@
 import axios, { isAxiosError, type InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 
+import { getClientLocale } from "@/lib/locale";
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export const api = axios.create({
@@ -12,8 +14,8 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const locale = Cookies.get("TLEX_LOCALE") || "it";
-  config.headers["Accept-Language"] = locale === "en" ? "en-US" : "it-IT";
+  // TMDB metadata in the UI's language
+  config.headers["Accept-Language"] = getClientLocale() === "en" ? "en-US" : "it-IT";
   return config;
 });
 
