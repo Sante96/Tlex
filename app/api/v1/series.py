@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
@@ -38,9 +39,10 @@ async def list_series(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     search: str | None = None,
+    sort: Literal["title", "recent"] = "title",
     current_user: User | None = Depends(get_current_user_optional),
 ) -> dict:
-    """List all TV series with pagination."""
+    """List all TV series with pagination, by title or by their newest episode."""
     offset = (page - 1) * page_size
 
     # Count total
@@ -50,7 +52,14 @@ async def list_series(
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
-    query = select(Series).offset(offset).limit(page_size).order_by(Series.title)
+    if sort == "recent":
+        newest_episode = (
+            select(func.max(MediaItem.id)).where(MediaItem.series_id == Series.id).scalar_subquery()
+        )
+        order = newest_episode.desc().nulls_last()
+    else:
+        order = Series.title
+    query = select(Series).offset(offset).limit(page_size).order_by(order)
     if search:
         query = query.where(Series.title.ilike(f"%{search}%"))
     result = await session.execute(query)

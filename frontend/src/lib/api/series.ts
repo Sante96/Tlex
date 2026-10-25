@@ -47,6 +47,8 @@ export async function getSeriesList(params?: {
   page?: number;
   page_size?: number;
   search?: string;
+  /** "recent": by newest episode first (the home rows); default by title */
+  sort?: "title" | "recent";
 }) {
   const response = await api.get<{
     items: SeriesItem[];

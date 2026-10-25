@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { DSButton, TVButton, PosterCard, SectionHeader } from "@/components/ds";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
 import { useIsTV } from "@/hooks/use-platform";
+import { useAuth } from "@/contexts/auth-context";
 import {
   getMediaList,
   getContinueWatching,
@@ -18,15 +19,20 @@ import {
 import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
 import { PosterCardSkeleton } from "@/components/ui/skeleton";
 
+// Posters per home row
+const ROW = 7;
+
 export default function HomePage() {
   const t = useTranslations();
   const isTV = useIsTV();
+  const { user } = useAuth();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<
     ContinueWatchingItem[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [scanning, setScanning] = useState(false);
 
   const gridClass = isTV
@@ -36,35 +42,36 @@ export default function HomePage() {
   const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
 
   useEffect(() => {
-    loadMedia();
-    loadContinueWatching();
+    loadHome();
   }, []);
 
-  const loadMedia = async () => {
+  // All rows in one go: Continue Watching used to land later and push the others down.
+  // Only movies, newest first: the old request mixed in episodes sorted by title, which
+  // could leave no movie in the first 50.
+  const loadHome = async () => {
+    setLoading(true);
+    setFailed(false);
     try {
-      setLoading(true);
-      const [mediaData, seriesData] = await Promise.all([
-        getMediaList({ limit: 50 }),
-        getSeriesList({ page_size: 50 }),
+      const [mediaData, seriesData, watching] = await Promise.all([
+        getMediaList({ media_type: "MOVIE", sort: "recent", limit: ROW }),
+        getSeriesList({ sort: "recent", page_size: ROW }),
+        getContinueWatching(10),
       ]);
-      setMedia(mediaData.items.filter((m) => m.media_type === "MOVIE"));
+      setMedia(mediaData.items);
       setSeries(seriesData.items);
+      setContinueWatching(watching);
     } catch {
+      setFailed(true); // not "your library is empty"
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadContinueWatching = async () => {
-    const items = await getContinueWatching(10);
-    setContinueWatching(items);
   };
 
   const handleScan = async () => {
     try {
       setScanning(true);
       await triggerScan(100);
-      await loadMedia();
+      await loadHome();
     } catch {
     } finally {
       setScanning(false);
@@ -83,14 +90,34 @@ export default function HomePage() {
     );
   }
 
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-6 py-20">
+        <p className="text-[#a1a1aa]">{t("common.loadError")}</p>
+        {isTV ? (
+          <TVButton onClick={loadHome} icon={<RefreshCw className="h-5 w-5" />}>
+            {t("common.retry")}
+          </TVButton>
+        ) : (
+          <DSButton onClick={loadHome} icon={<RefreshCw className="h-5 w-5" />}>
+            {t("common.retry")}
+          </DSButton>
+        )}
+      </div>
+    );
+  }
+
   if (media.length === 0 && series.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <h1 className="text-2xl font-bold text-[#fafafa] mb-4">
           {t("home.welcome")}
         </h1>
-        <p className="text-[#a1a1aa] mb-6">{t("home.emptyLibrary")}</p>
-        {isTV ? (
+        {/* Scanning takes an admin: the button used to fail silently for everyone else */}
+        <p className="text-[#a1a1aa] mb-6">
+          {user?.is_admin ? t("home.emptyLibrary") : t("home.emptyLibraryUser")}
+        </p>
+        {!user?.is_admin ? null : isTV ? (
           <TVButton
             onClick={handleScan}
             disabled={scanning}
@@ -128,9 +155,9 @@ export default function HomePage() {
       {/* Film */}
       {media.length > 0 && (
         <section>
-          <SectionHeader title={t("home.movies")} href="/movies" />
+          <SectionHeader title={t("home.recentMovies")} href="/movies" />
           <StaggerGrid className={gridClass}>
-            {media.slice(0, 7).map((m) => (
+            {media.map((m) => (
               <PosterCard
                 key={m.id}
                 href={`/media/${m.id}`}
@@ -151,9 +178,9 @@ export default function HomePage() {
       {/* Serie TV */}
       {series.length > 0 && (
         <section>
-          <SectionHeader title={t("home.series")} href="/series" />
+          <SectionHeader title={t("home.recentSeries")} href="/series" />
           <StaggerGrid className={gridClass}>
-            {series.slice(0, 7).map((s) => (
+            {series.map((s) => (
               <PosterCard
                 key={s.id}
                 href={`/series/${s.id}`}

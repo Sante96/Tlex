@@ -1,6 +1,7 @@
 """Media library API endpoints."""
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
@@ -39,9 +40,10 @@ async def list_media(
     page_size: int = Query(20, ge=1, le=200),
     media_type: MediaType | None = None,
     search: str | None = None,
+    sort: Literal["title", "recent"] = "title",
     current_user: User | None = Depends(get_current_user_optional),
 ) -> MediaListResponse:
-    """List all media items with pagination."""
+    """List all media items with pagination, by title or newest first."""
     offset = (page - 1) * page_size
 
     # Base query
@@ -62,7 +64,8 @@ async def list_media(
     total = total_result.scalar() or 0
 
     # Get items
-    query = query.offset(offset).limit(page_size).order_by(MediaItem.title)
+    order = MediaItem.id.desc() if sort == "recent" else MediaItem.title
+    query = query.offset(offset).limit(page_size).order_by(order)
     result = await session.execute(query)
     items = result.scalars().all()
 

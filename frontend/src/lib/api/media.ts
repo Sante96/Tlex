@@ -67,6 +67,8 @@ export async function getMediaList({
   limit?: number;
   media_type?: string;
   search?: string;
+  /** "recent": newest first (the home rows); default by title */
+  sort?: "title" | "recent";
 } = {}) {
   // The backend paginates with page/page_size: skip/limit used to be ignored (max 20 items)
   const response = await api.get<{
