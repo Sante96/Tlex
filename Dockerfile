@@ -5,12 +5,11 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Install system dependencies
+# Install system dependencies (no compiler: every locked package ships a wheel, except
+# pyaes, which is pure Python)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     mkvtoolnix \
-    gcc \
-    libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies and install into .venv
