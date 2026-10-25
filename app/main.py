@@ -11,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from app._version import __version__
 from app.api.v1 import router as api_v1_router
 from app.config import get_settings
+from app.core import pyrogram_tuning
 from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
 from app.core.worker_manager import worker_manager
@@ -33,7 +34,8 @@ async def lifespan(app: FastAPI):
     # Ensure all tables exist (creates new ones without touching existing)
     await create_all_tables()
 
-    # Load workers
+    # Load workers (Pyrogram tuned first: the tweaks apply to connections opened later)
+    pyrogram_tuning.apply()
     async with async_session_maker() as session:
         count = await worker_manager.load_workers(session)
         logger.info(f"Loaded {count} Telegram workers")

@@ -210,3 +210,44 @@ async def test_same_account_when_no_other_has_free_clients():
     manager._client_in_use[id(first)] = True
     assert await manager.try_acquire_one(spread_from=[first]) is clients[10][1]
     assert await manager.try_acquire_one(spread_from=[first]) is None
+
+
+# -- Pyrogram tuning (plain transport, linear recv, more crypto threads) --
+
+
+async def test_tcp_recv_joins_reads_and_stops_on_eof():
+    from pyrogram.connection.transport.tcp import TCP
+
+    from app.core.pyrogram_tuning import _recv
+
+    class Reader:
+        def __init__(self, *pieces):
+            self.pieces = list(pieces)
+
+        async def read(self, n):
+            return self.pieces.pop(0)[:n] if self.pieces else b""
+
+    tcp = MagicMock(spec=TCP)
+    tcp.reader = Reader(b"ab", b"cde", b"f")
+    assert await _recv(tcp, 6) == b"abcdef"
+    tcp.reader = Reader(b"ab")
+    assert await _recv(tcp, 6) is None  # connection closed mid-message
+
+
+def test_apply_switches_transport_and_crypto_threads(monkeypatch):
+    import pyrogram
+    from pyrogram.connection.transport.tcp import TCP, TCPAbridged
+    from pyrogram.session import session as session_module
+
+    from app.core import pyrogram_tuning
+
+    # restored after the test
+    monkeypatch.setattr(session_module, "Connection", session_module.Connection)
+    monkeypatch.setattr(TCP, "recv", TCP.recv)
+    monkeypatch.setattr(pyrogram, "crypto_executor", pyrogram.crypto_executor)
+
+    pyrogram_tuning.apply()
+
+    assert session_module.Connection(2, False, False, None, True).mode is TCPAbridged
+    assert TCP.recv is pyrogram_tuning._recv
+    assert pyrogram.crypto_executor._max_workers == pyrogram_tuning.CRYPTO_THREADS
