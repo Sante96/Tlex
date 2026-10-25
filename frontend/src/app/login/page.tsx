@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { isAxiosError } from "axios";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -10,6 +11,7 @@ import QRCode from "react-qr-code";
 import Image from "next/image";
 import { DSButton, DSInput, TVButton, TVBackground } from "@/components/ds";
 import { useAuth } from "@/contexts/auth-context";
+import { AuthGuard } from "@/components/auth-guard";
 import { useIsTV } from "@/hooks/use-platform";
 import { requestDeviceCode, pollDeviceCode } from "@/lib/api";
 
@@ -18,9 +20,30 @@ const MeshGradient = dynamic(
   { ssr: false },
 );
 
+/** What a failed login means for the user; axios's own message was shown before
+ * ("Request failed with status code 401"). */
+function loginError(e: unknown): "invalidCredentials" | "tooManyAttempts" | "serverUnreachable" {
+  const status = isAxiosError(e) ? e.response?.status : undefined;
+  if (status === 401) return "invalidCredentials";
+  if (status === 429) return "tooManyAttempts";
+  return "serverUnreachable";
+}
+
+// Signed in already: this page has nothing to do, and Back must not bring it back
 export default function LoginPage() {
-  const router = useRouter();
+  return (
+    <AuthGuard requireAuth={false} redirectTo="/profiles">
+      {/* useSearchParams (the "registered" notice) needs a Suspense boundary */}
+      <Suspense>
+        <LoginForm />
+      </Suspense>
+    </AuthGuard>
+  );
+}
+
+function LoginForm() {
   const { login, completeDeviceLogin } = useAuth();
+  const registered = useSearchParams().get("registered") === "true";
   const isTV = useIsTV();
 
   const [email, setEmail] = useState("");
@@ -29,6 +52,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations("auth.login");
+  const tv = useTranslations("auth.tv");
+  const tc = useTranslations("common");
 
   const [deviceCode, setDeviceCode] = useState<string | null>(null);
   const [userCode, setUserCode] = useState<string | null>(null);
@@ -42,7 +67,7 @@ export default function LoginPage() {
     setOrigin(window.location.origin);
   }, []);
 
-  const startDeviceFlow = async () => {
+  const startDeviceFlow = useCallback(async () => {
     setTvLoading(true);
     try {
       const data = await requestDeviceCode();
@@ -50,32 +75,30 @@ export default function LoginPage() {
       setUserCode(data.user_code);
       setExpiresIn(data.expires_in);
     } catch {
-      setError("Errore nella richiesta del codice");
+      setError(tv("codeError"));
     } finally {
       setTvLoading(false);
     }
-  };
+  }, [tv]);
 
   useEffect(() => {
     if (!isTV) return;
     startDeviceFlow();
-  }, [isTV]);
+  }, [isTV, startDeviceFlow]);
+
+  // An expired code gets a new one (this used to run inside a setState updater)
+  useEffect(() => {
+    if (deviceCode && expiresIn === 0) {
+      setDeviceCode(null);
+      setUserCode(null);
+      startDeviceFlow();
+    }
+  }, [deviceCode, expiresIn, startDeviceFlow]);
 
   useEffect(() => {
     if (!deviceCode) return;
 
-    const countdown = setInterval(() => {
-      setExpiresIn((s) => {
-        if (s <= 1) {
-          clearInterval(countdown);
-          setDeviceCode(null);
-          setUserCode(null);
-          startDeviceFlow();
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
+    const countdown = setInterval(() => setExpiresIn((s) => Math.max(0, s - 1)), 1000);
 
     pollRef.current = setInterval(async () => {
       try {
@@ -83,8 +106,7 @@ export default function LoginPage() {
         if (res.status === "confirmed") {
           clearInterval(pollRef.current!);
           clearInterval(countdown);
-          await completeDeviceLogin();
-          router.push("/profiles");
+          await completeDeviceLogin(); // the guard then leaves for /profiles
         } else if (res.status === "expired") {
           clearInterval(pollRef.current!);
           clearInterval(countdown);
@@ -98,17 +120,16 @@ export default function LoginPage() {
       clearInterval(pollRef.current!);
       clearInterval(countdown);
     };
-  }, [deviceCode, router, completeDeviceLogin]);
+  }, [deviceCode, completeDeviceLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
     try {
-      await login({ email, password });
-      router.push("/profiles");
+      await login({ email, password }); // the guard then leaves for /profiles
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("submit"));
+      setError(t(loginError(err)));
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +146,7 @@ export default function LoginPage() {
             {/* Brand */}
             <div>
               <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-16 w-auto" unoptimized />
-              <p className="text-3xl font-semibold text-white mt-2">Accedi alla TV</p>
+              <p className="text-3xl font-semibold text-white mt-2">{tv("title")}</p>
             </div>
 
             {/* Steps */}
@@ -133,7 +154,7 @@ export default function LoginPage() {
               <div className="flex items-start gap-4">
                 <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">1</span>
                 <div>
-                  <p className="text-base font-medium text-white">Vai su</p>
+                  <p className="text-base font-medium text-white">{tv("goTo")}</p>
                   <p className="text-base font-mono text-[#e5a00d]">
                     {origin}/activate
                   </p>
@@ -141,11 +162,11 @@ export default function LoginPage() {
               </div>
               <div className="flex items-start gap-4">
                 <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">2</span>
-                <p className="text-base font-medium text-white pt-1">Inserisci il codice qui sotto</p>
+                <p className="text-base font-medium text-white pt-1">{tv("enterCode")}</p>
               </div>
               <div className="flex items-start gap-4">
                 <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">3</span>
-                <p className="text-base font-medium text-white pt-1">Accedi con le tue credenziali</p>
+                <p className="text-base font-medium text-white pt-1">{tv("signIn")}</p>
               </div>
             </div>
 
@@ -163,7 +184,9 @@ export default function LoginPage() {
                   ))}
                 </div>
                 <p className="text-sm text-[#52525b]">
-                  Scade in {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, "0")}
+                  {tv("expiresIn", {
+                    time: `${Math.floor(expiresIn / 60)}:${String(expiresIn % 60).padStart(2, "0")}`,
+                  })}
                 </p>
               </div>
             )}
@@ -174,14 +197,14 @@ export default function LoginPage() {
                 icon={<RefreshCw className="h-5 w-5" />}
                 onClick={startDeviceFlow}
               >
-                Riprova
+                {tc("retry")}
               </TVButton>
             )}
 
             {tvLoading && (
               <div className="flex items-center gap-3 text-[#71717a] text-base">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Generazione codice...</span>
+                <span>{tv("generating")}</span>
               </div>
             )}
           </div>
@@ -207,7 +230,7 @@ export default function LoginPage() {
                 )}
               </div>
             </div>
-            <p className="text-base text-[#71717a]">Oppure scansiona con il telefono</p>
+            <p className="text-base text-[#71717a]">{tv("scanQr")}</p>
           </div>
         </div>
       </div>
@@ -252,16 +275,22 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {error && (
+          {error ? (
             <div className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
               {error}
             </div>
+          ) : (
+            registered && (
+              <div className="px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm text-center">
+                {t("registered")}
+              </div>
+            )
           )}
 
           <DSInput
             label={t("email")}
             type="email"
-            placeholder="tu@esempio.com"
+            placeholder={t("emailPlaceholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -280,6 +309,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? t("hidePassword") : t("showPassword")}
                 className="text-[#71717a] hover:text-[#fafafa] transition-colors"
               >
                 {showPassword ? (

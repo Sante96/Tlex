@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { isAxiosError } from "axios";
+import { AuthGuard } from "@/components/auth-guard";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { MeshGradient } from "@paper-design/shaders-react";
@@ -9,7 +11,16 @@ import { useTranslations } from "next-intl";
 import { DSButton, DSInput } from "@/components/ds";
 import { register } from "@/lib/api";
 
+// Signed in already: nothing to register
 export default function RegisterPage() {
+  return (
+    <AuthGuard requireAuth={false}>
+      <RegisterForm />
+    </AuthGuard>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
@@ -19,6 +30,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations("auth.register");
+  const tl = useTranslations("auth.login");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,20 +41,27 @@ export default function RegisterPage() {
       return;
     }
     if (password.length < 8) {
-      setError("Password min. 8 caratteri");
+      setError(t("passwordTooShort"));
       return;
     }
 
     setIsLoading(true);
     try {
       await register(email, password);
-      router.push("/login?registered=true");
+      router.replace("/login?registered=true");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message.includes("400") ? t("emailTaken") : err.message);
-      } else {
-        setError(t("failed"));
-      }
+      const status = isAxiosError(err) ? err.response?.status : undefined;
+      setError(
+        t(
+          status === 400
+            ? "emailTaken"
+            : status === 403
+              ? "closed"
+              : status === 422
+                ? "invalidEmail"
+                : "failed",
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +116,7 @@ export default function RegisterPage() {
           <DSInput
             label={t("email")}
             type="email"
-            placeholder="tu@esempio.com"
+            placeholder={tl("emailPlaceholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

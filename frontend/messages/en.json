@@ -52,7 +52,14 @@
       "submit": "Sign in",
       "loading": "Signing in...",
       "noAccount": "Don't have an account?",
-      "register": "Sign up"
+      "register": "Sign up",
+      "invalidCredentials": "Wrong email or password",
+      "tooManyAttempts": "Too many attempts: try again in a minute",
+      "serverUnreachable": "Can't reach the server, try again",
+      "registered": "Account created: you can sign in now",
+      "emailPlaceholder": "you@example.com",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
     },
     "register": {
       "title": "Create account",
@@ -67,7 +74,10 @@
       "login": "Sign in",
       "passwordMismatch": "Passwords do not match",
       "emailTaken": "Email already registered",
-      "failed": "Registration failed"
+      "failed": "Registration failed",
+      "closed": "Registration is closed: ask an admin",
+      "invalidEmail": "Invalid email address",
+      "passwordTooShort": "The password needs at least 8 characters"
     },
     "activate": {
       "title": "Activate TV device",
@@ -80,6 +90,16 @@
       "error": "Invalid code or wrong credentials",
       "success": "TV authorized!",
       "successSubtitle": "You can go back to your TV, it will sign in automatically."
+    },
+    "tv": {
+      "title": "Sign in on the TV",
+      "goTo": "Go to",
+      "enterCode": "Enter the code below",
+      "signIn": "Sign in with your account",
+      "expiresIn": "Expires in {time}",
+      "generating": "Generating a code...",
+      "scanQr": "Or scan it with your phone",
+      "codeError": "Couldn't get a code"
     }
   },
   "profiles": {

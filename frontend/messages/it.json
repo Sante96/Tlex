@@ -52,7 +52,14 @@
       "submit": "Accedi",
       "loading": "Accesso in corso...",
       "noAccount": "Non hai un account?",
-      "register": "Registrati"
+      "register": "Registrati",
+      "invalidCredentials": "Email o password non corrette",
+      "tooManyAttempts": "Troppi tentativi: riprova tra un minuto",
+      "serverUnreachable": "Server non raggiungibile, riprova",
+      "registered": "Account creato: ora puoi accedere",
+      "emailPlaceholder": "tu@esempio.com",
+      "showPassword": "Mostra password",
+      "hidePassword": "Nascondi password"
     },
     "register": {
       "title": "Crea account",
@@ -67,7 +74,10 @@
       "login": "Accedi",
       "passwordMismatch": "Le password non coincidono",
       "emailTaken": "Email già registrata",
-      "failed": "Registrazione fallita"
+      "failed": "Registrazione fallita",
+      "closed": "Le registrazioni sono chiuse: chiedi a un amministratore",
+      "invalidEmail": "Indirizzo email non valido",
+      "passwordTooShort": "La password deve avere almeno 8 caratteri"
     },
     "activate": {
       "title": "Attiva dispositivo TV",
@@ -80,6 +90,16 @@
       "error": "Codice non valido o credenziali errate",
       "success": "TV autorizzata!",
       "successSubtitle": "Puoi tornare al televisore, verrà effettuato l'accesso automaticamente."
+    },
+    "tv": {
+      "title": "Accedi alla TV",
+      "goTo": "Vai su",
+      "enterCode": "Inserisci il codice qui sotto",
+      "signIn": "Accedi con le tue credenziali",
+      "expiresIn": "Scade in {time}",
+      "generating": "Generazione codice...",
+      "scanQr": "Oppure scansiona con il telefono",
+      "codeError": "Impossibile ottenere un codice"
     }
   },
   "profiles": {

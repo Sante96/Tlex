@@ -7,14 +7,16 @@ import { useAuth } from "@/contexts/auth-context";
 
 interface AuthGuardProps {
   children: React.ReactNode;
+  /** false: a guest-only page (login, register), left once signed in */
   requireAuth?: boolean;
+  /** Where to go when the page isn't for this visitor */
   redirectTo?: string;
 }
 
 export function AuthGuard({
   children,
   requireAuth = true,
-  redirectTo = "/login",
+  redirectTo = requireAuth ? "/login" : "/",
 }: AuthGuardProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -27,7 +29,7 @@ export function AuthGuard({
       if (requireAuth && !isAuthenticated) {
         router.replace(redirectTo);
       } else if (!requireAuth && isAuthenticated) {
-        router.replace("/");
+        router.replace(redirectTo);
       }
     }
   }, [isAuthenticated, isLoading, requireAuth, redirectTo, router]);
