@@ -122,6 +122,7 @@ export function PlayerControls({
       <div className="flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent">
         <button
           onClick={onBack}
+          aria-label={t("common.back")}
           className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
         >
           <AnimatedBack className="text-white" />
@@ -147,6 +148,7 @@ export function PlayerControls({
           {/* Skip backward */}
           <button
             onClick={() => onSkip(-10)}
+            aria-label={t("player.back")}
             className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           >
             <div className="relative drop-shadow-lg">
@@ -179,7 +181,8 @@ export function PlayerControls({
             )}
             <button
               onClick={onTogglePlay}
-                className={cn(
+              aria-label={isPlaying ? t("player.pause") : t("player.play")}
+              className={cn(
                 "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
                 isLoading
                   ? "bg-black/60"
@@ -200,6 +203,7 @@ export function PlayerControls({
           {/* Skip forward */}
           <button
             onClick={() => onSkip(10)}
+            aria-label={t("player.forward")}
             className="p-3 hover:bg-white/20 rounded-full transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           >
             <div className="relative drop-shadow-lg">
@@ -252,6 +256,8 @@ export function PlayerControls({
                 <button
                   ref={episodesButtonRef}
                   onClick={onToggleEpisodes}
+                  aria-label={t("player.episodes")}
+                  aria-expanded={!!episodePickerOpen}
                   className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   <AnimatedEpisodes
@@ -275,10 +281,11 @@ export function PlayerControls({
             />
 
             {onTogglePiP && (
-              <PlayerTooltip label="Picture in Picture">
+              <PlayerTooltip label={t("player.pip")}>
                 <button
                   onClick={onTogglePiP}
-                  className="hidden md:flex p-2 rounded-full hover:bg-white/10 transition-colors"
+                  aria-label={t("player.pip")}
+                  className="hidden md:flex p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   <PictureInPicture2 className="h-5 w-5 text-white" />
                 </button>
@@ -295,6 +302,11 @@ export function PlayerControls({
               >
                 <button
                   onClick={onToggleFullscreen}
+                  aria-label={
+                    isFullscreen
+                      ? t("player.exitFullscreen")
+                      : t("player.fullscreen")
+                  }
                   className="p-2 rounded-full hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   <AnimatedFullscreen

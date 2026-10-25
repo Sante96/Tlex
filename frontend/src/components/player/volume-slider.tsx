@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { AnimatedVolume } from "./animated-icons";
 
@@ -23,6 +24,7 @@ export function VolumeSlider({
   onToggleMute,
   className,
 }: VolumeSliderProps) {
+  const t = useTranslations();
   const sliderRef = useRef<HTMLDivElement>(null);
   const [hovering, setHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -75,7 +77,11 @@ export function VolumeSlider({
         setHovering(false);
       }}
     >
-      <button onClick={onToggleMute} className="p-2 flex-shrink-0">
+      <button
+        onClick={onToggleMute}
+        aria-label={isMuted ? t("player.unmute") : t("player.mute")}
+        className="p-2 flex-shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+      >
         <AnimatedVolume
           volume={volume}
           isMuted={isMuted}
