@@ -6,12 +6,13 @@ Coverage:
 - Client acquisition patterns:
     extract_via_scan  → NO batch_mode (documented design trade-off)
     _parallel_fetch_and_parse → uses batch_mode correctly
-- Integration: extract_subtitle_direct orchestrator (header read, track
-  selection, format output, fallback to scan when cues missing)
+- Integration: extract_all_subtitles on a synthetic MKV (subtitle Cues read block by
+  block, fallback to reading the clusters, image tracks skipped)
+- read_small: Telegram's GetFile alignment rules
 """
 
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from app.services.subtitles.builders import (
     _format_ass_time,
@@ -30,8 +31,7 @@ from app.services.subtitles.ebml_parser import (
     parse_cluster_for_subtitles,
     parse_tracks,
 )
-from app.services.subtitles.mkv_extractor import extract_subtitle_direct
-
+from app.services.subtitles.mkv_extractor import extract_all_subtitles
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EBML construction helpers
@@ -111,6 +111,7 @@ class MockReader:
         self._data = data
         self.total_size = total_size if total_size is not None else len(data)
         self.read_range_calls: list[tuple[int, int]] = []
+        self.read_window_calls: list[tuple[int, int]] = []
         self.batch_mode_entered = 0
 
     async def read_range(self, start: int, end: int):
@@ -118,6 +119,10 @@ class MockReader:
         chunk = self._data[start : min(end, len(self._data))]
         if chunk:
             yield chunk
+
+    async def read_window(self, start: int, end: int) -> bytes:
+        self.read_window_calls.append((start, end))
+        return self._data[start:end]
 
     class _BatchCtx:
         def __init__(self, outer: "MockReader"):
@@ -368,20 +373,20 @@ class TestParseTracks:
 
 class TestParseCluster:
     def test_wrong_id_returns_empty(self):
-        events = parse_cluster_for_subtitles(b"\x00" * 50, 0, 3, 1_000_000)
+        events = parse_cluster_for_subtitles(b"\x00" * 50, 0, {3}, 1_000_000)
         assert events == []
 
     def test_block_for_wrong_track_skipped(self):
         block = _simple_block(track_num=1, relative_time=0, payload=b"Video")
         data = _cluster(timecode=0, blocks=[block])
-        events = parse_cluster_for_subtitles(data, 0, target_track=3, timecode_scale=1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, tracks={3}, timecode_scale=1_000_000)
         assert events == []
 
     def test_block_for_correct_track_extracted(self):
         payload = b"Hello subtitle"
         block = _simple_block(track_num=3, relative_time=100, payload=payload)
         data = _cluster(timecode=1000, blocks=[block])
-        events = parse_cluster_for_subtitles(data, 0, target_track=3, timecode_scale=1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, tracks={3}, timecode_scale=1_000_000)
         assert len(events) == 1
         assert events[0].data == payload
 
@@ -390,7 +395,7 @@ class TestParseCluster:
         # → timestamp_ms = int(1000 * 1_000_000 / 1_000_000) = 1000
         block = _simple_block(track_num=3, relative_time=0, payload=b"T")
         data = _cluster(timecode=1000, blocks=[block])
-        events = parse_cluster_for_subtitles(data, 0, 3, 1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, {3}, 1_000_000)
         assert events[0].timestamp_ms == 1000
 
     def test_relative_time_added_to_cluster_timecode(self):
@@ -398,7 +403,7 @@ class TestParseCluster:
         # scale=1_000_000 → timestamp_ms=800
         block = _simple_block(track_num=3, relative_time=300, payload=b"X")
         data = _cluster(timecode=500, blocks=[block])
-        events = parse_cluster_for_subtitles(data, 0, 3, 1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, {3}, 1_000_000)
         assert events[0].timestamp_ms == 800
 
     def test_multiple_blocks_in_cluster(self):
@@ -407,19 +412,19 @@ class TestParseCluster:
             _simple_block(track_num=3, relative_time=500, payload=b"Line 2"),
         ]
         data = _cluster(timecode=0, blocks=blocks)
-        events = parse_cluster_for_subtitles(data, 0, 3, 1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, {3}, 1_000_000)
         assert len(events) == 2
 
     def test_empty_cluster_no_events(self):
         data = _cluster(timecode=0, blocks=[])
-        events = parse_cluster_for_subtitles(data, 0, 3, 1_000_000)
+        events = parse_cluster_for_subtitles(data, 0, {3}, 1_000_000)
         assert events == []
 
     def test_block_duration_scaled_like_timestamp(self):
         # TimecodeScale 100_000 ns = 0.1 ms per unit: 1000 units → 100 ms, 20000 → 2000 ms
         block = bytes([0x83]) + (0).to_bytes(2, "big") + bytes([0x00]) + b"Hi"
         group = _elem(bytes([0xA0]), _elem(bytes([0xA1]), block) + _elem(bytes([0x9B]), (20000).to_bytes(2, "big")))
-        events = parse_cluster_for_subtitles(_cluster(timecode=1000, blocks=[group]), 0, 3, 100_000)
+        events = parse_cluster_for_subtitles(_cluster(timecode=1000, blocks=[group]), 0, {3}, 100_000)
         assert (events[0].timestamp_ms, events[0].duration_ms) == (100, 2000)
 
 
@@ -461,25 +466,25 @@ class TestExtractViaScanClientHandling:
 
     async def test_small_file_one_read_call(self):
         reader = MockReader(total_size=1 * 1024 * 1024)
-        await extract_via_scan(reader, 0, 3, 1_000_000)
+        await extract_via_scan(reader, 0, {3}, 1_000_000)
         assert len(reader.read_range_calls) == 1
 
     async def test_larger_file_multiple_independent_read_calls(self):
         # 21 MB → chunks: [0,10MB), [10MB,20MB), [20MB,21MB) = 3 calls
         reader = MockReader(total_size=21 * 1024 * 1024)
-        await extract_via_scan(reader, 0, 3, 1_000_000)
+        await extract_via_scan(reader, 0, {3}, 1_000_000)
         assert len(reader.read_range_calls) == 3
 
     async def test_no_batch_mode_entered(self):
         """extract_via_scan never enters batch_mode — the known design issue."""
         reader = MockReader(total_size=5 * 1024 * 1024)
-        await extract_via_scan(reader, 0, 3, 1_000_000)
+        await extract_via_scan(reader, 0, {3}, 1_000_000)
         assert reader.batch_mode_entered == 0  # batch_mode is NOT used
 
     async def test_reads_start_at_header_size(self):
         header_size = 1 * 1024 * 1024
         reader = MockReader(total_size=3 * 1024 * 1024)
-        await extract_via_scan(reader, header_size, 3, 1_000_000)
+        await extract_via_scan(reader, header_size, {3}, 1_000_000)
         assert all(start >= header_size for start, _ in reader.read_range_calls)
 
     async def test_read_error_stops_scan_and_returns_partial(self):
@@ -498,7 +503,7 @@ class TestExtractViaScanClientHandling:
                 raise AssertionError("batch_mode must not be called")
 
         reader = ErrorOnFirstRead()
-        events = await extract_via_scan(reader, 0, 3, 1_000_000)
+        events = await extract_via_scan(reader, 0, {3}, 1_000_000)
         assert events == []
         assert reader.call_count == 1  # stopped on first failure
 
@@ -506,7 +511,7 @@ class TestExtractViaScanClientHandling:
         block = _simple_block(track_num=3, relative_time=0, payload=b"Subtitle text")
         data = _cluster(timecode=1000, blocks=[block]) + b"\x00" * 100
         reader = MockReader(data=data)
-        events = await extract_via_scan(reader, 0, 3, 1_000_000)
+        events = await extract_via_scan(reader, 0, {3}, 1_000_000)
         assert len(events) == 1
         assert events[0].data == b"Subtitle text"
 
@@ -527,146 +532,194 @@ class TestParallelFetchBatchMode:
     async def test_batch_mode_entered_exactly_once(self):
         reader = MockReader(total_size=10 * 1024 * 1024)
         ranges = [(0, 128 * 1024), (1_000_000, 1_000_000 + 128 * 1024)]
-        await _parallel_fetch_and_parse(reader, ranges, 3, 1_000_000)
+        await _parallel_fetch_and_parse(reader, ranges, {3}, 1_000_000)
         assert reader.batch_mode_entered == 1
 
     async def test_all_ranges_fetched_inside_batch_mode(self):
         reader = MockReader(total_size=10 * 1024 * 1024)
         ranges = [(0, 128 * 1024), (500_000, 500_000 + 128 * 1024)]
-        await _parallel_fetch_and_parse(reader, ranges, 3, 1_000_000)
+        await _parallel_fetch_and_parse(reader, ranges, {3}, 1_000_000)
         fetched_starts = {s for s, _ in reader.read_range_calls}
         assert 0 in fetched_starts
         assert 500_000 in fetched_starts
 
     async def test_empty_ranges_returns_empty_events(self):
         reader = MockReader(total_size=10 * 1024 * 1024)
-        events = await _parallel_fetch_and_parse(reader, [], 3, 1_000_000)
+        events = await _parallel_fetch_and_parse(reader, [], {3}, 1_000_000)
         assert events == []
         assert len(reader.read_range_calls) == 0
 
     async def test_ranges_beyond_total_size_skipped(self):
         # total_size=100 → ranges at 1000+ are filtered before fetching
         reader = MockReader(total_size=100)
-        await _parallel_fetch_and_parse(reader, [(1000, 2000), (2000, 3000)], 3, 1_000_000)
+        await _parallel_fetch_and_parse(reader, [(1000, 2000), (2000, 3000)], {3}, 1_000_000)
         assert len(reader.read_range_calls) == 0
 
     async def test_batch_mode_entered_even_with_no_valid_ranges(self):
         # The async with block is always entered even when no tasks are created
         reader = MockReader(total_size=10 * 1024 * 1024)
-        await _parallel_fetch_and_parse(reader, [], 3, 1_000_000)
+        await _parallel_fetch_and_parse(reader, [], {3}, 1_000_000)
         assert reader.batch_mode_entered == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Integration: extract_subtitle_direct
+# Integration: extract_all_subtitles on a synthetic MKV
 # ─────────────────────────────────────────────────────────────────────────────
 
+LINES = [(1000, 2000, b"First line"), (61000, 1500, b"Second line"), (125000, 3000, b"Third line")]
 
-class TestExtractSubtitleDirect:
-    """End-to-end tests with a MockReader and patched cluster extraction."""
 
-    def _events(self) -> list[SubtitleEvent]:
-        return [
-            SubtitleEvent(timestamp_ms=1000, duration_ms=2000, data=b"Line 1"),
-            SubtitleEvent(timestamp_ms=3000, duration_ms=2000, data=b"Line 2"),
-        ]
+def _size(n: int, length: int) -> bytes:
+    """EBML size VINT of a fixed length (muxers often write Cluster sizes on 8 bytes)."""
+    return ((1 << (7 * length)) | n).to_bytes(length, "big")
 
-    def _header_with_track(self, codec_id: str = "S_TEXT/UTF8") -> bytes:
-        """Minimal MKV header bytes containing one subtitle track."""
-        return _tracks_block([_track_entry(3, 17, codec_id)])
+
+def _mkv(subtitle_cues: bool = True, cluster_size_len: int = 8) -> bytes:
+    """Video track 1, text subtitle track 3, PGS track 4; one cluster per line in LINES, the
+    subtitle BlockGroup between two video blocks; Cues for the video, and for the subtitles
+    (with relative position and duration, like mkvmerge) unless subtitle_cues=False.
+    TimecodeScale is 500 µs: 2 units per ms. Over 3 MB, so the cluster-Cues fallback runs.
+    """
+    info = _elem(b"\x15\x49\xa9\x66", _elem(b"\x2a\xd7\xb1", (500_000).to_bytes(4, "big")))
+    tracks = _tracks_block([
+        _track_entry(1, 1, "V_MPEG4/ISO/AVC"),
+        _track_entry(3, 17, "S_TEXT/UTF8"),
+        _track_entry(4, 17, "S_HDMV/PGS"),
+    ])
+
+    def seek_head(cues_position: int) -> bytes:
+        seek = _elem(b"\x53\xab", b"\x1c\x53\xbb\x6b") + _elem(b"\x53\xac", cues_position.to_bytes(8, "big"))
+        return _elem(b"\x11\x4d\x9b\x74", _elem(b"\x4d\xbb", seek))
+
+    position = len(seek_head(0)) + len(info) + len(tracks)
+    clusters, points = [], b""
+    for i, (start_ms, duration_ms, text) in enumerate(LINES):
+        cluster_time = start_ms * 2 - 100
+        video = b"\x00" * 1_100_000
+        if i == 1:
+            # Bytes that parse as a 4-byte SimpleBlock of track 3 right before the subtitle:
+            # a wrong start the vote must reject
+            video += b"\xa3\x84\x83\x00\x00"
+        before = _elem(b"\xe7", cluster_time.to_bytes(4, "big")) + _simple_block(1, 0, video)
+        block = bytes([0x83]) + (100).to_bytes(2, "big") + b"\x00" + text
+        group = _elem(b"\xa0", _elem(b"\xa1", block) + _elem(b"\x9b", (duration_ms * 2).to_bytes(2, "big")))
+        content = before + group + _simple_block(1, 10, b"\x00" * 1000)
+        clusters.append(b"\x1f\x43\xb6\x75" + _size(len(content), cluster_size_len) + content)
+
+        cluster_pos = _elem(b"\xf1", position.to_bytes(4, "big"))
+        points += _elem(b"\xbb", _elem(b"\xb3", cluster_time.to_bytes(4, "big"))
+                        + _elem(b"\xb7", _elem(b"\xf7", b"\x01") + cluster_pos))
+        if subtitle_cues:
+            points += _elem(b"\xbb", _elem(b"\xb3", (start_ms * 2).to_bytes(4, "big")) + _elem(
+                b"\xb7",
+                _elem(b"\xf7", b"\x03") + cluster_pos
+                + _elem(b"\xf0", len(before).to_bytes(4, "big"))
+                + _elem(b"\xb2", (duration_ms * 2).to_bytes(4, "big")),
+            ))
+        position += len(clusters[-1])
+
+    cues = b"\x1c\x53\xbb\x6b" + _size(len(points), 4) + points
+    body = seek_head(position) + info + tracks + b"".join(clusters) + cues
+    return b"\x1a\x45\xdf\xa3\x80" + b"\x18\x53\x80\x67" + _size(len(body), 8) + body
+
+
+def _lines(events: list[SubtitleEvent]) -> list[tuple[int, int, bytes]]:
+    return [(e.timestamp_ms, e.duration_ms, e.data) for e in events]
+
+
+class TestExtractAllSubtitles:
+    @pytest.mark.parametrize("cluster_size_len", [8, 4])
+    async def test_reads_only_the_cued_blocks(self, cluster_size_len):
+        reader = MockReader(_mkv(cluster_size_len=cluster_size_len))
+        result = await extract_all_subtitles(reader)
+
+        assert [t.track_number for t, _ in result] == [3, 4]
+        assert _lines(result[0][1]) == LINES
+        assert result[1][1] is None  # PGS: not extracted
+        assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
+        assert sum(end - start for start, end in reader.read_window_calls) < 64 * 1024
+        assert reader.batch_mode_entered == 1
+
+    async def test_without_subtitle_cues_reads_the_clusters(self):
+        reader = MockReader(_mkv(subtitle_cues=False))
+        result = await extract_all_subtitles(reader)
+
+        assert _lines(result[0][1]) == LINES
+        assert result[1][1] is None
+        assert sum(end - start for start, end in reader.read_range_calls) > 3 * 1024 * 1024
 
     async def test_header_read_failure_returns_none(self):
-        class FailReader:
-            total_size = 100 * 1024 * 1024
-
+        class FailReader(MockReader):
             async def read_range(self, start, end):
                 raise Exception("Network error")
                 yield
 
-            def batch_mode(self):
-                pass  # not reached
+        assert await extract_all_subtitles(FailReader(total_size=100 * 1024 * 1024)) is None
 
-        result = await extract_subtitle_direct(FailReader(), 0, "ass")
-        assert result is None
+    async def test_no_subtitle_tracks(self):
+        assert await extract_all_subtitles(MockReader(b"\x00" * 500)) == []
 
-    async def test_no_subtitle_tracks_found_returns_none(self):
-        # Data has no Tracks element → parse_tracks returns []
-        reader = MockReader(data=b"\x00" * 500)
-        result = await extract_subtitle_direct(reader, 0, "ass")
-        assert result is None
 
-    async def test_track_index_out_of_range_returns_none(self):
-        reader = MockReader(data=self._header_with_track())
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=([], False))):
-            with patch("app.services.subtitles.mkv_extractor.extract_via_scan",
-                       new=AsyncMock(return_value=[])):
-                result = await extract_subtitle_direct(reader, 5, "ass")  # only 1 track
-        assert result is None
+class TestCacheAllSubtitleTracks:
+    async def test_writes_ass_and_srt_per_text_track(self, tmp_path, monkeypatch):
+        from app.services.subtitles import cache
 
-    async def test_returns_srt_bytes_for_srt_format(self):
-        reader = MockReader(data=self._header_with_track())
-        events = self._events()
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=(events, True))):
-            result = await extract_subtitle_direct(reader, 0, "srt")
-        assert result is not None
-        decoded = result.decode()
-        assert "00:00:01,000 --> 00:00:03,000" in decoded
-        assert "Line 1" in decoded
+        monkeypatch.setattr(cache, "SUBTITLE_CACHE_DIR", tmp_path)
+        cached = await cache.cache_all_subtitle_tracks(MockReader(_mkv()), 7, [2, 5])
 
-    async def test_returns_ass_bytes_for_ass_format(self):
-        reader = MockReader(data=self._header_with_track("S_TEXT/ASS"))
-        events = self._events()
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=(events, True))):
-            result = await extract_subtitle_direct(reader, 0, "ass")
-        assert result is not None
-        decoded = result.decode()
-        assert "[Script Info]" in decoded
-        assert "Dialogue:" in decoded
+        assert cached == 1
+        assert b"First line" in (tmp_path / "7_2.ass").read_bytes()
+        assert b"00:01:01,000 --> 00:01:02,500" in (tmp_path / "7_2.srt").read_bytes()
+        assert not (tmp_path / "7_5.ass").exists()  # the PGS track
 
-    async def test_scan_fallback_when_cues_not_found(self):
-        reader = MockReader(data=self._header_with_track())
-        events = self._events()
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=([], False))):
-            with patch("app.services.subtitles.mkv_extractor.extract_via_scan",
-                       new=AsyncMock(return_value=events)):
-                result = await extract_subtitle_direct(reader, 0, "srt")
-        assert result is not None
-        assert b"Line 1" in result
 
-    async def test_no_events_returns_none(self):
-        reader = MockReader(data=self._header_with_track())
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=([], False))):
-            with patch("app.services.subtitles.mkv_extractor.extract_via_scan",
-                       new=AsyncMock(return_value=[])):
-                result = await extract_subtitle_direct(reader, 0, "ass")
-        assert result is None
+# ─────────────────────────────────────────────────────────────────────────────
+# read_small: Telegram GetFile rules
+# ─────────────────────────────────────────────────────────────────────────────
 
-    async def test_first_track_selected_by_default(self):
-        # Two subtitle tracks — index 0 should select track_number=3
-        data = _tracks_block([
-            _track_entry(3, 17, "S_TEXT/UTF8"),
-            _track_entry(4, 17, "S_TEXT/ASS"),
-        ])
-        reader = MockReader(data=data)
-        events = self._events()
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=(events, True))):
-            result = await extract_subtitle_direct(reader, 0, "srt")
-        assert result is not None  # succeeds for track at index 0
 
-    async def test_second_track_selected_by_index(self):
-        data = _tracks_block([
-            _track_entry(3, 17, "S_TEXT/UTF8"),
-            _track_entry(4, 17, "S_TEXT/ASS"),
-        ])
-        reader = MockReader(data=data)
-        events = self._events()
-        with patch("app.services.subtitles.mkv_extractor.extract_via_cues",
-                   new=AsyncMock(return_value=(events, True))):
-            result = await extract_subtitle_direct(reader, 1, "ass")
-        assert result is not None
+class TestReadSmall:
+    def _client(self, data: bytes, requests: list):
+        from unittest.mock import MagicMock
+
+        from pyrogram import raw
+
+        class Session:
+            async def invoke(self, query, sleep_threshold=None):
+                o, n = query.offset, query.limit
+                assert o % 4096 == 0 and n % 4096 == 0 and (1 << 20) % n == 0
+                assert o >> 20 == (o + n - 1) >> 20  # never across a 1 MB boundary
+                requests.append((o, n))
+                return raw.types.upload.File(
+                    type=raw.types.storage.FileUnknown(), mtime=0, bytes=data[o : o + n]
+                )
+
+        return MagicMock(media_sessions={4: Session()}, sleep_threshold=10)
+
+    def _file_id(self) -> str:
+        from pyrogram.file_id import FileId, FileType
+
+        return FileId(
+            file_type=FileType.DOCUMENT, dc_id=4, media_id=1, access_hash=2, file_reference=b"r"
+        ).encode()
+
+    @pytest.mark.parametrize(
+        ("offset", "length"),
+        [(0, 10), (5000, 3000), (4095, 2), ((1 << 20) - 100, 300), (2_000_000, 70_000)],
+    )
+    async def test_returns_exact_bytes_with_valid_requests(self, offset, length):
+        from app.services.streaming.download import read_small
+
+        data = bytes(range(256)) * 12_000  # ~3 MB
+        requests = []
+        result = await read_small(self._client(data, requests), self._file_id(), offset, length)
+
+        assert result == data[offset : offset + length]
+        assert sum(n for _, n in requests) <= max(4 * length, 8192)
+
+    async def test_no_media_session_returns_none(self):
+        from unittest.mock import MagicMock
+
+        from app.services.streaming.download import read_small
+
+        assert await read_small(MagicMock(media_sessions={}), self._file_id(), 0, 10) is None

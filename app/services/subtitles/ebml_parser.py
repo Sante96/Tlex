@@ -4,6 +4,7 @@ Parses MKV header to find subtitle tracks, and parses Cluster elements
 to extract individual subtitle events (dialog lines).
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from loguru import logger
@@ -42,6 +43,7 @@ class SubtitleEvent:
     timestamp_ms: int
     duration_ms: int | None
     data: bytes
+    track: int = 0  # MKV track number
 
 
 def parse_tracks(data: bytes) -> list[MkvSubtitleTrack]:
@@ -173,16 +175,16 @@ def _parse_track_entry(
 def parse_cluster_for_subtitles(
     data: bytes,
     offset: int,
-    target_track: int,
+    tracks: Collection[int],
     timecode_scale: int = 1000000,
 ) -> list[SubtitleEvent]:
     """
-    Parse a Cluster element and extract subtitle blocks for a specific track.
+    Parse a Cluster element and extract subtitle blocks for the given tracks.
 
     Args:
         data: Raw bytes containing the Cluster
         offset: Offset where Cluster starts
-        target_track: Track number to extract
+        tracks: Track numbers to extract
         timecode_scale: Nanoseconds per timestamp unit
 
     Returns:
@@ -215,13 +217,13 @@ def parse_cluster_for_subtitles(
         if elem_id == TIMECODE_ID:
             cluster_timecode = read_uint(data, offset, elem_size)
         elif elem_id == SIMPLE_BLOCK_ID:
-            event = _parse_block(data, offset, elem_size, cluster_timecode, target_track)
+            event = _parse_block(data, offset, elem_size, cluster_timecode, tracks)
             if event:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
                 events.append(event)
         elif elem_id == BLOCK_GROUP_ID:
             bg_events = _parse_block_group(
-                data, offset, elem_size, cluster_timecode, target_track
+                data, offset, elem_size, cluster_timecode, tracks
             )
             for event in bg_events:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
@@ -240,14 +242,14 @@ def _parse_block(
     offset: int,
     size: int,
     cluster_timecode: int,
-    target_track: int,
+    tracks: Collection[int],
 ) -> SubtitleEvent | None:
     """Parse a SimpleBlock/Block element."""
     if size < 4:
         return None
 
     track_num, track_len = read_vint(data, offset)
-    if track_num != target_track:
+    if track_num not in tracks:
         return None
 
     rel_offset = offset + track_len
@@ -265,6 +267,7 @@ def _parse_block(
         timestamp_ms=max(0, cluster_timecode + relative_time),
         duration_ms=None,
         data=payload,
+        track=track_num,
     )
 
 
@@ -273,7 +276,7 @@ def _parse_block_group(
     offset: int,
     size: int,
     cluster_timecode: int,
-    target_track: int,
+    tracks: Collection[int],
 ) -> list[SubtitleEvent]:
     """Parse a BlockGroup element (contains Block + optional duration)."""
     events: list[SubtitleEvent] = []
@@ -294,7 +297,7 @@ def _parse_block_group(
 
         if elem_id == BLOCK_ID:
             block_event = _parse_block(
-                data, offset, elem_size, cluster_timecode, target_track
+                data, offset, elem_size, cluster_timecode, tracks
             )
         elif elem_id == 0x9B:  # BlockDuration
             duration = read_uint(data, offset, elem_size)

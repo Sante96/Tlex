@@ -9,7 +9,7 @@ from pyrogram import Client
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.media import MediaItem, MediaPart, MediaStream, MediaType, Series
+from app.models.media import CodecType, MediaItem, MediaPart, MediaStream, MediaType, Series
 from app.services.ffprobe import ffprobe_service
 from app.services.scanner.models import MediaGroup, ScannedFile
 from app.services.tmdb import tmdb_client
@@ -219,7 +219,7 @@ async def analyze_streams(
                     is_default=stream_info.is_default,
                 )
                 session.add(stream)
-                if stream_info.codec_type.value == "subtitle":
+                if stream_info.codec_type == CodecType.SUBTITLE:
                     has_subtitles = True
 
             logger.debug(f"Found {len(probe_result.streams)} streams")

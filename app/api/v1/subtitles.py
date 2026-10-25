@@ -12,13 +12,15 @@ from app.config import get_settings
 from app.models.media import CodecType
 from app.services.streaming import get_virtual_reader
 from app.services.subtitles import subtitle_extractor
+from app.services.subtitles.cache import (
+    extraction_task,
+    finished_recently,
+    is_extracting,
+    subtitle_file,
+)
 
 settings = get_settings()
 router = APIRouter(tags=["subtitles"])
-
-# Subtitle cache directory
-SUBTITLE_CACHE_DIR = Path("cache/subtitles")
-SUBTITLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Font cache directory
 FONT_CACHE_DIR = Path("cache/fonts")
@@ -28,39 +30,9 @@ FONT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _font_extraction_locks: dict[int, asyncio.Lock] = {}
 _background_tasks: set[asyncio.Task] = set()
 
-# In-flight subtitle extraction tasks: key = (media_id, abs_track, format)
-_subtitle_tasks: dict[tuple[int, int, str], asyncio.Task] = {}
-# Lock per-key to avoid double-start
-_subtitle_locks: dict[tuple[int, int, str], asyncio.Lock] = {}
 
-
-async def _extract_and_cache(
-    media_id: int,
-    relative_index: int,
-    abs_track: int,
-    fmt: str,
-) -> None:
-    key = (media_id, abs_track, fmt)
-    try:
-        from app.database import async_session_maker
-        from app.services.subtitles.mkv_extractor import extract_subtitle_direct
-
-        async with async_session_maker() as s:
-            reader = await get_virtual_reader(s, media_id)
-            if not reader:
-                return
-            content = await extract_subtitle_direct(reader, track_index=relative_index, output_format=fmt)
-            if content:
-                cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{abs_track}.{fmt}"
-                cache_file.write_bytes(content)
-                logger.info(f"Background subtitle cached: {cache_file.name}")
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        logger.warning(f"Background subtitle extraction failed media={media_id} track={abs_track}: {e}")
-    finally:
-        _subtitle_tasks.pop(key, None)
-        _subtitle_locks.pop(key, None)
+def _cached(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 0
 
 
 @router.get("/{media_id}")
@@ -86,12 +58,12 @@ async def get_subtitle(
         raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
 
     # Check cache first (must exist AND have content)
-    cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{track}.{format}"
-    if cache_file.exists() and cache_file.stat().st_size > 0:
+    cache_file = subtitle_file(media_id, track, format)
+    if _cached(cache_file):
         logger.debug(f"Serving cached subtitle: {cache_file.name}")
         content = cache_file.read_bytes()
     else:
-        # DB query to validate track and get relative_index
+        # DB query to validate the track
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
@@ -104,36 +76,23 @@ async def get_subtitle(
         if not media:
             raise HTTPException(status_code=404, detail="Media not found")
 
-        subtitle_streams = sorted(
-            [s for s in media.streams if s.codec_type == CodecType.SUBTITLE],
-            key=lambda s: s.stream_index,
-        )
-        relative_index = next(
-            (i for i, s in enumerate(subtitle_streams) if s.stream_index == track),
-            None,
-        )
-        if relative_index is None:
+        if not any(
+            s.codec_type == CodecType.SUBTITLE and s.stream_index == track for s in media.streams
+        ):
             raise HTTPException(status_code=400, detail=f"Subtitle track {track} not found")
 
-        key = (media_id, track, format)
-        if key not in _subtitle_locks:
-            _subtitle_locks[key] = asyncio.Lock()
-
-        async with _subtitle_locks[key]:
-            # Double-check cache (another task may have written it)
-            if cache_file.exists() and cache_file.stat().st_size > 0:
-                content = cache_file.read_bytes()
-            else:
-                task = _subtitle_tasks.get(key)
-                if task is None or task.done():
-                    _subtitle_tasks[key] = asyncio.create_task(
-                        _extract_and_cache(media_id, relative_index, track, format)
-                    )
-                return JSONResponse(
-                    status_code=202,
-                    content={"status": "extracting", "retry_after": 5},
-                    headers={"Retry-After": "5"},
-                )
+        # Double-check cache (the extraction may have finished during the query)
+        if _cached(cache_file):
+            content = cache_file.read_bytes()
+        elif not is_extracting(media_id) and finished_recently(media_id):
+            raise HTTPException(status_code=404, detail="Subtitle track could not be extracted")
+        else:
+            extraction_task(media_id)
+            return JSONResponse(
+                status_code=202,
+                content={"status": "extracting", "retry_after": 2},
+                headers={"Retry-After": "2"},
+            )
 
     # Determine content type and filename
     if format == "ass":
@@ -162,13 +121,12 @@ async def get_subtitle_status(
     """Poll extraction status for a subtitle track."""
     if format not in ("ass", "srt"):
         raise HTTPException(status_code=400, detail="Format must be 'ass' or 'srt'")
-    cache_file = SUBTITLE_CACHE_DIR / f"{media_id}_{track}.{format}"
-    if cache_file.exists() and cache_file.stat().st_size > 0:
+    if _cached(subtitle_file(media_id, track, format)):
         return {"status": "ready"}
-    key = (media_id, track, format)
-    task = _subtitle_tasks.get(key)
-    if task and not task.done():
+    if is_extracting(media_id):
         return {"status": "extracting"}
+    if finished_recently(media_id):
+        return {"status": "failed"}
     return {"status": "not_started"}
 
 

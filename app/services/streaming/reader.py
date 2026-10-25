@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
-from app.services.streaming.download import stream_part
+from app.services.streaming.cache import _FILE_ID_CACHE
+from app.services.streaming.download import read_small, stream_part
 from app.services.streaming.models import StreamPosition
 from app.services.streaming.telegram import (
     ensure_file_ids_for_client,
@@ -160,6 +161,28 @@ class VirtualStreamReader:
         self._clients = []
 
     # --- Main streaming ---
+
+    async def read_window(self, start: int, end: int) -> bytes:
+        """Read a small byte range (subtitle blocks) without pulling whole 1 MB chunks.
+
+        Uses read_small with a client that already has a file_id for the part (batch_mode
+        refreshes one); anything it can't do — no such client, a range across parts, no
+        media session yet, CDN, an expired file reference — goes through read_range, which
+        handles all of those.
+        """
+        pos = self._find_part_for_offset(start)
+        if pos and self._clients and pos.local_offset + (end - start) <= pos.part.file_size:
+            client = self._clients[self._rr_counter % len(self._clients)]
+            self._rr_counter += 1
+            cached = _FILE_ID_CACHE.get((pos.part.id, id(client)))
+            if cached:
+                try:
+                    data = await read_small(client, cached[0], pos.local_offset, end - start)
+                    if data is not None:
+                        return data
+                except Exception as e:
+                    logger.debug(f"[STREAM] Small read fell back to chunk read: {e}")
+        return b"".join([chunk async for chunk in self.read_range(start, end)])
 
     async def read_range(self, start: int, end: int | None = None) -> AsyncIterator[bytes]:
         """

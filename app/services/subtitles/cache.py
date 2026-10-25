@@ -1,6 +1,7 @@
-"""Subtitle cache service for background pre-extraction."""
+"""Subtitle cache: extraction of every track of a media at once, and background warm-up."""
 
 import asyncio
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -11,6 +12,8 @@ from sqlalchemy.orm import selectinload
 from app.models.media import CodecType, MediaItem
 from app.services.streaming import get_virtual_reader
 from app.services.subtitles import subtitle_extractor
+from app.services.subtitles.builders import build_ass_content, build_srt_content
+from app.services.subtitles.mkv_extractor import extract_all_subtitles
 
 # Cache directories
 SUBTITLE_CACHE_DIR = Path("cache/subtitles")
@@ -20,6 +23,84 @@ FONT_CACHE_DIR = Path("cache/fonts")
 # Keep at 1: subtitle extraction reads large byte ranges from Telegram and
 # competes directly with active video streams on the same DC connections.
 MAX_CONCURRENT = 1
+
+# One extraction per media at a time, shared by player requests and the warm-up. A media
+# whose extraction ended without a track (failure, image subtitles) isn't retried for
+# RETRY_AFTER seconds, so the player's polling gets a 404 instead of restarting it.
+_tasks: dict[int, asyncio.Task] = {}
+_finished_at: dict[int, float] = {}
+RETRY_AFTER = 60
+
+
+def subtitle_file(media_id: int, stream_index: int, fmt: str) -> Path:
+    return SUBTITLE_CACHE_DIR / f"{media_id}_{stream_index}.{fmt}"
+
+
+def is_extracting(media_id: int) -> bool:
+    return media_id in _tasks
+
+
+def finished_recently(media_id: int) -> bool:
+    return time.monotonic() - _finished_at.get(media_id, float("-inf")) < RETRY_AFTER
+
+
+def extraction_task(media_id: int) -> asyncio.Task:
+    """The media's running subtitle extraction, started if there is none."""
+    if media_id not in _tasks:
+        _tasks[media_id] = asyncio.create_task(_extract(media_id))
+    return _tasks[media_id]
+
+
+async def _extract(media_id: int) -> int:
+    from app.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+            )
+            media = result.scalar_one_or_none()
+            if not media:
+                return 0
+            indexes = sorted(
+                s.stream_index for s in media.streams if s.codec_type == CodecType.SUBTITLE
+            )
+            reader = await get_virtual_reader(session, media_id)
+            if not reader or not indexes:
+                return 0
+            return await cache_all_subtitle_tracks(reader, media_id, indexes)
+    except Exception as e:
+        logger.warning(f"Subtitle extraction failed for media {media_id}: {e}")
+        return 0
+    finally:
+        _tasks.pop(media_id, None)
+        _finished_at[media_id] = time.monotonic()
+
+
+async def cache_all_subtitle_tracks(reader, media_id: int, stream_indexes: list[int]) -> int:
+    """Extract every text subtitle track in one pass and cache each as .ass and .srt.
+
+    stream_indexes: the media's subtitle stream indexes in order (the MKV lists its
+    subtitle tracks in the same order). Returns how many tracks were cached.
+    """
+    started = time.monotonic()
+    extracted = await extract_all_subtitles(reader)
+    if not extracted:
+        return 0
+
+    SUBTITLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cached = 0
+    for stream_index, (track, events) in zip(stream_indexes, extracted, strict=False):
+        if events is None:  # image subtitles
+            continue
+        subtitle_file(media_id, stream_index, "ass").write_bytes(build_ass_content(track, events))
+        # An empty file reads as "not cached": keep a track without lines servable
+        subtitle_file(media_id, stream_index, "srt").write_bytes(build_srt_content(events) or b"\n")
+        cached += 1
+    logger.info(
+        f"Cached {cached} subtitle tracks for media {media_id} in {time.monotonic() - started:.1f}s"
+    )
+    return cached
 
 
 async def pre_extract_fonts(media_id: int, session: AsyncSession) -> bool:
@@ -59,70 +140,23 @@ async def pre_extract_fonts(media_id: int, session: AsyncSession) -> bool:
 
 
 async def pre_extract_subtitles(media_id: int, session: AsyncSession) -> int:
-    """
-    Extract and cache the FIRST subtitle track for a media item.
+    """Extract and cache every subtitle track of a media item, unless that was done already.
 
-    Uses direct MKV extraction first (fast), falls back to FFmpeg if needed.
-
-    Returns number of subtitles extracted (0 or 1).
+    Returns the number of tracks cached.
     """
-    # Get media with streams
-    query = (
-        select(MediaItem)
-        .where(MediaItem.id == media_id)
-        .options(selectinload(MediaItem.streams))
+    result = await session.execute(
+        select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
     )
-    result = await session.execute(query)
     media = result.scalar_one_or_none()
-
     if not media:
         return 0
 
-    # Find subtitle streams, sorted by index
-    subtitle_streams = sorted(
-        [s for s in media.streams if s.codec_type == CodecType.SUBTITLE],
-        key=lambda s: s.stream_index
-    )
-
-    if not subtitle_streams:
+    indexes = [s.stream_index for s in media.streams if s.codec_type == CodecType.SUBTITLE]
+    # Every text track is cached in the same pass: one on disk means the media is done
+    if not indexes or any(subtitle_file(media_id, i, "ass").exists() for i in indexes):
         return 0
-
-    # Only extract the first subtitle track
-    first_stream = subtitle_streams[0]
-
-    # Check if already cached
-    cache_ass = SUBTITLE_CACHE_DIR / f"{media_id}_{first_stream.stream_index}.ass"
-    cache_srt = SUBTITLE_CACHE_DIR / f"{media_id}_{first_stream.stream_index}.srt"
-
-    if (cache_ass.exists() and cache_ass.stat().st_size > 0) or \
-       (cache_srt.exists() and cache_srt.stat().st_size > 0):
-        return 0
-
-    content = None
-
-    # Direct MKV extraction (fast - reads only needed bytes)
-    try:
-        from app.services.subtitles.mkv_extractor import extract_subtitle_direct
-
-        reader = await get_virtual_reader(session, media_id)
-        if reader:
-            content = await extract_subtitle_direct(
-                reader,
-                track_index=0,
-                output_format="ass",
-            )
-            if content:
-                logger.info(f"Subtitle extraction succeeded for media {media_id}")
-    except Exception as e:
-        logger.warning(f"Subtitle extraction failed for media {media_id}: {e}")
-
-    if content:
-        SUBTITLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_ass.write_bytes(content)
-        logger.info(f"Cached first subtitle for media {media_id}")
-        return 1
-
-    return 0
+    # shield: our caller giving up mustn't cancel an extraction the player may be waiting on
+    return await asyncio.shield(extraction_task(media_id))
 
 
 async def ensure_cache_populated(media_id: int, session: AsyncSession) -> None:
