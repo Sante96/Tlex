@@ -142,7 +142,7 @@ export function TVSettings() {
 
         {/* Left: playback preferences */}
         <div className="flex flex-col gap-5">
-          <TVSection icon={<Volume2 className="w-4 h-4 text-[#e5a00d]" />} title={t("settings.audio.title")}>
+          <TVSection icon={<Volume2 className="w-4 h-4 text-plex-orange" />} title={t("settings.audio.title")}>
             <TVRow label={t("settings.audio.defaultLanguage")}>
               <Select
                 value={preferences.default_audio}
@@ -161,7 +161,7 @@ export function TVSettings() {
             </TVRow>
           </TVSection>
 
-          <TVSection icon={<Subtitles className="w-4 h-4 text-[#e5a00d]" />} title={t("settings.subtitles.title")}>
+          <TVSection icon={<Subtitles className="w-4 h-4 text-plex-orange" />} title={t("settings.subtitles.title")}>
             <TVRow label={t("settings.subtitles.autoShow")}>
               <Switch
                 checked={preferences.subtitles_enabled}
@@ -186,7 +186,7 @@ export function TVSettings() {
             </TVRow>
           </TVSection>
 
-          <TVSection icon={<Monitor className="w-4 h-4 text-[#e5a00d]" />} title={t("settings.playback.title")}>
+          <TVSection icon={<Monitor className="w-4 h-4 text-plex-orange" />} title={t("settings.playback.title")}>
             <TVRow label={t("settings.playback.autoplayNext")} description={t("settings.playback.autoplayDescription")}>
               <Switch
                 checked={preferences.autoplay_next}
@@ -198,7 +198,7 @@ export function TVSettings() {
 
         {/* Right: language & account */}
         <div className="flex flex-col gap-5">
-          <TVSection icon={<Languages className="w-4 h-4 text-[#e5a00d]" />} title={t("settings.language.title")}>
+          <TVSection icon={<Languages className="w-4 h-4 text-plex-orange" />} title={t("settings.language.title")}>
             <TVRow label={t("settings.language.description")}>
               <div className="flex gap-2">
                 {(["it", "en"] as Locale[]).map((loc) => (
@@ -214,7 +214,7 @@ export function TVSettings() {
             </TVRow>
           </TVSection>
 
-          <TVSection icon={<User className="w-4 h-4 text-[#e5a00d]" />} title={t("settings.account.title")}>
+          <TVSection icon={<User className="w-4 h-4 text-plex-orange" />} title={t("settings.account.title")}>
             <TVRow label={t("settings.account.email")}>
               <span className="text-sm text-[#a1a1aa]">{user?.email || "—"}</span>
             </TVRow>

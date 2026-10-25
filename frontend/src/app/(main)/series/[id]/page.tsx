@@ -135,7 +135,7 @@ export default function SeriesDetailPage() {
         <p className="text-[#a1a1aa]">{t("media.notFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
+          className="text-plex-orange text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded"
         >
           {t("media.goBack")}
         </button>

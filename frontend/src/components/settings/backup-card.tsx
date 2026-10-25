@@ -172,7 +172,7 @@ export function BackupCard() {
 
   return (
     <DSCard
-      icon={<DatabaseBackup className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<DatabaseBackup className="w-5 h-5 text-plex-orange" />}
       title={t("title")}
       description={t("description")}
     >

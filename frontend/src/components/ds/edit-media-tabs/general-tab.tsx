@@ -44,7 +44,7 @@ export function GeneralTab({
           value={overview}
           onChange={(e) => onOverviewChange(e.target.value)}
           rows={5}
-          className="w-full px-3 py-2.5 rounded-lg bg-[#18181b] border border-[#3f3f46] text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-[#e5a00d] focus:border-2 transition-colors resize-none"
+          className="w-full px-3 py-2.5 rounded-lg bg-[#18181b] border border-[#3f3f46] text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-plex-orange focus:border-2 transition-colors resize-none"
         />
       </Field>
     </div>

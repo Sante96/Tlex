@@ -126,7 +126,7 @@ function WebSettings() {
         <div className="flex-1 flex flex-col gap-6">
           {/* Audio */}
           <DSCard
-            icon={<Volume2 className="w-5 h-5 text-[#e5a00d]" />}
+            icon={<Volume2 className="w-5 h-5 text-plex-orange" />}
             title={t("settings.audio.title")}
           >
             <div className="flex items-center justify-between">
@@ -165,7 +165,7 @@ function WebSettings() {
 
           {/* Sottotitoli */}
           <DSCard
-            icon={<Subtitles className="w-5 h-5 text-[#e5a00d]" />}
+            icon={<Subtitles className="w-5 h-5 text-plex-orange" />}
             title={t("settings.subtitles.title")}
           >
             <div className="flex flex-col gap-4">
@@ -218,7 +218,7 @@ function WebSettings() {
 
           {/* Riproduzione */}
           <DSCard
-            icon={<Monitor className="w-5 h-5 text-[#e5a00d]" />}
+            icon={<Monitor className="w-5 h-5 text-plex-orange" />}
             title={t("settings.playback.title")}
           >
             <div className="flex items-center justify-between">
@@ -242,7 +242,7 @@ function WebSettings() {
 
           {/* Account */}
           <DSCard
-            icon={<Languages className="w-5 h-5 text-[#e5a00d]" />}
+            icon={<Languages className="w-5 h-5 text-plex-orange" />}
             title={t("settings.language.title")}
           >
             <div className="flex items-center justify-between">
@@ -267,7 +267,7 @@ function WebSettings() {
           </DSCard>
 
           <DSCard
-            icon={<User className="w-5 h-5 text-[#e5a00d]" />}
+            icon={<User className="w-5 h-5 text-plex-orange" />}
             title={t("settings.account.title")}
           >
             <div className="flex flex-col gap-4">

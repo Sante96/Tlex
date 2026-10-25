@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 
 const variants = {
   primary: {
-    base: "bg-[#e5a00d] text-black focus:ring-[#e5a00d]",
-    disabled: "bg-[#e5a00d] text-black opacity-50",
+    base: "bg-plex-orange text-black focus:ring-plex-orange",
+    disabled: "bg-plex-orange text-black opacity-50",
   },
   secondary: {
     base: "bg-[#27272a] text-[#fafafa] focus:ring-[#71717a]",

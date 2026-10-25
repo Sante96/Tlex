@@ -28,7 +28,7 @@ export function EpisodeCard({
 
   return (
     <div
-      className="group cursor-pointer relative aspect-video rounded-lg overflow-hidden bg-[#27272a] outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+      className="group cursor-pointer relative aspect-video rounded-lg overflow-hidden bg-[#27272a] outline-none focus-visible:ring-2 focus-visible:ring-plex-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black"
       onClick={onClick}
       tabIndex={0}
       role="button"
@@ -65,7 +65,7 @@ export function EpisodeCard({
 
       {/* Watched badge */}
       {isWatched && (
-        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[#e5a00d] flex items-center justify-center z-10">
+        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-plex-orange flex items-center justify-center z-10">
           <Check className="h-3.5 w-3.5 text-black" strokeWidth={3} />
         </div>
       )}
@@ -106,7 +106,7 @@ export function EpisodeCard({
       {hasProgress && (
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-10">
           <div
-            className="h-full bg-[#e5a00d]"
+            className="h-full bg-plex-orange"
             style={{ width: `${progress}%` }}
           />
         </div>

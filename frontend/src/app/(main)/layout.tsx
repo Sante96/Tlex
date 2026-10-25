@@ -41,7 +41,7 @@ function ProfileGate({ children }: { children: React.ReactNode }) {
   if (isLoading || needsProfileSelection) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 text-[#e5a00d] animate-spin" />
+        <Loader2 className="h-8 w-8 text-plex-orange animate-spin" />
       </div>
     );
   }

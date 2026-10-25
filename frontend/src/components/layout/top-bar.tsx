@@ -210,7 +210,7 @@ export function TopBar() {
                   {/* Logo on mobile */}
                   <Link
                     href="/"
-                    className="md:hidden text-xl font-extrabold tracking-tight text-[#e5a00d]"
+                    className="md:hidden text-xl font-extrabold tracking-tight text-plex-orange"
                   >
                     TLEX
                   </Link>

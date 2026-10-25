@@ -51,7 +51,7 @@ export function PosterCard({
     >
       <Link href={href} className="group block outline-none focus-visible:outline-none">
         <div
-          className={`relative bg-[#27272a] rounded-lg overflow-hidden ring-2 ring-transparent group-focus-visible:ring-[#e5a00d] transition-shadow${isFluid ? " aspect-[2/3] w-full" : ""}`}
+          className={`relative bg-[#27272a] rounded-lg overflow-hidden ring-2 ring-transparent group-focus-visible:ring-plex-orange transition-shadow${isFluid ? " aspect-[2/3] w-full" : ""}`}
           style={isFluid ? undefined : { width: fixedW, height: fixedH }}
         >
           {imageUrl ? (
@@ -74,7 +74,7 @@ export function PosterCard({
           {progress !== undefined && progress > 0 && (
             <div className="absolute bottom-0 left-0 right-0 h-1 rounded-b-lg overflow-hidden bg-[#3f3f46]">
               <div
-                className="h-full rounded-bl-lg bg-[#e5a00d]"
+                className="h-full rounded-bl-lg bg-plex-orange"
                 style={{ width: `${progress}%` }}
               />
             </div>

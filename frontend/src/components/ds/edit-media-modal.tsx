@@ -224,7 +224,7 @@ export function EditMediaModal({
       {/* Header */}
       <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
-          <Pencil className="h-4 w-4 md:h-5 md:w-5 text-[#e5a00d] shrink-0" />
+          <Pencil className="h-4 w-4 md:h-5 md:w-5 text-plex-orange shrink-0" />
           <h2 className="text-base md:text-lg font-semibold text-[#fafafa] truncate">
             {modalTitle}
           </h2>
@@ -246,7 +246,7 @@ export function EditMediaModal({
             className={cn(
               "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2",
               activeTab === tab.id
-                ? "border-[#e5a00d] text-[#e5a00d]"
+                ? "border-plex-orange text-plex-orange"
                 : "border-transparent text-[#a1a1aa]",
             )}
           >
@@ -267,7 +267,7 @@ export function EditMediaModal({
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
                 activeTab === tab.id
-                  ? "bg-[#e5a00d]/15 text-[#e5a00d]"
+                  ? "bg-plex-orange/15 text-plex-orange"
                   : "text-[#a1a1aa] hover:bg-white/5 hover:text-[#fafafa]",
               )}
             >

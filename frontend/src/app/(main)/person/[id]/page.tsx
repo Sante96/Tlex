@@ -61,7 +61,7 @@ export default function PersonPage() {
         <p className="text-[#a1a1aa]">{t("person.notFound")}</p>
         <button
           onClick={() => router.back()}
-          className="text-[#e5a00d] text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
+          className="text-plex-orange text-sm mt-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded"
         >
           {t("media.goBack")}
         </button>
@@ -86,7 +86,7 @@ export default function PersonPage() {
       {/* Back */}
       <button
         onClick={() => router.back()}
-        className="flex items-center gap-2 text-[#a1a1aa] hover:text-white transition-colors mb-8 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
+        className="flex items-center gap-2 text-[#a1a1aa] hover:text-white transition-colors mb-8 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded"
       >
         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
         <span className="text-sm">{t("common.back")}</span>
@@ -183,7 +183,7 @@ export default function PersonPage() {
               {bioIsTruncatable && (
                 <button
                   onClick={() => setBioExpanded((v) => !v)}
-                  className="text-xs text-[#e5a00d] hover:underline self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded"
+                  className="text-xs text-plex-orange hover:underline self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded"
                 >
                   {bioExpanded ? t("common.readLess") : t("common.readMore")}
                 </button>

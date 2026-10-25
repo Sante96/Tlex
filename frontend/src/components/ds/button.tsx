@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 const variants = {
   primary: {
-    base: "bg-[#e5a00d] text-black hover:bg-[#d4940c] active:bg-[#b8860b]",
-    disabled: "bg-[#e5a00d] text-black opacity-50",
+    base: "bg-plex-orange text-black hover:bg-[#d4940c] active:bg-[#b8860b]",
+    disabled: "bg-plex-orange text-black opacity-50",
   },
   secondary: {
     base: "bg-[#27272a] text-[#fafafa] hover:bg-[#3f3f46] active:bg-[#52525b]",
@@ -49,7 +49,7 @@ export const DSButton = forwardRef<HTMLButtonElement, DSButtonProps>(
         transition={{ duration: 0.15 }}
         className={cn(
           "inline-flex items-center justify-center gap-2 h-10 rounded-lg px-4 text-sm font-medium transition-colors cursor-pointer",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-offset-2 focus-visible:ring-offset-black",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange focus-visible:ring-offset-2 focus-visible:ring-offset-black",
           "disabled:cursor-not-allowed",
           disabled ? v.disabled : v.base,
           className,

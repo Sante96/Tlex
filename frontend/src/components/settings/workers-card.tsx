@@ -15,7 +15,7 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
   const t = useTranslations();
   return (
     <DSCard
-      icon={<Server className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<Server className="w-5 h-5 text-plex-orange" />}
       title={t("workers.title")}
       description={t("workers.description")}
     >
@@ -123,7 +123,7 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                       <div className="text-sm font-medium">
                         Worker #{worker.id}
                         {worker.is_premium && (
-                          <span className="ml-2 text-xs text-[#e5a00d]">
+                          <span className="ml-2 text-xs text-plex-orange">
                             Premium
                           </span>
                         )}

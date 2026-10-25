@@ -34,7 +34,7 @@ function ResultRow({
     <button
       onClick={() => onSelect(result)}
       onKeyDown={onKeyDown}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.07] focus-visible:outline-none focus-visible:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-inset transition-colors text-left group"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.07] focus-visible:outline-none focus-visible:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-plex-orange focus-visible:ring-inset transition-colors text-left group"
     >
       <div className="w-10 h-[60px] rounded-md overflow-hidden shrink-0 bg-white/[0.04] border border-white/[0.06]">
         {result.poster_path ? (
@@ -199,13 +199,13 @@ export function SearchBar({ className, compact }: { className?: string; compact?
       {/* Input */}
       <div
         className={`group flex items-center gap-2 px-3 rounded-lg border border-white/5 backdrop-blur-sm transition-all duration-150
-          hover:border-white/15 focus-within:border-[#e5a00d] focus-within:border-2 focus-within:px-[11px] ${compact ? "h-7" : "h-9"}`}
+          hover:border-white/15 focus-within:border-plex-orange focus-within:border-2 focus-within:px-[11px] ${compact ? "h-7" : "h-9"}`}
         style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
       >
         {loading ? (
-          <Loader2 className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-[#e5a00d] animate-spin`} />
+          <Loader2 className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-plex-orange animate-spin`} />
         ) : (
-          <Search className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-[#71717a] group-hover:text-[#a1a1aa] group-focus-within:text-[#e5a00d] transition-colors`} />
+          <Search className={`${compact ? "h-3 w-3" : "h-4 w-4"} shrink-0 text-[#71717a] group-hover:text-[#a1a1aa] group-focus-within:text-plex-orange transition-colors`} />
         )}
         <input
           ref={inputRef}

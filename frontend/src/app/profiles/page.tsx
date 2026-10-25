@@ -57,7 +57,7 @@ export default function ProfilesPage() {
   if (isLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
-        <div className="w-10 h-10 border-2 border-[#e5a00d] border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-plex-orange border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -95,7 +95,7 @@ export default function ProfilesPage() {
                   className="flex flex-col items-center gap-4 group outline-none"
                 >
                   <div
-                    className="relative w-44 h-44 rounded-full transition-all duration-200 ring-4 ring-transparent group-focus-visible:ring-[#e5a00d] group-focus-visible:scale-105 group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#09090b]"
+                    className="relative w-44 h-44 rounded-full transition-all duration-200 ring-4 ring-transparent group-focus-visible:ring-plex-orange group-focus-visible:scale-105 group-focus-visible:ring-offset-4 group-focus-visible:ring-offset-[#09090b]"
                     style={{ "--tw-ring-offset-color": "#09090b" } as React.CSSProperties}
                   >
                     <ProfileAvatar
@@ -119,7 +119,7 @@ export default function ProfilesPage() {
                     onClick={(e) => handleAssignWorker(e, profile.id)}
                     title={t("profiles.assignWorker")}
                     aria-label={t("profiles.assignWorker")}
-                    className="absolute top-[154px] left-[calc(50%+66px)] w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#09090b] outline-none focus-visible:ring-4 focus-visible:ring-[#e5a00d]"
+                    className="absolute top-[154px] left-[calc(50%+66px)] w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#09090b] outline-none focus-visible:ring-4 focus-visible:ring-plex-orange"
                   >
                     <span className="text-xs font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
                   </button>
@@ -133,8 +133,8 @@ export default function ProfilesPage() {
                 onClick={() => setShowCreateModal(true)}
                 className="flex flex-col items-center gap-4 group outline-none"
               >
-                <div className="w-44 h-44 rounded-full border-4 border-dashed border-white/20 flex items-center justify-center transition-all duration-200 bg-white/[0.03] group-focus-visible:border-[#e5a00d] group-focus-visible:scale-105">
-                  <Plus className="w-14 h-14 text-white/30 group-focus-visible:text-[#e5a00d] transition-colors" />
+                <div className="w-44 h-44 rounded-full border-4 border-dashed border-white/20 flex items-center justify-center transition-all duration-200 bg-white/[0.03] group-focus-visible:border-plex-orange group-focus-visible:scale-105">
+                  <Plus className="w-14 h-14 text-white/30 group-focus-visible:text-plex-orange transition-colors" />
                 </div>
                 <span className="text-lg font-medium text-[#a1a1aa] group-focus-visible:text-white transition-colors">
                   {t("profiles.addProfile")}
@@ -195,7 +195,7 @@ export default function ProfilesPage() {
                 <div
                   className={`
                   relative w-32 h-32 rounded-full transition-all duration-200
-                  ring-2 ring-transparent group-hover:ring-[#e5a00d] group-hover:ring-offset-2
+                  ring-2 ring-transparent group-hover:ring-plex-orange group-hover:ring-offset-2
                   group-hover:scale-105
                   ${isEditing ? "ring-white/20" : ""}
                 `}
@@ -236,7 +236,7 @@ export default function ProfilesPage() {
                 onClick={(e) => handleAssignWorker(e, profile.id)}
                 title={t("profiles.assignWorker")}
                 aria-label={t("profiles.assignWorker")}
-                className="absolute top-[110px] left-[calc(50%+46px)] w-5 h-5 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors outline-none focus-visible:ring-[#e5a00d]"
+                className="absolute top-[110px] left-[calc(50%+46px)] w-5 h-5 bg-yellow-500 hover:bg-yellow-400 rounded-full flex items-center justify-center ring-2 ring-[#09090b] transition-colors outline-none focus-visible:ring-plex-orange"
               >
                 <span className="text-[10px] font-bold text-black">{assigningId === profile.id ? "…" : "!"}</span>
               </button>
@@ -250,8 +250,8 @@ export default function ProfilesPage() {
               onClick={() => setShowCreateModal(true)}
               className="flex flex-col items-center gap-3 group outline-none"
             >
-              <div className="w-32 h-32 rounded-full border-2 border-dashed border-white/20 group-hover:border-[#e5a00d]/60 flex items-center justify-center transition-all duration-200 group-hover:scale-105 bg-white/[0.03]">
-                <Plus className="w-9 h-9 text-white/30 group-hover:text-[#e5a00d]/70 transition-colors duration-200" />
+              <div className="w-32 h-32 rounded-full border-2 border-dashed border-white/20 group-hover:border-plex-orange/60 flex items-center justify-center transition-all duration-200 group-hover:scale-105 bg-white/[0.03]">
+                <Plus className="w-9 h-9 text-white/30 group-hover:text-plex-orange/70 transition-colors duration-200" />
               </div>
               <span className="text-[#52525b] group-hover:text-[#a1a1aa] transition-colors text-sm font-medium">
                 {t("profiles.addProfile")}
@@ -266,7 +266,7 @@ export default function ProfilesPage() {
             onClick={() => setIsEditing(!isEditing)}
             className={`mt-12 flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
               isEditing
-                ? "bg-[#e5a00d]/15 border border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/25"
+                ? "bg-plex-orange/15 border border-plex-orange/40 text-plex-orange hover:bg-plex-orange/25"
                 : "bg-white/[0.06] border border-white/10 text-[#a1a1aa] hover:bg-white/[0.12] hover:text-white"
             }`}
           >

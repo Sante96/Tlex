@@ -29,7 +29,7 @@ export function ImagePickerTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="w-6 h-6 border-2 border-[#e5a00d] border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-plex-orange border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -69,7 +69,7 @@ export function ImagePickerTab({
                 "relative rounded-lg overflow-hidden transition-all",
                 aspect === "poster" ? "aspect-[2/3]" : "aspect-video",
                 isSelected
-                  ? "ring-2 ring-[#e5a00d] ring-offset-2 ring-offset-[#18181b]"
+                  ? "ring-2 ring-plex-orange ring-offset-2 ring-offset-[#18181b]"
                   : "hover:ring-1 hover:ring-white/30 opacity-70 hover:opacity-100",
               )}
             >
@@ -77,7 +77,7 @@ export function ImagePickerTab({
                 <Image src={url} alt={label} fill className="object-cover" />
               )}
               {isSelected && (
-                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#e5a00d] flex items-center justify-center">
+                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-plex-orange flex items-center justify-center">
                   <svg
                     className="h-3 w-3 text-black"
                     fill="none"

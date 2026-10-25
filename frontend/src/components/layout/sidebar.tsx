@@ -124,14 +124,14 @@ export function Sidebar() {
           collapsed ? (
             <Link
               href="/"
-              className="flex items-center justify-center w-9 h-9 tv-1080:w-10 tv-1080:h-10 rounded-[10px] flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+              className="flex items-center justify-center w-9 h-9 tv-1080:w-10 tv-1080:h-10 rounded-[10px] flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
             >
               <Image src="/tlex-icon.svg" alt="TLEX" width={32} height={32} className="w-6 h-6 tv-1080:w-7 tv-1080:h-7 tv-4k:w-8 tv-4k:h-8" unoptimized />
             </Link>
           ) : (
             <Link
               href="/"
-              className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded-[10px]"
+              className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded-[10px]"
             >
               <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-7 tv-1080:h-8 tv-4k:h-10 w-auto" unoptimized />
             </Link>
@@ -210,10 +210,10 @@ export function Sidebar() {
 
       {/* Scan indicator */}
       {isScanning && (
-        <div className="flex items-center gap-2 px-2 tv-1080:px-3 py-1.5 tv-1080:py-2 rounded-[10px] mb-2 tv-1080:mb-3 bg-[#e5a00d]/10 border border-[#e5a00d]/30">
-          <Loader2 className="h-4 w-4 animate-spin text-[#e5a00d] flex-shrink-0" />
+        <div className="flex items-center gap-2 px-2 tv-1080:px-3 py-1.5 tv-1080:py-2 rounded-[10px] mb-2 tv-1080:mb-3 bg-plex-orange/10 border border-plex-orange/30">
+          <Loader2 className="h-4 w-4 animate-spin text-plex-orange flex-shrink-0" />
           <span
-            className="text-xs font-medium text-[#e5a00d] whitespace-nowrap"
+            className="text-xs font-medium text-plex-orange whitespace-nowrap"
             style={{
               opacity: collapsed ? 0 : 1,
               transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",

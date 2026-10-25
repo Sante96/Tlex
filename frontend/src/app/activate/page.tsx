@@ -59,8 +59,8 @@ export default function ActivatePage() {
             border: "1px solid rgba(255,255,255,0.07)",
           }}
         >
-          <div className="w-16 h-16 rounded-full bg-[#e5a00d]/15 border border-[#e5a00d]/30 flex items-center justify-center">
-            <CheckCircle className="h-8 w-8 text-[#e5a00d]" />
+          <div className="w-16 h-16 rounded-full bg-plex-orange/15 border border-plex-orange/30 flex items-center justify-center">
+            <CheckCircle className="h-8 w-8 text-plex-orange" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold text-white">{t("success")}</h1>
@@ -125,7 +125,7 @@ export default function ActivatePage() {
               placeholder="ABCD12"
               maxLength={6}
               required
-              className="w-full h-12 rounded-lg bg-[#18181b] px-3 text-center text-xl font-mono font-bold tracking-[0.4em] text-[#e5a00d] border border-[#3f3f46] outline-none transition-colors focus:border-[#e5a00d] focus:border-2 placeholder:text-[#3f3f46] placeholder:tracking-normal"
+              className="w-full h-12 rounded-lg bg-[#18181b] px-3 text-center text-xl font-mono font-bold tracking-[0.4em] text-plex-orange border border-[#3f3f46] outline-none transition-colors focus:border-plex-orange focus:border-2 placeholder:text-[#3f3f46] placeholder:tracking-normal"
             />
           </div>
 

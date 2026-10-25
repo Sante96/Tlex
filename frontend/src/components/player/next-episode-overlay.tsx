@@ -127,7 +127,7 @@ export function NextEpisodeOverlay({
             <button
               onClick={onPlay}
               aria-label={t("player.playNow")}
-              className="w-full rounded-xl overflow-hidden aspect-video relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+              className="w-full rounded-xl overflow-hidden aspect-video relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
             >
               {thumbUrl ? (
                 <Image
@@ -161,7 +161,7 @@ export function NextEpisodeOverlay({
             <button
               onClick={onPlay}
               aria-label={t("player.playNow")}
-              className="relative flex items-center justify-center w-[72px] h-[72px] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d] rounded-full"
+              className="relative flex items-center justify-center w-[72px] h-[72px] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded-full"
             >
               <svg
                 width="72"
@@ -307,7 +307,7 @@ export function NextEpisodeOverlay({
                 <button
                   onClick={onPlay}
                   aria-label={t("player.playNow")}
-                  className="h-9 px-3 rounded-lg bg-[#e5a00d] text-black text-xs font-semibold flex items-center gap-1"
+                  className="h-9 px-3 rounded-lg bg-plex-orange text-black text-xs font-semibold flex items-center gap-1"
                 >
                   <Play className="h-3 w-3 fill-black" />
                   {t("media.play")}

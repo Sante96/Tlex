@@ -17,13 +17,13 @@ export const DSInput = forwardRef<HTMLInputElement, DSInputProps>(
     const borderClass = error
       ? "border-[#ef4444]"
       : focused
-        ? "border-[#e5a00d] border-2"
+        ? "border-plex-orange border-2"
         : "border-[#3f3f46]";
 
     const labelColor = error
       ? "text-[#ef4444]"
       : focused
-        ? "text-[#e5a00d]"
+        ? "text-plex-orange"
         : "text-[#a1a1aa]";
 
     return (

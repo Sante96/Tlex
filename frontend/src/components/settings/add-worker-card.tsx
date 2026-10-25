@@ -125,7 +125,7 @@ export function AddWorkerCard({
 
   return (
     <DSCard
-      icon={<Phone className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<Phone className="w-5 h-5 text-plex-orange" />}
       title="Worker Telegram"
     >
       <div className="flex flex-col gap-4">
@@ -150,7 +150,7 @@ export function AddWorkerCard({
                   />
                   <span className="text-sm text-[#fafafa]">****{w.phone}</span>
                   {w.is_premium && (
-                    <Crown className="w-3.5 h-3.5 text-[#e5a00d]" />
+                    <Crown className="w-3.5 h-3.5 text-plex-orange" />
                   )}
                   <span className="text-xs text-[#71717a]">
                     {w.clients_total} client{w.clients_total !== 1 ? "s" : ""}

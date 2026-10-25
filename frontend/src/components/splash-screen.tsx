@@ -41,7 +41,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
 
         {/* Secondary glow ring */}
         <motion.div
-          className="absolute w-[400px] h-[400px] rounded-full border border-[#e5a00d]/20"
+          className="absolute w-[400px] h-[400px] rounded-full border border-plex-orange/20"
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.3 }}
@@ -144,7 +144,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
             transition={{ delay: 1, duration: 0.3 }}
           >
             <motion.div
-              className="h-full bg-gradient-to-r from-[#e5a00d] to-[#f5c842]"
+              className="h-full bg-gradient-to-r from-plex-orange to-[#f5c842]"
               initial={{ x: "-100%" }}
               animate={{ x: "100%" }}
               transition={{
@@ -160,7 +160,7 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
         {[...Array(6)].map((_, i) => (
           <motion.div
             key={i}
-            className="absolute w-1 h-1 rounded-full bg-[#e5a00d]"
+            className="absolute w-1 h-1 rounded-full bg-plex-orange"
             initial={{
               x: 0,
               y: 0,

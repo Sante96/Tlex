@@ -18,7 +18,7 @@ export default function ErrorPage({ reset }: { error: Error; reset: () => void }
         </DSButton>
         <Link
           href="/"
-          className="h-11 px-6 inline-flex items-center rounded-[10px] bg-[#27272a] text-[#fafafa] font-medium outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+          className="h-11 px-6 inline-flex items-center rounded-[10px] bg-[#27272a] text-[#fafafa] font-medium outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
         >
           {t("nav.home")}
         </Link>

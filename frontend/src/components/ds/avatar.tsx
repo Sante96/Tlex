@@ -13,7 +13,7 @@ export function DSAvatar({ letter, src, size = 36, className }: DSAvatarProps) {
     <div
       className={cn(
         "relative flex items-center justify-center rounded-full overflow-hidden",
-        "bg-[#e5a00d] text-black text-sm font-semibold",
+        "bg-plex-orange text-black text-sm font-semibold",
         "hover:ring-2 hover:ring-[#e5a00d80] transition-shadow cursor-pointer",
         className,
       )}

@@ -93,7 +93,7 @@ export function BackupRow({
           <DSIconButton
             onClick={() => onToggle(b.id)}
             disabled={togglingId === b.id}
-            className="hover:text-[#e5a00d]"
+            className="hover:text-plex-orange"
             title={b.is_active ? t("inactive") : t("active")}
             icon={
               togglingId === b.id ? (

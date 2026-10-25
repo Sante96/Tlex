@@ -96,7 +96,7 @@ function PeopleRow({
             className="flex flex-col items-center gap-2 shrink-0 w-[200px] group outline-none"
           >
             <div
-              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-[#e5a00d] group-focus-visible:ring-[#e5a00d] transition-all duration-200 group-hover:scale-105 group-focus-visible:scale-105"
+              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-plex-orange group-focus-visible:ring-plex-orange transition-all duration-200 group-hover:scale-105 group-focus-visible:scale-105"
               style={{ boxShadow: "none" }}
             >
               {member.profile_path ? (
@@ -108,7 +108,7 @@ function PeopleRow({
                   className="object-cover w-full h-full transition-[filter] duration-200 group-hover:brightness-110"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#52525b] group-hover:text-[#e5a00d] text-lg font-semibold transition-colors duration-200">
+                <div className="w-full h-full flex items-center justify-center text-[#52525b] group-hover:text-plex-orange text-lg font-semibold transition-colors duration-200">
                   {member.name.charAt(0)}
                 </div>
               )}

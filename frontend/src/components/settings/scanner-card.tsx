@@ -41,7 +41,7 @@ export function ScannerCard({
   const toast = useToast();
   return (
     <DSCard
-      icon={<Clock className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<Clock className="w-5 h-5 text-plex-orange" />}
       title={t("scanner.title")}
       description={t("scanner.description")}
     >

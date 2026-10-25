@@ -97,7 +97,7 @@ function RegisterForm() {
       >
         {/* Logo + heading */}
         <div className="text-center mb-8">
-          <span className="text-4xl font-bold tracking-tight text-[#e5a00d]">
+          <span className="text-4xl font-bold tracking-tight text-plex-orange">
             TLEX
           </span>
           <h1 className="text-xl font-semibold text-white mt-3">
@@ -175,7 +175,7 @@ function RegisterForm() {
           {t("hasAccount")}{" "}
           <Link
             href="/login"
-            className="text-[#e5a00d] hover:text-[#f0b429] transition-colors"
+            className="text-plex-orange hover:text-[#f0b429] transition-colors"
           >
             {t("login")}
           </Link>

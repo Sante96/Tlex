@@ -152,20 +152,20 @@ function LoginForm() {
             {/* Steps */}
             <div className="flex flex-col gap-5">
               <div className="flex items-start gap-4">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">1</span>
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-plex-orange/20 border border-plex-orange/40 text-plex-orange text-sm font-bold flex items-center justify-center">1</span>
                 <div>
                   <p className="text-base font-medium text-white">{tv("goTo")}</p>
-                  <p className="text-base font-mono text-[#e5a00d]">
+                  <p className="text-base font-mono text-plex-orange">
                     {origin}/activate
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">2</span>
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-plex-orange/20 border border-plex-orange/40 text-plex-orange text-sm font-bold flex items-center justify-center">2</span>
                 <p className="text-base font-medium text-white pt-1">{tv("enterCode")}</p>
               </div>
               <div className="flex items-start gap-4">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/40 text-[#e5a00d] text-sm font-bold flex items-center justify-center">3</span>
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-plex-orange/20 border border-plex-orange/40 text-plex-orange text-sm font-bold flex items-center justify-center">3</span>
                 <p className="text-base font-medium text-white pt-1">{tv("signIn")}</p>
               </div>
             </div>
@@ -177,7 +177,7 @@ function LoginForm() {
                   {userCode.split("").map((char, i) => (
                     <span
                       key={i}
-                      className="w-14 h-16 flex items-center justify-center rounded-xl bg-[#18181b] border border-[#e5a00d]/30 text-3xl font-mono font-bold text-[#e5a00d] shadow-[0_0_12px_rgba(229,160,13,0.15)]"
+                      className="w-14 h-16 flex items-center justify-center rounded-xl bg-[#18181b] border border-plex-orange/30 text-3xl font-mono font-bold text-plex-orange shadow-[0_0_12px_rgba(229,160,13,0.15)]"
                     >
                       {char}
                     </span>
@@ -339,7 +339,7 @@ function LoginForm() {
           {t("noAccount")}{" "}
           <Link
             href="/register"
-            className="text-[#e5a00d] hover:text-[#f0b429] transition-colors"
+            className="text-plex-orange hover:text-[#f0b429] transition-colors"
           >
             {t("register")}
           </Link>

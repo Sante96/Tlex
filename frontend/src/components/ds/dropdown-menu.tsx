@@ -57,7 +57,7 @@ export function DSDropdownMenu({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5a00d]"
+        className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
       >
         {trigger}
       </button>

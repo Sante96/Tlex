@@ -152,7 +152,7 @@ export function EditProfileModal({
               type="checkbox"
               checked={isKids}
               onChange={(e) => setIsKids(e.target.checked)}
-              className="w-5 h-5 shrink-0 accent-[#e5a00d] cursor-pointer"
+              className="w-5 h-5 shrink-0 accent-plex-orange cursor-pointer"
             />
             <div>
               <span className="text-sm text-white">

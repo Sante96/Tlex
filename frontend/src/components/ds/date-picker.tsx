@@ -100,7 +100,7 @@ export function DSDatePicker({
         className={cn(
           "flex items-center gap-2 h-10 w-full rounded-lg bg-[#18181b] border px-3 text-sm text-left transition-colors outline-none",
           open
-            ? "border-[#e5a00d] border-2 px-[11px]"
+            ? "border-plex-orange border-2 px-[11px]"
             : "border-[#3f3f46] hover:border-[#52525b]",
           value ? "text-[#fafafa]" : "text-[#52525b]",
           disabled && "opacity-50 cursor-not-allowed",
@@ -160,8 +160,8 @@ export function DSDatePicker({
                   onClick={() => selectDay(day)}
                   className={cn(
                     "text-sm h-8 w-8 rounded-lg mx-auto flex items-center justify-center transition-colors",
-                    sel && "bg-[#e5a00d] text-black font-semibold",
-                    !sel && tod && "ring-1 ring-[#e5a00d] text-[#e5a00d]",
+                    sel && "bg-plex-orange text-black font-semibold",
+                    !sel && tod && "ring-1 ring-plex-orange text-plex-orange",
                     !sel &&
                       !tod &&
                       "text-[#a1a1aa] hover:bg-[#27272a] hover:text-white",

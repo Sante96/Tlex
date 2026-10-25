@@ -31,9 +31,9 @@ export function DSNavItem({
         "grid w-full rounded-[10px] font-medium transition-colors outline-none overflow-hidden items-center",
         tvMode ? "h-9 tv-1080:h-10 tv-4k:h-11 text-[13px] tv-1080:text-[14px] tv-4k:text-[15px]" : "h-11 text-[15px]",
         active
-          ? "bg-[#e5a00d1a] text-[#e5a00d]"
+          ? "bg-[#e5a00d1a] text-plex-orange"
           : tvMode
-            ? "text-[#a1a1aa] focus-visible:bg-white/15 focus-visible:text-[#fafafa] focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:ring-inset"
+            ? "text-[#a1a1aa] focus-visible:bg-white/15 focus-visible:text-[#fafafa] focus-visible:ring-2 focus-visible:ring-plex-orange focus-visible:ring-inset"
             : "text-[#a1a1aa] hover:bg-white/10 hover:text-[#fafafa] focus-visible:bg-white/10 focus-visible:text-[#fafafa]",
       )}
       style={{ gridTemplateColumns: `${iconColumn ?? (tvMode ? 36 : 44)}px minmax(0, 1fr) auto` }}
@@ -42,7 +42,7 @@ export function DSNavItem({
       <span
         className={cn(
           "flex items-center justify-center",
-          active ? "text-[#e5a00d]" : "text-[#71717a]",
+          active ? "text-plex-orange" : "text-[#71717a]",
         )}
       >
         {icon}
@@ -62,7 +62,7 @@ export function DSNavItem({
       {/* Chevron — only rendered when visible to avoid ghost space in auto column */}
       {!collapsed && active && (
         <span className="pr-3.5" style={{ opacity: 1, transition: "opacity 0.15s ease 0.12s" }}>
-          <ChevronRight className="h-4 w-4 text-[#e5a00d]" />
+          <ChevronRight className="h-4 w-4 text-plex-orange" />
         </span>
       )}
     </Link>

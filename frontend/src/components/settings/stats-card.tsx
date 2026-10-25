@@ -17,7 +17,7 @@ export function StatsCard({ data, loading, onRefresh }: StatsCardProps) {
 
   return (
     <DSCard
-      icon={<BarChart3 className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<BarChart3 className="w-5 h-5 text-plex-orange" />}
       title={t("stats.title")}
       description={t("stats.description")}
     >

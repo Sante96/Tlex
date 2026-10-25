@@ -17,7 +17,7 @@ export function SectionHeader({
       {href && (
         <Link
           href={href}
-          className="text-sm font-medium text-[#e5a00d] hover:underline focus-visible:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-[#e5a00d] focus-visible:rounded"
+          className="text-sm font-medium text-plex-orange hover:underline focus-visible:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-plex-orange focus-visible:rounded"
         >
           {linkText}
         </Link>

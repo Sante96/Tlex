@@ -59,7 +59,7 @@ export function UsersCard({
 
   return (
     <DSCard
-      icon={<Users className="w-5 h-5 text-[#e5a00d]" />}
+      icon={<Users className="w-5 h-5 text-plex-orange" />}
       title={t("users.title")}
       description={description}
     >
@@ -87,7 +87,7 @@ export function UsersCard({
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div
                   className={`w-2 h-2 rounded-full shrink-0 ${
-                    user.is_admin ? "bg-[#e5a00d]" : "bg-[#3f3f46]"
+                    user.is_admin ? "bg-plex-orange" : "bg-[#3f3f46]"
                   }`}
                 />
                 <div className="min-w-0">
@@ -117,7 +117,7 @@ export function UsersCard({
                 {/* Admin toggle */}
                 <div className="flex items-center gap-2">
                   {user.is_admin ? (
-                    <Shield className="w-3.5 h-3.5 text-[#e5a00d]" />
+                    <Shield className="w-3.5 h-3.5 text-plex-orange" />
                   ) : (
                     <ShieldOff className="w-3.5 h-3.5 text-[#52525b]" />
                   )}
