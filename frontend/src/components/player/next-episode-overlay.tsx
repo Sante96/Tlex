@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Play, X } from "lucide-react";
 import { DSButton } from "@/components/ds/button";
 import { type NextEpisode } from "@/lib/api";
+import { useProfile } from "@/contexts/profile-context";
 import {
   getTmdbImageUrl,
   formatDuration,
@@ -14,11 +15,6 @@ import {
 } from "@/lib/format";
 
 const COUNTDOWN_SECONDS = 30;
-
-function getAutoplayPref(): boolean {
-  if (typeof window === "undefined") return true;
-  return localStorage.getItem("pref_autoplay_next") !== "false";
-}
 
 interface NextEpisodeOverlayProps {
   nextEpisode: NextEpisode | null;
@@ -38,6 +34,8 @@ export function NextEpisodeOverlay({
   onCancel,
 }: NextEpisodeOverlayProps) {
   const t = useTranslations();
+  // The profile's Settings, on every device (it used to be a per-browser copy)
+  const autoplay = useProfile().profile?.preferences?.autoplay_next !== false;
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onPlayRef = useRef(onPlay);
@@ -56,7 +54,7 @@ export function NextEpisodeOverlay({
   // Countdown timer — uses interval callback for all state updates
   useEffect(() => {
     if (!visible || !nextEpisode) return;
-    if (!getAutoplayPref()) return; // autoplay disabled by user preference
+    if (!autoplay) return;
 
     let remaining = COUNTDOWN_SECONDS;
 
@@ -81,7 +79,7 @@ export function NextEpisodeOverlay({
       clearTimeout(initTimer);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [visible, nextEpisode]);
+  }, [visible, nextEpisode, autoplay]);
 
   const handleCancel = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -262,7 +260,7 @@ export function NextEpisodeOverlay({
 
               {/* Countdown ring + play */}
               <div className="flex flex-col items-center gap-2 shrink-0">
-                {getAutoplayPref() && (
+                {autoplay && (
                   <button
                     onClick={onPlay}
                     className="relative flex items-center justify-center w-11 h-11"

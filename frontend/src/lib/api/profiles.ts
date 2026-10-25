@@ -7,10 +7,12 @@ export interface Profile {
   name: string;
   avatar_url: string | null;
   is_kids: boolean;
+  /** What the Settings page saves; absent keys mean the defaults */
   preferences: {
     default_audio?: string;
     default_subtitle?: string | null;
-    auto_quality?: boolean;
+    subtitles_enabled?: boolean;
+    autoplay_next?: boolean;
   };
   has_worker: boolean;
 }

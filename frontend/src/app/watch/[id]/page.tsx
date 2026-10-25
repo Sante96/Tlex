@@ -11,11 +11,15 @@ import {
   type MediaDetails,
 } from "@/lib/api";
 import { cleanEpisodeTitle } from "@/lib/format";
+import { useProfile } from "@/contexts/profile-context";
 
 export default function WatchPage() {
   const params = useParams();
   const router = useRouter();
   const mediaId = Number(params.id);
+  // The player picks audio and subtitles from the profile's Settings: wait for it, or a
+  // late profile would switch the audio track (and restart the stream) right after start
+  const { isLoading: profileLoading } = useProfile();
 
   const [media, setMedia] = useState<MediaDetails | null>(null);
   const [initialPosition, setInitialPosition] = useState(0);
@@ -65,7 +69,7 @@ export default function WatchPage() {
   const subtitleTracks =
     media?.streams.filter((s) => s.codec_type === "SUBTITLE") || [];
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>

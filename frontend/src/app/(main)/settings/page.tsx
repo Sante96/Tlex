@@ -52,7 +52,7 @@ export default function SettingsPage() {
 
 function WebSettings() {
   const { user } = useAuth();
-  const { profile } = useProfile();
+  const { profile, refreshProfiles } = useProfile();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -110,15 +110,8 @@ function WebSettings() {
         await updateProfile(profile.id, {
           preferences: preferences as unknown as Record<string, unknown>,
         });
+        await refreshProfiles(); // the player reads the profile in memory
       }
-      localStorage.setItem(
-        "pref_autoplay_next",
-        String(preferences.autoplay_next),
-      );
-      localStorage.setItem(
-        "pref_subtitles_enabled",
-        String(preferences.subtitles_enabled),
-      );
       toast(t("settings.saved"), "success");
     } catch {
       toast(t("settings.saveError"), "error");

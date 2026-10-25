@@ -8,7 +8,7 @@ import {
   SubtitleRenderer,
   type SubtitleRendererHandle,
 } from "./subtitle-renderer";
-import { releaseStream, type MediaStream } from "@/lib/api";
+import { releaseStream, type MediaStream, type Profile } from "@/lib/api";
 
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
 import { usePoolStatus } from "@/hooks/player/use-pool-status";
@@ -30,11 +30,18 @@ const BUFFER_MARGIN = 0.5;
 // Skips (arrow keys, ±10 buttons) in a row restart the stream once, where they stop
 const SKIP_SETTLE_MS = 400;
 
-// Saved from the Settings page into the profile
-interface ProfilePlaybackPrefs {
-  default_audio?: string;
-  default_subtitle?: string;
-  subtitles_enabled?: boolean;
+/** The Settings' subtitle track for this media, until one is picked in the player. */
+function defaultSubtitle(tracks: MediaStream[], prefs: Profile["preferences"]): number | null {
+  if (!tracks.length || prefs.subtitles_enabled === false || prefs.default_subtitle === "none") {
+    return null;
+  }
+  const inLanguage = tracks.filter((t) => t.language === prefs.default_subtitle);
+  const track =
+    inLanguage.find((t) => t.is_default) ??
+    inLanguage[0] ??
+    tracks.find((t) => t.is_default) ??
+    tracks[0];
+  return track.stream_index;
 }
 
 interface VideoPlayerProps {
@@ -95,11 +102,10 @@ export function VideoPlayer({
 
   // Custom Hooks
   const { profile } = useProfile();
-  const prefs = (profile?.preferences ?? {}) as ProfilePlaybackPrefs;
+  const prefs = profile?.preferences ?? {};
   const {
     selectedAudio,
     selectedSubtitle,
-    subtitleChosen,
     subtitleOffset,
     setSelectedAudio,
     setSelectedSubtitle,
@@ -107,35 +113,8 @@ export function VideoPlayer({
   } = usePlayerPreferences(
     mediaId,
     Math.max(0, audioTracks.findIndex((t) => t.language === prefs.default_audio)),
+    defaultSubtitle(subtitleTracks, prefs),
   );
-
-  // First time on this media: pick subtitles from the Settings preferences.
-  // A saved choice, including "off", always wins.
-  useEffect(() => {
-    if (subtitleChosen || subtitleTracks.length === 0) return;
-    const enabled =
-      prefs.subtitles_enabled ??
-      localStorage.getItem("pref_subtitles_enabled") !== "false";
-    if (!enabled || prefs.default_subtitle === "none") {
-      setSelectedSubtitle(null);
-      return;
-    }
-    const inLanguage = subtitleTracks.filter(
-      (t) => t.language === prefs.default_subtitle,
-    );
-    const track =
-      inLanguage.find((t) => t.is_default) ??
-      inLanguage[0] ??
-      subtitleTracks.find((t) => t.is_default) ??
-      subtitleTracks[0];
-    setSelectedSubtitle(track.stream_index);
-  }, [
-    subtitleChosen,
-    subtitleTracks,
-    prefs.subtitles_enabled,
-    prefs.default_subtitle,
-    setSelectedSubtitle,
-  ]);
 
   const { videoUrl, streamStartTime, localSeekOffset } = useVideoSync(
     mediaId,
