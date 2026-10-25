@@ -487,6 +487,10 @@ export function VideoPlayer({
             videoRef={videoRef}
             mediaId={mediaId}
             subtitleTrack={selectedSubtitle}
+            pgs={
+              subtitleTracks.find((s) => s.stream_index === selectedSubtitle)?.codec_name ===
+              "hdmv_pgs_subtitle"
+            }
             enabled={selectedSubtitle !== null}
             visible={!isLoading && !isSeeking}
             timeOffset={streamStartTime}

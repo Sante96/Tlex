@@ -6,9 +6,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 // No cache buster: a track's file never changes once extracted, and the backend lets the
 // browser keep it a day (202 "still extracting" answers are not cached)
-function getSubtitleUrl(mediaId: number, track: number): string {
-  return `${API_BASE_URL}/api/v1/subtitles/${mediaId}?track=${track}&format=ass`;
+function getSubtitleUrl(mediaId: number, track: number, format: SubtitleFormat): string {
+  return `${API_BASE_URL}/api/v1/subtitles/${mediaId}?track=${track}&format=${format}`;
 }
+
+/** ass: a text track, for libass. sup: a PGS (Blu-ray picture) track, for libpgs */
+export type SubtitleFormat = "ass" | "sup";
 
 export async function fetchAvailableFonts(
   mediaId: number,
@@ -56,21 +59,23 @@ export async function fetchAvailableFonts(
 /**
  * The backend answers 202 (+ Retry-After) while it extracts a track that isn't cached
  * yet; keep asking until it's ready or the caller no longer wants it (isStale).
+ * Returns the ready response, to read as text (ass) or bytes (sup).
  */
-export async function fetchSubtitleContent(
+export async function fetchSubtitleFile(
   mediaId: number,
   track: number,
+  format: SubtitleFormat,
   isStale: () => boolean = () => false,
-): Promise<string | null> {
+): Promise<Response | null> {
   try {
     while (!isStale()) {
-      const resp = await fetch(getSubtitleUrl(mediaId, track));
+      const resp = await fetch(getSubtitleUrl(mediaId, track, format));
       if (resp.status === 202) {
         const retryAfter = Number(resp.headers.get("Retry-After")) || 5;
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         continue;
       }
-      return resp.ok ? await resp.text() : null;
+      return resp.ok ? resp : null;
     }
   } catch {
     // Error fetching subtitles

@@ -7,6 +7,8 @@ interface SubtitleRendererProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   mediaId: number;
   subtitleTrack: number | null;
+  /** A PGS track (Blu-ray pictures) rather than a text one */
+  pgs?: boolean;
   enabled: boolean;
   visible?: boolean;
   timeOffset?: number;
@@ -26,6 +28,7 @@ export const SubtitleRenderer = forwardRef<
     videoRef,
     mediaId,
     subtitleTrack,
+    pgs = false,
     enabled,
     visible = true,
     timeOffset = 0,
@@ -39,6 +42,7 @@ export const SubtitleRenderer = forwardRef<
       videoRef,
       mediaId,
       subtitleTrack,
+      pgs,
       enabled,
       timeOffset,
       targetFps,
@@ -51,9 +55,12 @@ export const SubtitleRenderer = forwardRef<
 
   return (
     <canvas
+      // Its own canvas per kind of track: libpgs sizes it to the subtitle's screen
+      // (1920x1080, scaled by the CSS size below), libass to the screen's pixels
+      key={pgs ? "pgs" : "ass"}
       ref={setCanvasRefCallback}
-      width={canvasSize.pixelWidth}
-      height={canvasSize.pixelHeight}
+      width={pgs ? undefined : canvasSize.pixelWidth}
+      height={pgs ? undefined : canvasSize.pixelHeight}
       style={{
         position: "absolute",
         top: canvasSize.offsetY,

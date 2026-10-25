@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { fetchAvailableFonts, fetchSubtitleContent } from "./subtitle-fetchers";
+import type { PgsRenderer } from "libpgs";
+import { fetchAvailableFonts, fetchSubtitleFile } from "./subtitle-fetchers";
 import { useCanvasSync } from "./use-canvas-sync";
+
+// libpgs exports its renderer only, not the enum of its modes
+type PgsRendererMode = NonNullable<ConstructorParameters<typeof PgsRenderer>[0]["mode"]>;
 
 interface SubtitlesOctopusOptions {
   video?: HTMLVideoElement | null;
@@ -32,10 +36,20 @@ declare class SubtitlesOctopus {
   resize(width?: number, height?: number, top?: number, left?: number): void;
 }
 
+/** What the render loop drives: libass for a text track, libpgs for a PGS one */
+interface SubtitleInstance {
+  setCurrentTime(time: number): void;
+  resize?(width: number, height: number): void;
+  dispose(): void;
+  _cleanup?: () => void;
+}
+
 interface UseSubtitleEngineOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   mediaId: number;
   subtitleTrack: number | null;
+  /** The track is PGS (Blu-ray pictures): libpgs draws it, from the .sup */
+  pgs: boolean;
   enabled: boolean;
   timeOffset: number;
   targetFps: number;
@@ -46,12 +60,13 @@ export function useSubtitleEngine({
   videoRef,
   mediaId,
   subtitleTrack,
+  pgs,
   enabled,
   timeOffset,
   targetFps,
   initialManualOffset,
 }: UseSubtitleEngineOptions) {
-  const octopusRef = useRef<SubtitlesOctopus | null>(null);
+  const octopusRef = useRef<SubtitleInstance | null>(null);
   // Bumped by every init and dispose: an init that resumes after its track changed
   // (fonts/subtitle fetches are slow) sees it's stale and creates nothing
   const generationRef = useRef(0);
@@ -63,7 +78,7 @@ export function useSubtitleEngine({
   // Canvas sync (letterbox-aware sizing + ResizeObserver)
   const resizeOctopus = useCallback((w: number, h: number) => {
     try {
-      octopusRef.current?.resize(w, h);
+      octopusRef.current?.resize?.(w, h);
     } catch {
       // Worker may not be ready yet
     }
@@ -128,9 +143,7 @@ export function useSubtitleEngine({
   // Also invalidates any init still in flight
   const disposeOctopus = useCallback(() => {
     generationRef.current++;
-    const instance = octopusRef.current as
-      | (SubtitlesOctopus & { _cleanup?: () => void })
-      | null;
+    const instance = octopusRef.current;
     if (instance) {
       instance._cleanup?.();
       instance.dispose();
@@ -149,36 +162,69 @@ export function useSubtitleEngine({
     const isStale = () => generation !== generationRef.current;
 
     try {
-      const availableFonts = await fetchAvailableFonts(mediaId);
-      if (isStale() || !videoRef.current || !canvasRef.current) return;
+      if (pgs) {
+        const file = await fetchSubtitleFile(mediaId, subtitleTrack, "sup", isStale);
+        const buffer = file && (await file.arrayBuffer());
+        if (!buffer || isStale()) return;
 
-      const subContent = await fetchSubtitleContent(mediaId, subtitleTrack, isStale);
-      if (!subContent || isStale()) return;
+        const { PgsRenderer } = await import("libpgs");
+        const pgsCanvas = canvasRef.current;
+        if (isStale() || !pgsCanvas) return;
 
-      const SubtitlesOctopusModule = await import("libass-wasm");
-      const SubtitlesOctopusLib =
-        SubtitlesOctopusModule.default || SubtitlesOctopusModule;
+        const renderer = new PgsRenderer({
+          canvas: pgsCanvas,
+          workerUrl: "/lib/libpgs.worker.js",
+          // Decoded in a worker, drawn here: the all-in-worker mode takes the canvas over
+          // for good, and the next PGS track couldn't draw on it
+          mode: "workerWithoutOffscreenCanvas" as PgsRendererMode,
+        });
+        await renderer.loadFromBuffer(buffer);
+        if (isStale()) {
+          renderer.dispose();
+          return;
+        }
+        octopusRef.current = {
+          setCurrentTime: (time) => renderer.renderAtTimestamp(time),
+          dispose: () => {
+            renderer.dispose();
+            // The next track's renderer doesn't know what this one left drawn
+            pgsCanvas.getContext("2d")?.clearRect(0, 0, pgsCanvas.width, pgsCanvas.height);
+          },
+        };
+        updateSubtitles();
+      } else {
+        const availableFonts = await fetchAvailableFonts(mediaId);
+        if (isStale() || !videoRef.current || !canvasRef.current) return;
 
-      const currentCanvas = canvasRef.current;
-      if (isStale() || !currentCanvas) return;
+        const file = await fetchSubtitleFile(mediaId, subtitleTrack, "ass", isStale);
+        const subContent = file && (await file.text());
+        if (!subContent || isStale()) return;
 
-      const options: SubtitlesOctopusOptions = {
-        video: null,
-        canvas: currentCanvas,
-        subContent,
-        workerUrl: "/lib/subtitles-octopus-worker.js",
-        legacyWorkerUrl: "/lib/subtitles-octopus-worker-legacy.js",
-        availableFonts,
-        targetFps,
-        debug: false,
-        onReady: () => updateSubtitles(),
-        onError: () => {},
-      };
+        const SubtitlesOctopusModule = await import("libass-wasm");
+        const SubtitlesOctopusLib =
+          SubtitlesOctopusModule.default || SubtitlesOctopusModule;
 
-      octopusRef.current = new SubtitlesOctopusLib(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        options as any,
-      ) as SubtitlesOctopus;
+        const currentCanvas = canvasRef.current;
+        if (isStale() || !currentCanvas) return;
+
+        const options: SubtitlesOctopusOptions = {
+          video: null,
+          canvas: currentCanvas,
+          subContent,
+          workerUrl: "/lib/subtitles-octopus-worker.js",
+          legacyWorkerUrl: "/lib/subtitles-octopus-worker-legacy.js",
+          availableFonts,
+          targetFps,
+          debug: false,
+          onReady: () => updateSubtitles(),
+          onError: () => {},
+        };
+
+        octopusRef.current = new SubtitlesOctopusLib(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          options as any,
+        ) as SubtitlesOctopus;
+      }
 
       // Video event listeners for manual sync
       const handlePlay = () => startRenderLoop();
@@ -204,11 +250,7 @@ export function useSubtitleEngine({
         video.removeEventListener("timeupdate", handleTimeUpdate);
       };
 
-      (
-        octopusRef as {
-          current: SubtitlesOctopus & { _cleanup?: () => void };
-        }
-      ).current._cleanup = cleanup;
+      octopusRef.current._cleanup = cleanup;
 
       if (!video.paused) startRenderLoop();
     } catch {
@@ -219,6 +261,7 @@ export function useSubtitleEngine({
     canvasRef,
     enabled,
     subtitleTrack,
+    pgs,
     mediaId,
     targetFps,
     updateSubtitles,
