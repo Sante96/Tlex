@@ -10,8 +10,6 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
 from app.models.media import MediaItem
-from app.services.streaming.crash_log import flush as crash_flush
-from app.services.streaming.crash_log import record as crash_record
 from app.services.streaming.reader import VirtualStreamReader
 
 settings = get_settings()
@@ -46,7 +44,6 @@ async def get_virtual_reader(
         logger.info(
             f"[READER] Reusing cached reader for media {media_id} ({len(reader._clients)} clients)"
         )
-        crash_record("reader.cache_hit", media_id=media_id, clients=len(reader._clients))
         return reader
 
     # Create new reader
@@ -55,7 +52,6 @@ async def get_virtual_reader(
     media_item = result.scalar_one_or_none()
 
     if media_item is None:
-        crash_record("reader.not_found", media_id=media_id)
         return None
 
     # Another request may have cached a reader while we awaited the query; reuse it,
@@ -65,8 +61,6 @@ async def get_virtual_reader(
 
     if not media_item.parts:
         logger.error(f"Media {media_id} has no parts")
-        crash_record("reader.no_parts", media_id=media_id)
-        crash_flush(reason=f"Media {media_id} has no parts — cannot create reader")
         return None
 
     reader = VirtualStreamReader(media_item=media_item)
@@ -76,12 +70,6 @@ async def get_virtual_reader(
         _reader_cache[media_id] = (reader, time.time())
         logger.info(f"[READER] Created persistent reader for media {media_id}")
 
-    crash_record(
-        "reader.created",
-        media_id=media_id,
-        persistent=persistent,
-        parts=len(media_item.parts),
-    )
     return reader
 
 
@@ -114,12 +102,6 @@ async def release_reader(media_id: int, *, only_if_idle: bool = False) -> None:
                 f"[READER] Force-released {count} client(s) for media {media_id}"
                 f"{f' ({active} stream(s) were active)' if active else ''}"
             )
-            crash_record(
-                "reader.force_released",
-                media_id=media_id,
-                clients_released=count,
-                active_streams=active,
-            )
 
 
 async def cleanup_stale_readers() -> None:
@@ -130,7 +112,5 @@ async def cleanup_stale_readers() -> None:
         for mid, (reader, last_access) in _reader_cache.items()
         if now - last_access > _READER_TTL and reader._active_streams == 0
     ]
-    if stale:
-        crash_record("cleanup.stale_readers", count=len(stale), media_ids=stale)
     for mid in stale:
         await release_reader(mid)

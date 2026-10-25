@@ -98,23 +98,13 @@ def setup_logging() -> None:
             colorize=True,
         )
     else:
-        # Production: JSON structured logging
+        # Production: JSON lines on stderr, which docker logs keeps
         log_level = "INFO"
 
         logger.add(
             json_sink,
             level=log_level,
             format="{message}",
-        )
-
-        # File handler with JSON
-        logger.add(
-            "logs/tlex_{time:YYYY-MM-DD}.json",
-            rotation="00:00",
-            retention="30 days",
-            compression="gz",
-            serialize=True,
-            level="INFO",
         )
 
     # Silence noisy loggers

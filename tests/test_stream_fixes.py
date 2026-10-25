@@ -5,9 +5,6 @@ Fix 1 — Resource Leak: stream_generator detects disconnect and calls
 
 Fix 2 — WebView 206: stream_raw always returns HTTP 206 with correct
          Content-Range and Content-Length headers.
-
-Fix 3 — Ring Buffer: crash_log records events; flushes to disk only on
-         critical failure (never during normal operation).
 """
 
 import asyncio
@@ -21,14 +18,11 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient, Response
 
-import app.services.streaming.crash_log as crash_log_module
 import app.services.streaming.manager as manager_module
 from app.api.deps import get_stream_user
 from app.api.v1.stream import parse_range_header
 from app.core.security import INTERNAL_STREAM_TOKEN, create_access_token
 from app.main import app
-from app.services.streaming.crash_log import flush as crash_flush
-from app.services.streaming.crash_log import record as crash_record
 from app.services.streaming.manager import get_virtual_reader, release_reader
 from app.services.streaming.reader import VirtualStreamReader
 
@@ -68,13 +62,6 @@ def make_mock_reader(total: int = TOTAL) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Autouse fixtures — isolate module-level state between tests
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def clear_crash_ring():
-    crash_log_module._ring.clear()
-    yield
-    crash_log_module._ring.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -468,121 +455,12 @@ class TestStreamGeneratorDisconnect:
 
 
 # ---------------------------------------------------------------------------
-# Fix 3 — Ring Buffer (crash_log module)
+# Reader cache and release (manager)
 # ---------------------------------------------------------------------------
 
 
-class TestCrashLogRingBuffer:
-    """crash_log.record() and the ring buffer capacity."""
-
-    def test_record_appends_entry(self):
-        crash_record("test.event", key="value")
-        assert len(crash_log_module._ring) == 1
-        entry = crash_log_module._ring[-1]
-        assert entry["event"] == "test.event"
-        assert entry["key"] == "value"
-
-    def test_record_includes_timestamp(self):
-        before = time.time()
-        crash_record("ts.check")
-        after = time.time()
-        assert before <= crash_log_module._ring[-1]["ts"] <= after
-
-    def test_ring_maxlen_is_500(self):
-        assert crash_log_module._ring.maxlen == 500
-
-    def test_multiple_records_accumulate(self):
-        for i in range(10):
-            crash_record("ev", i=i)
-        assert len(crash_log_module._ring) == 10
-
-    def test_oldest_entry_evicted_when_full(self):
-        for i in range(501):
-            crash_record("ev", seq=i)
-        assert len(crash_log_module._ring) == 500
-        # seq=0 was evicted; first surviving entry has seq=1
-        assert crash_log_module._ring[0]["seq"] == 1
-        assert crash_log_module._ring[-1]["seq"] == 500
-
-    def test_fields_stored_correctly(self):
-        crash_record("complex", part_id=42, client_id=99, error="boom")
-        entry = crash_log_module._ring[-1]
-        assert entry["part_id"] == 42
-        assert entry["client_id"] == 99
-        assert entry["error"] == "boom"
-
-
-class TestCrashLogFlush:
-    """crash_log.flush() writes JSON only on demand; silent on I/O errors."""
-
-    def test_flush_creates_file(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        crash_record("pre.flush")
-        crash_flush("test crash")
-        assert crash_path.exists()
-
-    def test_flush_json_structure(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        crash_record("alpha", x=1)
-        crash_record("beta", x=2)
-        crash_flush("reason text")
-        data = json.loads(crash_path.read_text())
-        assert data["reason"] == "reason text"
-        assert data["total_entries"] == 2
-        assert len(data["entries"]) == 2
-        assert data["entries"][0]["event"] == "alpha"
-        assert data["entries"][1]["event"] == "beta"
-
-    def test_flush_includes_flushed_at_timestamp(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        before = time.time()
-        crash_flush("ts test")
-        data = json.loads(crash_path.read_text())
-        assert data["flushed_at"] >= before
-
-    def test_flush_silent_on_oserror(self, mocker):
-        bad_path = Path("/nonexistent_dir_xyz/crash.json")
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", bad_path)
-        crash_record("event")
-        crash_flush("should not raise")  # must not raise OSError
-
-    def test_record_never_writes_to_disk(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        for _ in range(200):
-            crash_record("normal.op", data="payload")
-        assert not crash_path.exists(), "crash_stream.json written during normal operation"
-
-    def test_flush_empty_ring_writes_empty_entries(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        # ring is empty (autouse fixture cleared it)
-        crash_flush("empty ring")
-        data = json.loads(crash_path.read_text())
-        assert data["entries"] == []
-        assert data["total_entries"] == 0
-
-    def test_flush_preserves_entry_order(self, mocker, tmp_path):
-        crash_path = tmp_path / "crash_stream.json"
-        mocker.patch.object(crash_log_module, "_CRASH_LOG_PATH", crash_path)
-        for i in range(5):
-            crash_record("seq", n=i)
-        crash_flush("order check")
-        data = json.loads(crash_path.read_text())
-        ns = [e["n"] for e in data["entries"]]
-        assert ns == [0, 1, 2, 3, 4]
-
-
-# ---------------------------------------------------------------------------
-# Fix 3 — crash_log integration: manager writes events to the ring
-# ---------------------------------------------------------------------------
-
-
-class TestCrashLogManagerIntegration:
-    """Manager operations write the expected events to the ring buffer."""
+class TestReaderManager:
+    """Persistent readers: cached per media, released with their clients."""
 
     @pytest_asyncio.fixture
     async def media_with_parts(self, test_session):
@@ -606,53 +484,27 @@ class TestCrashLogManagerIntegration:
         await test_session.commit()
         return media, part
 
-    async def test_missing_media_records_not_found(self, test_session):
-        result = await get_virtual_reader(test_session, 88888)
-        assert result is None
-        events = [e["event"] for e in crash_log_module._ring]
-        assert "reader.not_found" in events
+    async def test_missing_media_has_no_reader(self, test_session):
+        assert await get_virtual_reader(test_session, 88888) is None
 
-    async def test_reader_created_records_event(self, test_session, media_with_parts):
+    async def test_persistent_reader_is_reused(self, test_session, media_with_parts):
         media, _ = media_with_parts
-        await get_virtual_reader(test_session, media.id, persistent=False)
-        events = [e["event"] for e in crash_log_module._ring]
-        assert "reader.created" in events
+        first = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert await get_virtual_reader(test_session, media.id, persistent=True) is first
 
-    async def test_cache_hit_records_event(self, test_session, media_with_parts):
+    async def test_release_gives_the_clients_back(self, mocker, test_session, media_with_parts):
         media, _ = media_with_parts
-        await get_virtual_reader(test_session, media.id, persistent=True)
-        crash_log_module._ring.clear()  # clear creation event
-        # Second call → cache hit
-        await get_virtual_reader(test_session, media.id, persistent=True)
-        events = [e["event"] for e in crash_log_module._ring]
-        assert "reader.cache_hit" in events
-
-    async def test_force_release_with_clients_records_event(self, mocker, test_session, media_with_parts):
-        media, _ = media_with_parts
-        mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
+        release = mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
         assert reader is not None
-        # Inject a fake client so the release branch is taken
-        reader._clients = [MagicMock()]
-        crash_log_module._ring.clear()
+        client = MagicMock()
+        reader._clients = [client]
 
         await release_reader(media.id)
 
-        events = [e["event"] for e in crash_log_module._ring]
-        assert "reader.force_released" in events
-
-    async def test_force_release_event_contains_media_id(self, mocker, test_session, media_with_parts):
-        media, _ = media_with_parts
-        mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
-        reader = await get_virtual_reader(test_session, media.id, persistent=True)
-        assert reader is not None
-        reader._clients = [MagicMock()]
-        crash_log_module._ring.clear()
-
-        await release_reader(media.id)
-
-        release_entries = [e for e in crash_log_module._ring if e["event"] == "reader.force_released"]
-        assert release_entries[0]["media_id"] == media.id
+        release.assert_called_once_with([client])
+        assert reader._force_released and reader._clients == []
+        assert media.id not in manager_module._reader_cache
 
     async def test_idle_only_release_keeps_reader_in_use(self, mocker, test_session, media_with_parts):
         media, _ = media_with_parts

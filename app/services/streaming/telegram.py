@@ -8,8 +8,6 @@ from pyrogram.types import Message
 
 from app.models.media import MediaPart
 from app.services.streaming.cache import FILE_ID_CACHE, FILE_ID_CACHE_TTL
-from app.services.streaming.crash_log import flush as crash_flush
-from app.services.streaming.crash_log import record as crash_record
 
 
 async def populate_peer_cache(client: Client, parts: list[MediaPart]) -> None:
@@ -67,7 +65,6 @@ async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
     NOTE: Does NOT update DB to avoid race conditions during parallel streaming.
     The file_id is only cached in memory. DB will be updated during next scan.
     """
-    crash_record("refresh_file_id.attempt", part_id=part.id, part_index=part.part_index)
 
     # --- Primary: fetch from main channel ---
     try:
@@ -76,12 +73,9 @@ async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
         if new_file_id:
             part.telegram_file_id = new_file_id
             logger.debug(f"Refreshed file_id for part {part.part_index}")
-            crash_record("refresh_file_id.ok", part_id=part.id, source="primary")
             return new_file_id
         logger.error(f"No document in message {part.message_id}")
-        crash_record("refresh_file_id.no_doc", part_id=part.id, message_id=part.message_id)
     except Exception as e:
-        crash_record("refresh_file_id.primary_error", part_id=part.id, error=str(e))
         logger.warning(
             f"Failed to refresh file_id from main channel for part {part.part_index}: {e}"
         )
@@ -103,20 +97,16 @@ async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
             if fallback_file_id:
                 part.telegram_file_id = fallback_file_id
                 logger.info(f"[BACKUP] Fallback file_id obtained for part {part.part_index}")
-                crash_record("refresh_file_id.ok", part_id=part.id, source="backup")
                 return fallback_file_id
             logger.error(f"[BACKUP] No document in backup message {backup_message_id}")
-            crash_record("refresh_file_id.no_doc", part_id=part.id, source="backup")
         else:
             logger.debug(
                 f"No backup mapping found for channel={part.channel_id} msg={part.message_id}"
             )
     except Exception as e:
-        crash_record("refresh_file_id.backup_error", part_id=part.id, error=str(e))
         logger.error(f"[BACKUP] Fallback refresh failed for part {part.part_index}: {e}")
 
-    # Both channels failed — flush diagnostics so the crash dump captures the context
-    crash_flush(reason=f"refresh_file_id failed for part {part.id}")
+    logger.error(f"[STREAM] No file reference for part {part.id} from either channel")
     return None
 
 
@@ -129,14 +119,11 @@ async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) ->
     """
     if not clients:
         logger.warning("No clients available for file_id refresh")
-        crash_record("refresh_all.no_clients", parts=len(parts))
         return
 
     now = time.time()
     client = clients[0]
     client_id = id(client)
-
-    crash_record("refresh_all.start", parts=len(parts), client_id=client_id)
 
     # Check if any part needs refresh for the primary client
     needs_refresh = False
@@ -158,12 +145,10 @@ async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) ->
 
     if not needs_refresh:
         logger.info("[STREAM] All file_ids cached, skipping refresh")
-        crash_record("refresh_all.cache_hit", parts=len(parts))
         return
 
     await populate_peer_cache(client, parts)
 
-    failed_parts = []
     for part in parts:
         cache_key = (part.id, client_id)
         cached = FILE_ID_CACHE.get(cache_key)
@@ -173,14 +158,6 @@ async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) ->
         new_file_id = await refresh_file_id(part, client)
         if new_file_id:
             FILE_ID_CACHE[cache_key] = (new_file_id, now)
-        else:
-            failed_parts.append(part.id)
-
-    if failed_parts:
-        crash_record("refresh_all.partial_failure", failed_part_ids=failed_parts)
-        crash_flush(reason=f"refresh_all_file_ids: {len(failed_parts)} part(s) failed")
-    else:
-        crash_record("refresh_all.done", parts=len(parts))
 
 
 async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> None:
@@ -193,7 +170,6 @@ async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> 
     """
     client_id = id(client)
 
-    failed_parts = []
     for part in parts:
         cache_key = (part.id, client_id)
 
@@ -207,13 +183,6 @@ async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> 
 
         # Need to refresh for this client
         logger.debug(f"Refreshing file_id for part {part.part_index} (client {client_id})")
-        crash_record("ensure_file_ids.refresh", part_id=part.id, client_id=client_id)
         new_file_id = await refresh_file_id(part, client)
         if new_file_id:
             FILE_ID_CACHE[cache_key] = (new_file_id, now)
-        else:
-            failed_parts.append(part.id)
-
-    if failed_parts:
-        crash_record("ensure_file_ids.failure", failed_part_ids=failed_parts, client_id=client_id)
-        crash_flush(reason=f"ensure_file_ids_for_client: {len(failed_parts)} part(s) failed")
