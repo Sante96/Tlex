@@ -78,12 +78,10 @@ function SelectContent({
           "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          "glass",
           className,
         )}
         style={{
-          backgroundColor: "rgba(10,10,10,0.82)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.06)",
           maxHeight: "var(--radix-select-content-available-height)",
           ...style,
         }}

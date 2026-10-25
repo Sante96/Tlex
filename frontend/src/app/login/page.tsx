@@ -258,12 +258,7 @@ function LoginForm() {
 
       {/* Glass card */}
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl p-8 shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
-        style={{
-          backgroundColor: "rgba(10,10,10,0.7)",
-          backdropFilter: "blur(24px)",
-          border: "1px solid rgba(255,255,255,0.07)",
-        }}
+        className="relative z-10 w-full max-w-sm rounded-2xl p-8 shadow-[0_24px_48px_rgba(0,0,0,0.6)] glass"
       >
         {/* Logo + heading */}
         <div className="text-center mb-8">

@@ -22,6 +22,13 @@
   --radius: 0.625rem;
 }
 
+/* The glass panel of cards, menus and modals (the sidebar and bottom bar have their own) */
+@utility glass {
+  background-color: rgb(10 10 10 / 0.75);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 0.07);
+}
+
 @layer base {
   * {
     @apply border-white/10 outline-neutral-500/50;

@@ -74,7 +74,7 @@ export function DSModal({
         className={cn(
           "w-full max-w-md",
           !bare &&
-            "rounded-2xl p-6 bg-[rgba(10,10,10,0.8)] backdrop-blur-[24px] border border-white/[0.07] shadow-[0_24px_48px_rgba(0,0,0,0.6)]",
+            "rounded-2xl p-6 glass shadow-[0_24px_48px_rgba(0,0,0,0.6)]",
           className,
         )}
       >

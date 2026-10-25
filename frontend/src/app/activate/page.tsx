@@ -52,12 +52,7 @@ export default function ActivatePage() {
           <div className="absolute inset-0" style={{ backgroundColor: "rgba(9,9,11,0.5)" }} />
         </div>
         <div
-          className="relative z-10 flex flex-col items-center gap-5 text-center rounded-2xl px-10 py-12 shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
-          style={{
-            backgroundColor: "rgba(10,10,10,0.7)",
-            backdropFilter: "blur(24px)",
-            border: "1px solid rgba(255,255,255,0.07)",
-          }}
+          className="relative z-10 flex flex-col items-center gap-5 text-center rounded-2xl px-10 py-12 shadow-[0_24px_48px_rgba(0,0,0,0.6)] glass"
         >
           <div className="w-16 h-16 rounded-full bg-plex-orange/15 border border-plex-orange/30 flex items-center justify-center">
             <CheckCircle className="h-8 w-8 text-plex-orange" />
@@ -92,12 +87,7 @@ export default function ActivatePage() {
 
       {/* Glass card */}
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl p-8 shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
-        style={{
-          backgroundColor: "rgba(10,10,10,0.7)",
-          backdropFilter: "blur(24px)",
-          border: "1px solid rgba(255,255,255,0.07)",
-        }}
+        className="relative z-10 w-full max-w-sm rounded-2xl p-8 shadow-[0_24px_48px_rgba(0,0,0,0.6)] glass"
       >
         {/* Header */}
         <div className="text-center mb-7">
