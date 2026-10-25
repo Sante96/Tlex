@@ -208,6 +208,7 @@ async def analyze_streams(
         if probe_result:
             if probe_result.duration_seconds:
                 media_item.duration_seconds = probe_result.duration_seconds
+            media_item.chapters = probe_result.chapters
 
             has_subtitles = False
             for stream_info in probe_result.streams:

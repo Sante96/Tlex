@@ -68,6 +68,8 @@ SCHEMA_UPGRADES = (
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS video_keyframes TEXT",
     "ALTER TABLE media_items DROP COLUMN IF EXISTS keyframes_index",
     "ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
+    # NULL until probed: the startup task reads the chapters of the titles already there
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS chapters JSON",
     # Profiles keep their own watch progress and watchlist. Every user gets a profile if
     # they had none; rows from before go to the user's first profile. Uniqueness moves
     # from (user, media) to (profile, media): the old rule, re-run at every start, would

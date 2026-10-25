@@ -54,11 +54,21 @@ class MediaItemResponse(BaseModel):
         from_attributes = True
 
 
+class ChapterResponse(BaseModel):
+    """A chapter of the file: a segment of the player's seekbar."""
+
+    start: float
+    end: float
+    title: str | None = None
+
+
 class MediaItemDetailResponse(MediaItemResponse):
     """Detailed response with parts and streams."""
 
     parts: list[MediaPartResponse]
     streams: list[MediaStreamResponse]
+    # None: not probed yet; []: the file has no chapters
+    chapters: list[ChapterResponse] | None = None
 
 
 class MediaListResponse(BaseModel):

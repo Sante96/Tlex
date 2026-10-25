@@ -52,8 +52,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Background cache population failed: {e}")
 
+    # The chapters of titles scanned before they were stored: once, in the background
+    async def backfill_chapters_background():
+        try:
+            await asyncio.sleep(30)  # after the subtitle pass and the first viewers
+            from app.services.chapters import backfill_chapters
+
+            await backfill_chapters()
+        except Exception as e:
+            logger.warning(f"Chapter backfill failed: {e}")
+
     # Kept: the loop holds only weak references to tasks, and shutdown cancels them
-    background = [asyncio.create_task(populate_caches_background())]
+    background = [
+        asyncio.create_task(populate_caches_background()),
+        asyncio.create_task(backfill_chapters_background()),
+    ]
     logger.info("Background subtitle cache population started")
 
     # Start auto-scan scheduler (always on: it idles while the interval is 0, and the

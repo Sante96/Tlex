@@ -3,9 +3,10 @@
 import asyncio
 import json
 import os
+import re
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
 
@@ -30,6 +31,16 @@ class ProbeResult:
 
     duration_seconds: int | None
     streams: list[StreamInfo]
+    # [{"start": s, "end": s, "title": str | None}]: the player's seekbar segments
+    chapters: list[dict] = field(default_factory=list)
+
+
+# Names that say nothing: "Chapter 01" (mkvmerge's default), "Capitolo 3", a timestamp.
+# Left out, so the player shows its own "Chapter 12" in the viewer's language.
+_GENERIC_CHAPTER = re.compile(
+    r"^\s*((chapter|chapitre|capitolo|kapitel|cap[ií]tulo)\s*\d+|\d{1,2}:\d{2}(:\d{2})?(\.\d+)?)?\s*$",
+    re.IGNORECASE,
+)
 
 
 class FFProbeService:
@@ -65,6 +76,7 @@ class FFProbeService:
             "json",
             "-show_format",
             "-show_streams",
+            "-show_chapters",
             file_path,
         ]
 
@@ -130,7 +142,23 @@ class FFProbeService:
             )
             streams.append(stream_info)
 
-        return ProbeResult(duration_seconds=duration_seconds, streams=streams)
+        chapters: list[dict] = []
+        for chapter in data.get("chapters", []):
+            try:
+                start = round(float(chapter["start_time"]), 3)
+                end = round(float(chapter["end_time"]), 3)
+            except (KeyError, ValueError, TypeError):
+                continue
+            title = (chapter.get("tags") or {}).get("title") or ""
+            chapters.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "title": None if _GENERIC_CHAPTER.match(title) else title,
+                }
+            )
+
+        return ProbeResult(duration_seconds=duration_seconds, streams=streams, chapters=chapters)
 
     async def analyze_from_telegram(
         self, client, file_id: str, suffix: str = ".mkv"

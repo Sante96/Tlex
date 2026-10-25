@@ -104,6 +104,13 @@ class MediaItem(Base):
     vote_average: Mapped[float | None] = mapped_column(nullable=True)
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma-separated
 
+    # Chapters from the file ([{"start", "end", "title"}], the seekbar's segments). NULL:
+    # never probed (app/services/chapters.py fills those in); [] : the file has none.
+    # Deferred like video_keyframes: only the details need them
+    chapters: Mapped[list | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True, deferred=True
+    )
+
     # For episodes - link to series
     series_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("series.id", ondelete="CASCADE"), nullable=True, index=True

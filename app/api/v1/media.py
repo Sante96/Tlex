@@ -8,7 +8,7 @@ from loguru import logger
 from pydantic import BaseModel
 from pyrogram.types import Message
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
 from app.api.deps import DBSession, get_admin_user, get_current_user, get_current_user_optional
 from app.core.worker_manager import worker_manager
@@ -118,6 +118,7 @@ async def get_media(
             selectinload(MediaItem.parts),
             selectinload(MediaItem.streams),
             selectinload(MediaItem.series),
+            undefer(MediaItem.chapters),
         )
     )
     result = await session.execute(query)
@@ -187,6 +188,7 @@ async def get_media(
             )
             for s in item.streams
         ],
+        chapters=item.chapters,
     )
 
 
@@ -333,6 +335,7 @@ async def analyze_media(
             if probe_result.duration_seconds:
                 item.duration_seconds = probe_result.duration_seconds
                 logger.info(f"Duration from header: {item.duration_seconds}s")
+            item.chapters = probe_result.chapters
 
             # Clear existing streams and add new ones
             # Refresh to avoid greenlet error after Pyrogram operations
