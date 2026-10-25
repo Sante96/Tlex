@@ -40,6 +40,10 @@ class ContinueWatchingItem(BaseModel):
     position_seconds: int
     duration_seconds: int
     progress_percent: float
+    # The landscape picture of the home's card: an episode's still, a movie's backdrop
+    still_path: str | None = None
+    # The episode's or movie's own synopsis (the home's hero)
+    overview: str | None = None
     # Series metadata for Plex-style grouping
     series_id: int | None = None
     series_title: str | None = None
@@ -167,6 +171,8 @@ async def get_continue_watching(
                     position_seconds=progress.position_seconds,
                     duration_seconds=progress.duration_seconds,
                     progress_percent=progress.progress_percent,
+                    still_path=media.backdrop_path,
+                    overview=media.overview,
                 )
             )
         else:
@@ -183,6 +189,9 @@ async def get_continue_watching(
                         position_seconds=progress.position_seconds,
                         duration_seconds=progress.duration_seconds,
                         progress_percent=progress.progress_percent,
+                        # An episode's poster_path is its TMDB still
+                        still_path=media.poster_path or (series.backdrop_path if series else None),
+                        overview=media.overview or (series.overview if series else None),
                         series_id=media.series_id,
                         series_title=series.title if series else None,
                         series_poster_path=series.poster_path if series else None,
