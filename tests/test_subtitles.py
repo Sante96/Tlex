@@ -415,6 +415,31 @@ class TestParseCluster:
         events = parse_cluster_for_subtitles(data, 0, 3, 1_000_000)
         assert events == []
 
+    def test_block_duration_scaled_like_timestamp(self):
+        # TimecodeScale 100_000 ns = 0.1 ms per unit: 1000 units → 100 ms, 20000 → 2000 ms
+        block = bytes([0x83]) + (0).to_bytes(2, "big") + bytes([0x00]) + b"Hi"
+        group = _elem(bytes([0xA0]), _elem(bytes([0xA1]), block) + _elem(bytes([0x9B]), (20000).to_bytes(2, "big")))
+        events = parse_cluster_for_subtitles(_cluster(timecode=1000, blocks=[group]), 0, 3, 100_000)
+        assert (events[0].timestamp_ms, events[0].duration_ms) == (100, 2000)
+
+
+class TestSafeFontFilename:
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("Arial.ttf", "Arial.ttf"),
+            ("../../etc/evil.ttf", "evil.ttf"),
+            ("..\\..\\evil.ttf", "evil.ttf"),
+            ("/abs/x.otf", "x.otf"),
+            ("..", "font_7.ttf"),
+            (None, "font_7.ttf"),
+        ],
+    )
+    def test_keeps_only_base_name(self, name, expected):
+        from app.services.subtitles.service import safe_font_filename
+
+        assert safe_font_filename(name, 7) == expected
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Client acquisition: extract_via_scan  (KNOWN DESIGN ISSUE: no batch_mode)

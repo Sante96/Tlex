@@ -21,6 +21,13 @@ if TYPE_CHECKING:
     from app.services.streaming import VirtualStreamReader
 
 
+def safe_font_filename(name: str | None, att_id: object) -> str:
+    """Attachment names come from inside the MKV: keep only the base name, so a
+    crafted "../../x" can't make mkvextract or the font cache write outside their dir."""
+    base = (name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    return base if base not in ("", ".", "..") else f"font_{att_id}.ttf"
+
+
 class SubtitleExtractor:
     """
     Extracts subtitles and fonts from media files using FFmpeg.
@@ -208,7 +215,7 @@ class SubtitleExtractor:
 
         for att in font_attachments:
             att_id = att.get("id")
-            filename = att.get("file_name", f"font_{att_id}.ttf")
+            filename = safe_font_filename(att.get("file_name"), att_id)
             extract_cmd.append(f"{att_id}:{tmp_path / filename}")
 
         def run_extract():
@@ -227,7 +234,7 @@ class SubtitleExtractor:
         fonts: list[AttachedFont] = []
         for att in font_attachments:
             att_id = att.get("id")
-            filename = att.get("file_name", f"font_{att_id}.ttf")
+            filename = safe_font_filename(att.get("file_name"), att_id)
             content_type = att.get("content_type", "application/x-font-ttf")
             font_path = tmp_path / filename
 

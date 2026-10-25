@@ -421,3 +421,62 @@ class TestExtractAndCache:
                 await mod._extract_and_cache(1, 0, 5, "ass")
 
         assert not (mod.SUBTITLE_CACHE_DIR / "1_5.ass").exists()
+
+
+# ---------------------------------------------------------------------------
+# get_font_file — must not read outside the media's font cache
+# ---------------------------------------------------------------------------
+
+class TestGetFontFile:
+    @pytest.fixture(autouse=True)
+    def font_cache(self, tmp_path, monkeypatch):
+        import app.api.v1.subtitles as mod
+
+        monkeypatch.setattr(mod, "FONT_CACHE_DIR", tmp_path / "fonts")
+        (tmp_path / "fonts" / "1").mkdir(parents=True)
+        (tmp_path / "fonts" / "1" / "Arial.ttf").write_bytes(b"font")
+        (tmp_path / "fonts" / "secret.txt").write_bytes(b"secret")
+
+    async def test_cached_font_served(self):
+        import app.api.v1.subtitles as mod
+
+        resp = await mod.get_font_file(media_id=1, filename="Arial.ttf", session=None)
+        assert resp.body == b"font"
+
+    @pytest.mark.parametrize("filename", ["..", "../secret.txt", "..\\secret.txt"])
+    async def test_traversal_rejected(self, filename):
+        from fastapi import HTTPException
+
+        import app.api.v1.subtitles as mod
+
+        with pytest.raises(HTTPException) as exc:
+            await mod.get_font_file(media_id=1, filename=filename, session=None)
+        assert exc.value.status_code == 404
+
+
+class TestWarmSubtitleAssets:
+    async def test_background_extraction_uses_its_own_session(self, tmp_path, monkeypatch):
+        import app.api.v1.subtitles as mod
+        from app.services.subtitles.models import AttachedFont
+
+        monkeypatch.setattr(mod, "FONT_CACHE_DIR", tmp_path / "fonts")
+        request_session = _make_session(_make_media([_make_stream(3)]))
+        own_session = AsyncMock()
+        maker = MagicMock()
+        maker.return_value.__aenter__.return_value = own_session
+        get_reader = AsyncMock(return_value=MagicMock())
+        font = AttachedFont(filename="A.ttf", mimetype="font/ttf", data=b"f", font_names=[])
+
+        with (
+            patch("app.database.async_session_maker", maker),
+            patch("app.api.v1.subtitles.get_virtual_reader", get_reader),
+            patch.object(
+                mod.subtitle_extractor, "extract_all_fonts_from_reader", AsyncMock(return_value=[font])
+            ),
+        ):
+            resp = await mod.warm_subtitle_assets(media_id=1, session=request_session)
+            await asyncio.gather(*mod._background_tasks)
+
+        assert resp["status"] == "warming"
+        get_reader.assert_awaited_once_with(own_session, 1)
+        assert (tmp_path / "fonts" / "1" / "A.ttf").read_bytes() == b"f"

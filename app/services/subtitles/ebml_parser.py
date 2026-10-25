@@ -225,6 +225,9 @@ def parse_cluster_for_subtitles(
             )
             for event in bg_events:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
+                # BlockDuration is in the same timestamp units as the block time
+                if event.duration_ms is not None:
+                    event.duration_ms = int((event.duration_ms * timecode_scale) / 1_000_000)
                 events.append(event)
 
         offset += elem_size

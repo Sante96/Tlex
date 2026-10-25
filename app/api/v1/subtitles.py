@@ -26,6 +26,7 @@ FONT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Lock to prevent parallel font extraction for same media_id
 _font_extraction_locks: dict[int, asyncio.Lock] = {}
+_background_tasks: set[asyncio.Task] = set()
 
 # In-flight subtitle extraction tasks: key = (media_id, abs_track, format)
 _subtitle_tasks: dict[tuple[int, int, str], asyncio.Task] = {}
@@ -324,9 +325,11 @@ async def get_font_file(
     """
     Download a specific attached font from cache.
     """
-    # Check cache first
-    cache_file = FONT_CACHE_DIR / str(media_id) / filename
-    if cache_file.exists():
+    # Check cache first. Resolve and compare parents so "..", or "..\" on a Windows
+    # host (Starlette's path param only excludes "/"), can't read outside the cache.
+    font_dir = (FONT_CACHE_DIR / str(media_id)).resolve()
+    cache_file = (font_dir / filename).resolve()
+    if cache_file.parent == font_dir and cache_file.is_file():
         content = cache_file.read_bytes()
         mimetype = "application/x-font-ttf"
         if filename.lower().endswith(".otf"):
@@ -383,9 +386,19 @@ async def warm_subtitle_assets(
 
     # Start background extraction (don't await)
     async def extract_in_background():
+        from app.database import async_session_maker
+
         try:
-            async with asyncio.timeout(120):  # 2 min max
-                reader = await get_virtual_reader(session, media_id)
+            # Own session: the request's one is closed once this endpoint returns.
+            # Same lock as get_fonts, so the player's request doesn't extract twice.
+            async with (
+                asyncio.timeout(120),  # 2 min max
+                _font_extraction_locks.setdefault(media_id, asyncio.Lock()),
+                async_session_maker() as s,
+            ):
+                if cache_dir.exists() and list(cache_dir.glob("*")):
+                    return
+                reader = await get_virtual_reader(s, media_id)
                 if reader:
                     fonts = await subtitle_extractor.extract_all_fonts_from_reader(reader)
                     if fonts:
@@ -398,7 +411,9 @@ async def warm_subtitle_assets(
         except Exception as e:
             logger.warning(f"Background font extraction failed for media {media_id}: {e}")
 
-    # Fire and forget
-    asyncio.create_task(extract_in_background())
+    # Fire and forget; keep a reference so the task isn't garbage-collected mid-run
+    task = asyncio.create_task(extract_in_background())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return {"status": "warming", "media_id": media_id}
