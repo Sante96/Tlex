@@ -300,6 +300,29 @@ class TestStreamPlayHeaders:
         assert resp.content == b"fmp4"
 
 
+async def test_abandoned_remux_frees_its_reader_thread(mocker):
+    import sys
+    import threading
+
+    from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
+
+    producer = "import sys\nwhile True: sys.stdout.buffer.write(b'x' * 65536)"
+    mocker.patch.object(ffmpeg_remuxer, "build_command", return_value=[sys.executable, "-c", producer])
+    stream = ffmpeg_remuxer.stream("in", RemuxOptions())
+    await stream.__anext__()
+    await asyncio.sleep(0.5)  # the player stops reading (60 s buffered): the queue fills up
+    await stream.aclose()  # then seeks out of the buffer or leaves
+
+    def reader_alive():
+        return any(t.name.endswith("(reader_thread)") and t.is_alive() for t in threading.enumerate())
+
+    for _ in range(50):
+        if not reader_alive():
+            break
+        await asyncio.sleep(0.1)
+    assert not reader_alive()
+
+
 def test_hevc_is_remuxed_as_hvc1_for_safari():
     from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
 

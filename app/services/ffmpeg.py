@@ -277,6 +277,11 @@ class FFmpegRemuxer:
             if process.poll() is None:
                 process.kill()
                 await asyncio.to_thread(process.wait)
+            # A client that stopped reading (60 s buffered) left the queue full and the
+            # reader thread blocked on it for good, holding ~6 MB of chunks. Emptied, the
+            # thread reaches the dead process's EOF and ends
+            while not queue.empty():
+                queue.get_nowait()
 
 
 # Global instance
