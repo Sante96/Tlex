@@ -227,7 +227,8 @@ export function SearchBar({ className, compact }: { className?: string; compact?
           style={{
             ...PANEL_STYLE,
             left: 0,
-            minWidth: "360px",
+            // Never wider than a phone screen: it ran off the right edge
+            minWidth: "min(360px, calc(100vw - 2rem))",
             right: className ? 0 : "auto",
           }}
         >

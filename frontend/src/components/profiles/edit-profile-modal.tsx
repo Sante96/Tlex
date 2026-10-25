@@ -123,7 +123,7 @@ export function EditProfileModal({
             <label className="block text-sm text-white/70 mb-3">
               {t("profiles.edit.avatar")}
             </label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 justify-items-center">
               {PROFILE_AVATARS.map((avatar) => (
                 <ProfileAvatar
                   key={avatar.id}
@@ -152,7 +152,7 @@ export function EditProfileModal({
               type="checkbox"
               checked={isKids}
               onChange={(e) => setIsKids(e.target.checked)}
-              className="w-5 h-5 shrink-0 accent-plex-orange cursor-pointer"
+              className="w-5 h-5 shrink-0 accent-plex-orange cursor-pointer [color-scheme:dark]"
             />
             <div>
               <span className="text-sm text-white">
