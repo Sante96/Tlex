@@ -110,7 +110,9 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
       </div>
 
-      <div className="relative flex flex-col justify-end gap-6 min-h-[440px] md:min-h-[64vh] px-4 md:px-8 pt-32 md:pt-40 pb-4 md:pb-8">
+      {/* A fixed height: the text grows upwards, so a longer title doesn't push the page
+          down every time the hero moves on */}
+      <div className="relative flex flex-col justify-end gap-6 h-[480px] md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
         <div className="flex flex-col gap-2 md:gap-3 max-w-2xl text-shadow">
           {/* The text changes with the title; the buttons below stay put (and their glass
               blurred: a fading ancestor would turn the blur off) */}
@@ -118,8 +120,8 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
             <span className="text-xs font-semibold uppercase tracking-widest text-plex-orange">
               {item.label}
             </span>
-            <h1 className="text-2xl md:text-5xl font-bold text-white leading-tight">{item.title}</h1>
-            {item.subtitle && <p className="text-sm md:text-base text-white/80">{item.subtitle}</p>}
+            <h1 className="text-2xl md:text-5xl font-bold text-white leading-tight line-clamp-2">{item.title}</h1>
+            {item.subtitle && <p className="text-sm md:text-base text-white/80 truncate">{item.subtitle}</p>}
             {item.overview && (
               <p className="hidden md:block text-sm text-white/70 line-clamp-2">{item.overview}</p>
             )}

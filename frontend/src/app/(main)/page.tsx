@@ -256,7 +256,7 @@ function HomeSkeleton({
 }) {
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
-      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-[440px] md:min-h-[64vh] bg-[#18181b] animate-pulse" />
+      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 h-[480px] md:h-[max(520px,64vh)] bg-[#18181b] animate-pulse" />
       {[0, 1].map((row) => (
         <section key={row}>
           <Skeleton className="h-8 w-48 mb-5" />
