@@ -27,8 +27,6 @@ app/src/main/java/com/tlex/tv/
 ├── data/
 │   └── local/
 │       └── AppPreferences.kt      # DataStore (server_url)
-├── di/
-│   └── AppModule.kt               # Hilt module
 └── ui/
     ├── theme/                     # Color, Type, Theme
     ├── navigation/
@@ -51,19 +49,19 @@ TV mode persists across navigation (stored in `sessionStorage`) so the param isn
 
 ## Build
 
-Requires Android Studio Hedgehog or newer.
+Requires a recent Android Studio (the project uses AGP 9 / Gradle 9.4).
 
 1. Open `android-tv/` as a Gradle project in Android Studio.
 2. Wait for Gradle sync to complete.
-3. Connect an Android TV device or launch an emulator (TV profile, API 26+).
+3. Connect an Android TV device or launch an emulator (TV profile, API 23+).
 4. Run the `app` configuration.
 
-On first launch, enter your TLEX server URL (e.g. `http://192.168.1.x:8000` or `http://10.0.2.2:8000` for emulator).
+On first launch, enter the URL of the TLEX **web app** (the frontend, port 3000), e.g. `http://192.168.1.x:3000` or `http://10.0.2.2:3000` for the emulator. The backend port (8000) only serves the API. The `http://` prefix is optional. If the address doesn't load the app, TLEX TV goes back to this screen so you can fix it.
 
 ## URL Routing
 
-| Scenario                       | URL to enter              |
-|--------------------------------|---------------------------|
-| Emulator + backend on same PC  | `http://10.0.2.2:8000`    |
-| Physical TV + local PC backend | `http://192.168.1.X:8000` |
-| Remote/VPS backend             | Public URL                |
+| Scenario                        | URL to enter              |
+|---------------------------------|---------------------------|
+| Emulator + TLEX on same PC      | `http://10.0.2.2:3000`    |
+| Physical TV + TLEX on a LAN PC  | `http://192.168.1.X:3000` |
+| Remote access (tunnel / domain) | Public URL                |

@@ -20,8 +20,17 @@ class ServerSetupViewModel @Inject constructor(
     fun saveServerUrl(url: String) {
         if (url.isBlank()) return
         viewModelScope.launch {
-            preferences.setServerUrl(url)
+            preferences.setServerUrl(normalizeServerUrl(url))
             _saved.value = true
         }
     }
+}
+
+/**
+ * "192.168.1.5:3000/" → "http://192.168.1.5:3000": the WebView needs a scheme, and the
+ * URL gets "?platform=tv" appended and is used as a same-site prefix, so no trailing slash.
+ */
+internal fun normalizeServerUrl(url: String): String {
+    val trimmed = url.trim().trimEnd('/')
+    return if ("://" in trimmed) trimmed else "http://$trimmed"
 }

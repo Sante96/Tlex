@@ -29,6 +29,7 @@ fun TlexNavGraph(
     ) {
         composable(Screen.Setup.route) {
             ServerSetupScreen(
+                currentUrl = url,
                 onSetupComplete = {
                     navController.navigate(Screen.WebView.route) {
                         popUpTo(Screen.Setup.route) { inclusive = true }
@@ -38,7 +39,14 @@ fun TlexNavGraph(
         }
 
         composable(Screen.WebView.route) {
-            TvWebView(serverUrl = url)
+            TvWebView(
+                serverUrl = url,
+                onServerUnreachable = {
+                    navController.navigate(Screen.Setup.route) {
+                        popUpTo(Screen.WebView.route) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

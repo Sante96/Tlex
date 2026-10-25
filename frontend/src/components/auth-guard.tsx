@@ -19,12 +19,15 @@ export function AuthGuard({
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
+  // replace, not push: a redirect must not leave a history entry, or Back from
+  // /login lands on the guarded page, which redirects to /login again (and on
+  // the TV app Back could never leave the app)
   useEffect(() => {
     if (!isLoading) {
       if (requireAuth && !isAuthenticated) {
-        router.push(redirectTo);
+        router.replace(redirectTo);
       } else if (!requireAuth && isAuthenticated) {
-        router.push("/");
+        router.replace("/");
       }
     }
   }, [isAuthenticated, isLoading, requireAuth, redirectTo, router]);

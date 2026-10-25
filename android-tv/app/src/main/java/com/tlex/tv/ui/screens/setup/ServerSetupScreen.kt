@@ -41,10 +41,12 @@ import com.tlex.tv.ui.theme.TlexGold
 @Composable
 fun ServerSetupScreen(
     onSetupComplete: () -> Unit,
+    /** Saved URL, non-blank when we got here because it didn't load */
+    currentUrl: String = "",
     viewModel: ServerSetupViewModel = hiltViewModel()
 ) {
     val saved by viewModel.saved.collectAsState()
-    var url by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(currentUrl) }
 
     LaunchedEffect(saved) {
         if (saved) onSetupComplete()
@@ -75,13 +77,25 @@ fun ServerSetupScreen(
                 color = TextSecondary
             )
 
+            if (currentUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Impossibile aprire TLEX da questo indirizzo: il server non risponde " +
+                        "o non è quello giusto. Usa l'indirizzo del frontend (porta 3000) o " +
+                        "l'URL del tunnel, non il backend (8000).",
+                    fontSize = 14.sp,
+                    color = TlexGold,
+                    modifier = Modifier.width(480.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
 
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("URL Server", color = TextSecondary) },
-                placeholder = { Text("es. http://192.168.1.100:8000", color = TextSecondary.copy(alpha = 0.5f)) },
+                placeholder = { Text("es. http://192.168.1.100:3000", color = TextSecondary.copy(alpha = 0.5f)) },
                 singleLine = true,
                 modifier = Modifier.width(480.dp),
                 shape = RoundedCornerShape(8.dp),

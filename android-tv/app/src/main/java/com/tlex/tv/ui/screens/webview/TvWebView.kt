@@ -3,11 +3,14 @@
 package com.tlex.tv.ui.screens.webview
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -15,7 +18,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -25,10 +30,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 @Composable
 @Suppress("UNUSED_PARAMETER")
 fun TvWebView(
-    serverUrl: String
+    serverUrl: String,
+    /** The URL doesn't load the TLEX app: let the user fix it instead of being stuck */
+    onServerUnreachable: () -> Unit
 ) {
     val context = LocalContext.current
     val targetUrl = remember(serverUrl) { "$serverUrl?platform=tv" }
+    val currentOnServerUnreachable by rememberUpdatedState(onServerUnreachable)
 
     val webView = remember {
         WebView(context).apply {
@@ -50,7 +58,7 @@ fun TvWebView(
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false // the app is served over HTTP; no file:// access
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
 
@@ -69,11 +77,44 @@ fun TvWebView(
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
             webViewClient = object : WebViewClient() {
+                private var reported = false
+
+                private fun reportUnreachable() {
+                    if (!reported) {
+                        reported = true
+                        currentOnServerUnreachable()
+                    }
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
                     request: WebResourceRequest
                 ): Boolean {
                     return !request.url.toString().startsWith(serverUrl)
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError
+                ) {
+                    if (request.isForMainFrame) reportUnreachable()
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: WebResourceResponse
+                ) {
+                    // e.g. Cloudflare's "tunnel error" page (530) when TLEX isn't running
+                    if (request.isForMainFrame && errorResponse.statusCode >= 500) reportUnreachable()
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    // The backend's port (8000) answers JSON, not the web app (3000)
+                    view.evaluateJavascript("document.contentType") { type ->
+                        if (type.contains("json")) reportUnreachable()
+                    }
                 }
             }
 
@@ -109,8 +150,10 @@ fun TvWebView(
         }
     }
 
-    BackHandler(enabled = webView.canGoBack()) {
-        webView.goBack()
+    // Always enabled: `enabled = webView.canGoBack()` was only evaluated at composition
+    // (WebView navigation doesn't recompose), so Back always left the app
+    BackHandler {
+        if (webView.canGoBack()) webView.goBack() else (context as? Activity)?.finish()
     }
 
     Box(
