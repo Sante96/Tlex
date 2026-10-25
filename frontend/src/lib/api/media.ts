@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, getShared } from "./client";
 
 export interface MediaItem {
   id: number;
@@ -82,9 +82,8 @@ export async function getMediaList({
   return response.data;
 }
 
-export async function getMediaDetails(id: number) {
-  const response = await api.get<MediaDetails>(`/api/v1/media/${id}`);
-  return response.data;
+export function getMediaDetails(id: number) {
+  return getShared<MediaDetails>(`/api/v1/media/${id}`);
 }
 
 export async function deleteMedia(id: number) {

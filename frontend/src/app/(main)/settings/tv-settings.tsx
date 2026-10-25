@@ -17,7 +17,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
 import { updateProfile } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
-import { useSettingsData } from "@/hooks/use-settings-data";
+import { useRegistration } from "@/hooks/use-settings-data";
 import { ChangePasswordModal } from "@/components/settings/change-password-modal";
 
 interface UserPreferences {
@@ -116,7 +116,7 @@ export function TVSettings() {
   const setPreferences = (p: UserPreferences) => setLocalPrefs(p);
 
   const { registrationOpen, togglingRegistration, handleToggleRegistration } =
-    useSettingsData(!!user?.is_admin);
+    useRegistration(!!user?.is_admin);
 
   const handleSave = async () => {
     setSaving(true);

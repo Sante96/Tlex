@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, getShared } from "./client";
 import type { CastMember, TMDBImagesResponse } from "./media";
 
 export interface SeriesItem {
@@ -59,9 +59,8 @@ export async function getSeriesList(params?: {
   return response.data;
 }
 
-export async function getSeriesDetails(id: number): Promise<SeriesDetails> {
-  const response = await api.get<SeriesDetails>(`/api/v1/series/${id}`);
-  return response.data;
+export function getSeriesDetails(id: number): Promise<SeriesDetails> {
+  return getShared<SeriesDetails>(`/api/v1/series/${id}`);
 }
 
 export async function refreshSeriesMetadata(id: number) {

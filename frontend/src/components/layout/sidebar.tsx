@@ -12,6 +12,7 @@ import pkg from "../../../package.json";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useIsTV, useTVTier, type TVTier } from "@/hooks/use-platform";
 import { getScannerStatus } from "@/lib/api";
+import { useIsMobile } from "@/lib/breakpoints";
 import type { FocusEvent } from "react";
 
 const SIDEBAR_EXPANDED = 260;
@@ -54,6 +55,7 @@ export function Sidebar() {
   const [isScanning, setIsScanning] = useState(false);
   const t = useTranslations();
   const isTV = useIsTV();
+  const isMobile = useIsMobile();
 
   const tvTier = useTVTier();
   const tvWidths = TV_WIDTHS[tvTier ?? "1080"];
@@ -75,8 +77,12 @@ export function Sidebar() {
     }
   };
 
+  // Only while someone can see it: phones hide the sidebar, and a background tab polled
+  // the backend every 5 s all day
   useEffect(() => {
+    if (isMobile) return;
     const checkScanStatus = async () => {
+      if (document.hidden) return;
       try {
         const status = await getScannerStatus();
         setIsScanning(status.is_scanning);
@@ -86,7 +92,7 @@ export function Sidebar() {
     checkScanStatus();
     const interval = setInterval(checkScanStatus, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isMobile]);
 
   return (
     <motion.aside

@@ -17,6 +17,33 @@ import {
   type UserInfo,
 } from "@/lib/api";
 
+/** The admin's "open registration" toggle: all the TV settings load */
+export function useRegistration(isAdmin: boolean) {
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(
+    null,
+  );
+  const [togglingRegistration, setTogglingRegistration] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    getRegistrationStatus()
+      .then((data) => setRegistrationOpen(data.enabled))
+      .catch(() => {});
+  }, [isAdmin]);
+
+  const handleToggleRegistration = useCallback(async () => {
+    if (registrationOpen === null) return;
+    setTogglingRegistration(true);
+    try {
+      const data = await setRegistrationStatus(!registrationOpen);
+      setRegistrationOpen(data.enabled);
+    } catch {}
+    setTogglingRegistration(false);
+  }, [registrationOpen]);
+
+  return { registrationOpen, togglingRegistration, handleToggleRegistration };
+}
+
 export function useSettingsData(isAdmin: boolean) {
   const [workersData, setWorkersData] = useState<WorkersStatusResponse | null>(
     null,
@@ -28,10 +55,7 @@ export function useSettingsData(isAdmin: boolean) {
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingScan, setLoadingScan] = useState(false);
   const [triggeringScan, setTriggeringScan] = useState(false);
-  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(
-    null,
-  );
-  const [togglingRegistration, setTogglingRegistration] = useState(false);
+  const registration = useRegistration(isAdmin);
   const [usersData, setUsersData] = useState<UserInfo[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
@@ -81,13 +105,6 @@ export function useSettingsData(isAdmin: boolean) {
     }
   }, [loadScanStatus]);
 
-  const loadRegistrationStatus = useCallback(async () => {
-    try {
-      const data = await getRegistrationStatus();
-      setRegistrationOpen(data.enabled);
-    } catch {}
-  }, []);
-
   const loadUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
@@ -98,22 +115,11 @@ export function useSettingsData(isAdmin: boolean) {
     }
   }, []);
 
-  const handleToggleRegistration = useCallback(async () => {
-    if (registrationOpen === null) return;
-    setTogglingRegistration(true);
-    try {
-      const data = await setRegistrationStatus(!registrationOpen);
-      setRegistrationOpen(data.enabled);
-    } catch {}
-    setTogglingRegistration(false);
-  }, [registrationOpen]);
-
   useEffect(() => {
     if (isAdmin) {
       loadWorkersStatus();
       loadStats();
       loadScanStatus();
-      loadRegistrationStatus();
       loadUsers();
     }
   }, [
@@ -121,7 +127,6 @@ export function useSettingsData(isAdmin: boolean) {
     loadWorkersStatus,
     loadStats,
     loadScanStatus,
-    loadRegistrationStatus,
     loadUsers,
   ]);
 
@@ -135,15 +140,13 @@ export function useSettingsData(isAdmin: boolean) {
     loadingStats,
     loadingScan,
     triggeringScan,
-    registrationOpen,
-    togglingRegistration,
+    ...registration,
     usersData,
     loadingUsers,
     loadWorkersStatus,
     loadStats,
     loadScanStatus,
     handleTriggerScan,
-    handleToggleRegistration,
     loadUsers,
   };
 }

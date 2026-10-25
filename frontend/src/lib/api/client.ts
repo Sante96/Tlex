@@ -26,6 +26,22 @@ export function errorText(e: unknown, text: string): string {
   return typeof detail === "string" ? `${text}: ${detail}` : text;
 }
 
+const inflight = new Map<string, Promise<unknown>>();
+
+/** A GET whose identical requests already in flight share one response: a detail page
+ * and the top bar's breadcrumb both load the title's details as the page opens. */
+export function getShared<T>(url: string): Promise<T> {
+  let request = inflight.get(url) as Promise<T> | undefined;
+  if (!request) {
+    request = api
+      .get<T>(url)
+      .then((response) => response.data)
+      .finally(() => inflight.delete(url));
+    inflight.set(url, request);
+  }
+  return request;
+}
+
 // --- Session ----------------------------------------------------------------
 // The backend keeps the tokens in httpOnly cookies, out of this code's reach (and an
 // XSS's), plus a readable `token_exp`: the access token's expiry in unix seconds. The
