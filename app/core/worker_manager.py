@@ -89,7 +89,9 @@ class WorkerManager:
 
                 # Create additional clients for concurrent streams
                 # Premium accounts get more clients due to higher bandwidth
-                max_extra = (CLIENTS_PER_WORKER_PREMIUM if worker.is_premium else CLIENTS_PER_WORKER_STANDARD) - 1
+                max_extra = (
+                    CLIENTS_PER_WORKER_PREMIUM if worker.is_premium else CLIENTS_PER_WORKER_STANDARD
+                ) - 1
 
                 # Load existing extra sessions or create new ones
                 extra_sessions = worker.extra_sessions or []
@@ -100,14 +102,14 @@ class WorkerManager:
                         if i < len(extra_sessions):
                             # Use existing saved session
                             extra_session = extra_sessions[i]
-                            logger.debug(f"Loading saved session {i+1} for worker {worker.id}")
+                            logger.debug(f"Loading saved session {i + 1} for worker {worker.id}")
                         else:
                             # Create new session from primary (first time)
                             extra_session = worker.session_string
-                            logger.debug(f"Creating new session {i+1} for worker {worker.id}")
+                            logger.debug(f"Creating new session {i + 1} for worker {worker.id}")
 
                         extra_client = Client(
-                            name=f"worker_{worker.id}_stream_{i+1}",
+                            name=f"worker_{worker.id}_stream_{i + 1}",
                             api_id=settings.api_id,
                             api_hash=settings.api_hash,
                             session_string=extra_session,
@@ -127,11 +129,15 @@ class WorkerManager:
 
                         self._client_pool.append((worker.id, extra_client))
                         self._client_in_use[id(extra_client)] = False
-                        logger.debug(f"Started extra client {i+1} for worker {worker.id}")
+                        logger.debug(f"Started extra client {i + 1} for worker {worker.id}")
                     except Exception as e:
-                        logger.warning(f"Failed to create extra client {i+1} for worker {worker.id}: {e}")
+                        logger.warning(
+                            f"Failed to create extra client {i + 1} for worker {worker.id}: {e}"
+                        )
                         if "AUTH_KEY_DUPLICATED" in str(e) or "AUTH_KEY_UNREGISTERED" in str(e):
-                            logger.warning(f"Worker {worker.id} extra sessions invalidated, clearing from DB")
+                            logger.warning(
+                                f"Worker {worker.id} extra sessions invalidated, clearing from DB"
+                            )
                             extra_sessions = []  # clear local var; saved below
                             sessions_updated = True
                         break  # Stop creating more if one fails
@@ -139,7 +145,9 @@ class WorkerManager:
                 # Save updated sessions to DB
                 if sessions_updated:
                     worker.extra_sessions = extra_sessions
-                    logger.info(f"Saved {len(extra_sessions)} extra sessions for worker {worker.id}")
+                    logger.info(
+                        f"Saved {len(extra_sessions)} extra sessions for worker {worker.id}"
+                    )
 
                 total_clients = len([c for wid, c in self._client_pool if wid == worker.id])
                 logger.info(
@@ -164,7 +172,9 @@ class WorkerManager:
                     worker.extra_sessions = []
                 await session.commit()
 
-        logger.info(f"Loaded {loaded}/{len(workers)} workers ({len(self._client_pool)} total clients)")
+        logger.info(
+            f"Loaded {loaded}/{len(workers)} workers ({len(self._client_pool)} total clients)"
+        )
         return loaded
 
     async def get_best_worker(self, session: AsyncSession) -> tuple[Worker, Client] | None:
@@ -259,7 +269,9 @@ class WorkerManager:
         async with self._lock:
             taken = {wid for wid, c in self._client_pool if c in (spread_from or [])}
             # _free_clients already puts throttled accounts last; then prefer a new account
-            free = sorted(self._free_clients(), key=lambda wc: (self._throttled(wc[0]), wc[0] in taken))
+            free = sorted(
+                self._free_clients(), key=lambda wc: (self._throttled(wc[0]), wc[0] in taken)
+            )
             if not free:
                 return None
             worker_id, client = free[0]
@@ -271,7 +283,9 @@ class WorkerManager:
         """Free clients: accounts Telegram is slowing down last, then those with the fewest
         clients in use first, so streams spread over the accounts."""
         busy = Counter(wid for wid, c in self._client_pool if self._client_in_use.get(id(c), False))
-        free = [(wid, c) for wid, c in self._client_pool if not self._client_in_use.get(id(c), False)]
+        free = [
+            (wid, c) for wid, c in self._client_pool if not self._client_in_use.get(id(c), False)
+        ]
         return sorted(free, key=lambda wc: (self._throttled(wc[0]), busy[wc[0]]))
 
     def _throttled(self, worker_id: int) -> bool:
@@ -343,7 +357,9 @@ class WorkerManager:
         for w in workers:
             # Count clients for this worker
             worker_clients = [(wid, c) for wid, c in self._client_pool if wid == w.id]
-            clients_in_use = sum(1 for wid, c in worker_clients if self._client_in_use.get(id(c), False))
+            clients_in_use = sum(
+                1 for wid, c in worker_clients if self._client_in_use.get(id(c), False)
+            )
 
             info = {
                 "id": w.id,

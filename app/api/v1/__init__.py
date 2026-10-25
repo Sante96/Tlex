@@ -41,4 +41,3 @@ router.include_router(watchlist.router)
 router.include_router(people.router, dependencies=_user_auth)
 router.include_router(workers.router, tags=["workers"])
 router.include_router(backup.router)
-

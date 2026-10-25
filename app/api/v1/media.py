@@ -207,9 +207,7 @@ async def get_next_episode(
 ):
     """Get the next episode after the given media item."""
     # Load current item
-    result = await session.execute(
-        select(MediaItem).where(MediaItem.id == media_id)
-    )
+    result = await session.execute(select(MediaItem).where(MediaItem.id == media_id))
     current = result.scalar_one_or_none()
     if not current or current.media_type != MediaType.EPISODE or not current.series_id:
         return None
@@ -285,11 +283,7 @@ async def analyze_media(
     _admin=Depends(get_admin_user),
 ) -> dict:
     """Re-analyze a media item to extract duration and streams."""
-    query = (
-        select(MediaItem)
-        .where(MediaItem.id == media_id)
-        .options(selectinload(MediaItem.parts))
-    )
+    query = select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.parts))
     result = await session.execute(query)
     item = result.scalar_one_or_none()
 
@@ -329,9 +323,7 @@ async def analyze_media(
             except Exception as refresh_err:
                 logger.warning(f"Could not refresh file_id: {refresh_err}")
 
-        probe_result = await ffprobe_service.analyze_from_telegram(
-            client, file_id
-        )
+        probe_result = await ffprobe_service.analyze_from_telegram(client, file_id)
 
         if probe_result:
             # MKV/MP4 header contains total duration, no estimation needed
@@ -399,9 +391,7 @@ async def refresh_metadata(
         # For movies: first find tmdb_id via search, then fetch full details
         tmdb_result = await tmdb_client.search_movie(item.title, language=lang)
         if not tmdb_result:
-            raise HTTPException(
-                status_code=404, detail=f"No TMDB results found for: {item.title}"
-            )
+            raise HTTPException(status_code=404, detail=f"No TMDB results found for: {item.title}")
         movie_details = await tmdb_client.get_movie_full_details(tmdb_result.tmdb_id, language=lang)
         if movie_details:
             item.tmdb_id = movie_details.tmdb_id
@@ -428,9 +418,7 @@ async def refresh_metadata(
             item.title, item.season_number, item.episode_number, language=lang
         )
         if not tmdb_result:
-            raise HTTPException(
-                status_code=404, detail=f"No TMDB results found for: {item.title}"
-            )
+            raise HTTPException(status_code=404, detail=f"No TMDB results found for: {item.title}")
         item.tmdb_id = tmdb_result.tmdb_id
         item.title = tmdb_result.title
         item.overview = tmdb_result.overview
@@ -559,6 +547,7 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
     if item.media_type == MediaType.EPISODE and item.series_id:
         # For episodes: fetch stills from TMDB
         from app.models.media import Series
+
         series_query = select(Series).where(Series.id == item.series_id)
         series_result = await session.execute(series_query)
         series = series_result.scalar_one_or_none()
@@ -575,6 +564,7 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
     # Reuse TV images method structure for movies
     params = {"api_key": tmdb_client._api_key}
     import httpx
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
@@ -587,11 +577,19 @@ async def get_media_tmdb_images(session: DBSession, media_id: int) -> dict:
             return {
                 "stills": [],
                 "posters": [
-                    {"file_path": img["file_path"], "width": img.get("width"), "height": img.get("height")}
+                    {
+                        "file_path": img["file_path"],
+                        "width": img.get("width"),
+                        "height": img.get("height"),
+                    }
                     for img in data.get("posters", [])
                 ],
                 "backdrops": [
-                    {"file_path": img["file_path"], "width": img.get("width"), "height": img.get("height")}
+                    {
+                        "file_path": img["file_path"],
+                        "width": img.get("width"),
+                        "height": img.get("height"),
+                    }
                     for img in data.get("backdrops", [])
                 ],
             }

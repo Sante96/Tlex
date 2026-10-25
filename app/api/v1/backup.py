@@ -66,11 +66,13 @@ class BackupChannelOut(BaseModel):
             for main_id_str, entry in obj.topic_map.items():
                 if not entry.get("backup_id"):
                     continue
-                topics.append(BackupTopicOut(
-                    main_topic_id=int(main_id_str),
-                    backup_topic_id=entry["backup_id"],
-                    name=entry["name"],
-                ))
+                topics.append(
+                    BackupTopicOut(
+                        main_topic_id=int(main_id_str),
+                        backup_topic_id=entry["backup_id"],
+                        name=entry["name"],
+                    )
+                )
         return cls(
             id=obj.id,
             main_channel_id=obj.main_channel_id,
@@ -88,7 +90,9 @@ class BackupChannelOut(BaseModel):
 
 
 @router.get("/channels", response_model=list[BackupChannelOut])
-async def list_backups(session: DBSession, _admin=Depends(get_admin_user)) -> list[BackupChannelOut]:
+async def list_backups(
+    session: DBSession, _admin=Depends(get_admin_user)
+) -> list[BackupChannelOut]:
     """List all configured backup channels."""
     result = await session.execute(select(BackupChannel).order_by(BackupChannel.id))
     return [BackupChannelOut.from_orm(b) for b in result.scalars().all()]
@@ -152,9 +156,7 @@ async def sync_backup(
     _admin=Depends(get_admin_user),
 ) -> dict:
     """Trigger a message sync for a specific backup channel."""
-    result = await session.execute(
-        select(BackupChannel).where(BackupChannel.id == backup_id)
-    )
+    result = await session.execute(select(BackupChannel).where(BackupChannel.id == backup_id))
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(404, "Backup channel not found")
@@ -175,9 +177,7 @@ async def toggle_backup(
     _admin=Depends(get_admin_user),
 ) -> BackupChannelOut:
     """Enable or disable a backup channel as fallback."""
-    result = await session.execute(
-        select(BackupChannel).where(BackupChannel.id == backup_id)
-    )
+    result = await session.execute(select(BackupChannel).where(BackupChannel.id == backup_id))
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(404, "Backup channel not found")
@@ -194,9 +194,7 @@ async def promote_backup(
     _admin=Depends(get_admin_user),
 ) -> BackupChannelOut:
     """Manually promote backup to main, redirect MediaParts, create new backup."""
-    result = await session.execute(
-        select(BackupChannel).where(BackupChannel.id == backup_id)
-    )
+    result = await session.execute(select(BackupChannel).where(BackupChannel.id == backup_id))
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(404, "Backup channel not found")
@@ -220,9 +218,7 @@ async def set_max_failures(
     _admin=Depends(get_admin_user),
 ) -> BackupChannelOut:
     """Update the failure threshold before auto-promotion."""
-    result = await session.execute(
-        select(BackupChannel).where(BackupChannel.id == backup_id)
-    )
+    result = await session.execute(select(BackupChannel).where(BackupChannel.id == backup_id))
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(404, "Backup channel not found")
@@ -241,9 +237,7 @@ async def delete_backup(
     delete_telegram: bool = False,
 ) -> None:
     """Remove backup config from DB. Pass ?delete_telegram=true to also delete the Telegram supergroup."""
-    result = await session.execute(
-        select(BackupChannel).where(BackupChannel.id == backup_id)
-    )
+    result = await session.execute(select(BackupChannel).where(BackupChannel.id == backup_id))
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(404, "Backup channel not found")

@@ -106,7 +106,9 @@ class AutoScanScheduler:
                 else:
                     r = await self._get_redis()
                     last = await _last_run(r, REDIS_KEY_SCAN_LAST_RUN) or self._last_scan
-                    self._next_scan = last + timedelta(hours=interval_hours) if last else datetime.now()
+                    self._next_scan = (
+                        last + timedelta(hours=interval_hours) if last else datetime.now()
+                    )
                     if datetime.now() >= self._next_scan:
                         self._last_scan = await _mark_run(r, REDIS_KEY_SCAN_LAST_RUN)
                         await self._run_scan()

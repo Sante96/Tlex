@@ -142,7 +142,9 @@ async def verify_code(
     phone = body.phone_number.strip().replace(" ", "")
 
     if phone not in _pending_auth:
-        raise HTTPException(status_code=400, detail="No pending auth for this phone. Send code first.")
+        raise HTTPException(
+            status_code=400, detail="No pending auth for this phone. Send code first."
+        )
 
     client, phone_code_hash = _pending_auth[phone]
 
@@ -152,7 +154,9 @@ async def verify_code(
             await client.connect()
         except Exception as e:
             del _pending_auth[phone]
-            raise HTTPException(status_code=400, detail=f"Lost connection, please send code again: {e}") from None
+            raise HTTPException(
+                status_code=400, detail=f"Lost connection, please send code again: {e}"
+            ) from None
 
     signed_in_user = None
     try:
@@ -172,7 +176,10 @@ async def verify_code(
         # Don't stop the client on sign_in failure — user may retry with a new code
         # Only clean up on fatal auth errors
         error_str = str(e)
-        if any(x in error_str for x in ("PHONE_CODE_INVALID", "PHONE_CODE_EXPIRED", "SESSION_PASSWORD_NEEDED")):
+        if any(
+            x in error_str
+            for x in ("PHONE_CODE_INVALID", "PHONE_CODE_EXPIRED", "SESSION_PASSWORD_NEEDED")
+        ):
             pass  # Keep client alive for retry
         else:
             del _pending_auth[phone]

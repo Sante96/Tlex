@@ -182,9 +182,9 @@ class FFProbeService:
                     f.write(chunk)
                     bytes_written += len(chunk)
                     if bytes_written % (10 * 1024 * 1024) == 0:
-                        logger.debug(f"Downloaded {bytes_written // (1024*1024)}MB")
+                        logger.debug(f"Downloaded {bytes_written // (1024 * 1024)}MB")
 
-            logger.debug(f"Download complete: {bytes_written // (1024*1024)}MB")
+            logger.debug(f"Download complete: {bytes_written // (1024 * 1024)}MB")
 
             result = await self.probe_file(temp_path)
             return result

@@ -27,11 +27,7 @@ async def _assign_worker_to_profile(session: AsyncSession, profile: Profile) -> 
     stmt = (
         select(Worker)
         .where(Worker.status == WorkerStatus.ACTIVE)
-        .where(
-            ~Worker.id.in_(
-                select(Profile.worker_id).where(Profile.worker_id.isnot(None))
-            )
-        )
+        .where(~Worker.id.in_(select(Profile.worker_id).where(Profile.worker_id.isnot(None))))
         .order_by(Worker.is_premium.desc())
         .limit(1)
     )

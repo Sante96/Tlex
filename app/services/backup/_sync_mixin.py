@@ -55,10 +55,15 @@ class BackupSyncMixin(BackupFailoverMixin):
             main_topic_id = int(main_topic_id_str)
             backup_topic_id = entry["backup_id"]
             synced = await self._sync_topic(
-                session, client, backup,
-                main_channel_id, backup_tg_id,
-                main_topic_id, backup_topic_id,
-                already_synced, limit,
+                session,
+                client,
+                backup,
+                main_channel_id,
+                backup_tg_id,
+                main_topic_id,
+                backup_topic_id,
+                already_synced,
+                limit,
             )
             total_synced += synced
 
@@ -86,7 +91,9 @@ class BackupSyncMixin(BackupFailoverMixin):
             if key not in updated:
                 try:
                     new_topic = await client.create_forum_topic(backup_tg_id, topic.name)
-                    new_topic_id = getattr(new_topic, "id", None) or getattr(new_topic, "message_thread_id", None)
+                    new_topic_id = getattr(new_topic, "id", None) or getattr(
+                        new_topic, "message_thread_id", None
+                    )
                     if new_topic_id:
                         updated[key] = {"backup_id": new_topic_id, "name": topic.name}
                         logger.info(f"[BACKUP] New topic '{topic.name}' mirrored → {new_topic_id}")
@@ -144,7 +151,8 @@ class BackupSyncMixin(BackupFailoverMixin):
                 )
                 # The forwarded copies come back as UpdateNew(Channel)Message entries
                 fwd_ids = [
-                    m.id for u in getattr(result, "updates", [])
+                    m.id
+                    for u in getattr(result, "updates", [])
                     if (m := getattr(u, "message", None)) is not None and hasattr(m, "id")
                 ]
                 now = datetime.utcnow()
@@ -153,13 +161,15 @@ class BackupSyncMixin(BackupFailoverMixin):
                 else:
                     pairs = zip(batch_ids, [0] * len(batch_ids), strict=False)
                 for orig_id, fwd_id in pairs:
-                    session.add(BackupMessage(
-                        backup_channel_db_id=backup.id,
-                        main_channel_id=main_channel_id,
-                        main_message_id=orig_id,
-                        backup_message_id=fwd_id,
-                        synced_at=now,
-                    ))
+                    session.add(
+                        BackupMessage(
+                            backup_channel_db_id=backup.id,
+                            main_channel_id=main_channel_id,
+                            main_message_id=orig_id,
+                            backup_message_id=fwd_id,
+                            synced_at=now,
+                        )
+                    )
                     synced += 1
                 await session.flush()
 

@@ -41,6 +41,7 @@ class Throttled(Exception):
         super().__init__(f"account throttled for {seconds}s")
         self.seconds = seconds
 
+
 # Opening a media session (or following a CDN redirect) is left to Pyrogram's get_file,
 # one call per client at a time so concurrent fetches don't each open a session.
 _open_locks: dict[int, asyncio.Lock] = {}
@@ -132,7 +133,9 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
                 CHUNK_TIMEOUT,
             )
             if data is None:
-                data = await asyncio.wait_for(_pyrogram_chunk(client, file_id, index), CHUNK_TIMEOUT)
+                data = await asyncio.wait_for(
+                    _pyrogram_chunk(client, file_id, index), CHUNK_TIMEOUT
+                )
             _cache_chunk(part.id, index, data)
             return data
 
@@ -169,7 +172,9 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             # Jitter: fetches failing together shouldn't all resend at the same instant
             await asyncio.sleep(random.uniform(0.2, 1.0) * attempt)
 
-    raise RuntimeError(f"Failed to fetch chunk {index} of part {part.id} after {MAX_ATTEMPTS} attempts")
+    raise RuntimeError(
+        f"Failed to fetch chunk {index} of part {part.id} after {MAX_ATTEMPTS} attempts"
+    )
 
 
 async def _pyrogram_chunk(client: Client, file_id: str, index: int) -> bytes:

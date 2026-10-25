@@ -33,30 +33,32 @@ async def get_watchlist(
             )
             media = media_result.scalar_one_or_none()
             if media:
-                items.append(WatchlistMediaResponse(
-                    id=wl.id,
-                    media_item_id=wl.media_item_id,
-                    item_type=media.media_type.value.lower(),
-                    added_at=wl.added_at,
-                    title=media.title,
-                    poster_path=media.poster_path,
-                    media_type=media.media_type.value,
-                    duration_seconds=media.duration_seconds,
-                ))
+                items.append(
+                    WatchlistMediaResponse(
+                        id=wl.id,
+                        media_item_id=wl.media_item_id,
+                        item_type=media.media_type.value.lower(),
+                        added_at=wl.added_at,
+                        title=media.title,
+                        poster_path=media.poster_path,
+                        media_type=media.media_type.value,
+                        duration_seconds=media.duration_seconds,
+                    )
+                )
         elif wl.series_id:
-            series_result = await session.execute(
-                select(Series).where(Series.id == wl.series_id)
-            )
+            series_result = await session.execute(select(Series).where(Series.id == wl.series_id))
             series = series_result.scalar_one_or_none()
             if series:
-                items.append(WatchlistMediaResponse(
-                    id=wl.id,
-                    series_id=wl.series_id,
-                    item_type="series",
-                    added_at=wl.added_at,
-                    title=series.title,
-                    poster_path=series.poster_path,
-                ))
+                items.append(
+                    WatchlistMediaResponse(
+                        id=wl.id,
+                        series_id=wl.series_id,
+                        item_type="series",
+                        added_at=wl.added_at,
+                        title=series.title,
+                        poster_path=series.poster_path,
+                    )
+                )
 
     return WatchlistListResponse(items=items, total=len(items))
 

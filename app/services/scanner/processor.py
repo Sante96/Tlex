@@ -113,7 +113,9 @@ async def process_group(
                         if tmdb_result.release_date
                         else None
                     ),
-                    genres=",".join(tv_details.genres) if tv_details and tv_details.genres else None,
+                    genres=",".join(tv_details.genres)
+                    if tv_details and tv_details.genres
+                    else None,
                     vote_average=tv_details.vote_average if tv_details else None,
                     content_rating=tv_details.content_rating if tv_details else None,
                 )

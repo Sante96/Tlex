@@ -54,7 +54,9 @@ async def get_person(request: Request, session: DBSession, person_id: int) -> di
                 credit_map[item.tmdb_id]["in_catalog"] = True
                 credit_map[item.tmdb_id]["catalog_id"] = item.id
                 credit_map[item.tmdb_id]["catalog_type"] = "media"
-                credit_map[item.tmdb_id]["poster_path"] = item.poster_path or credit_map[item.tmdb_id]["poster_path"]
+                credit_map[item.tmdb_id]["poster_path"] = (
+                    item.poster_path or credit_map[item.tmdb_id]["poster_path"]
+                )
 
     # Match TV series in local catalog
     if tv_tmdb_ids:
@@ -65,7 +67,9 @@ async def get_person(request: Request, session: DBSession, person_id: int) -> di
                 credit_map[series.tmdb_id]["in_catalog"] = True
                 credit_map[series.tmdb_id]["catalog_id"] = series.id
                 credit_map[series.tmdb_id]["catalog_type"] = "series"
-                credit_map[series.tmdb_id]["poster_path"] = series.poster_path or credit_map[series.tmdb_id]["poster_path"]
+                credit_map[series.tmdb_id]["poster_path"] = (
+                    series.poster_path or credit_map[series.tmdb_id]["poster_path"]
+                )
 
     works = sorted(credit_map.values(), key=lambda w: w.get("release_date") or "", reverse=True)
 

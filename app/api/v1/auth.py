@@ -123,7 +123,9 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit(AUTH_LIMIT)
-async def refresh_tokens(request: Request, body: RefreshRequest, session: DBSession) -> TokenResponse:
+async def refresh_tokens(
+    request: Request, body: RefreshRequest, session: DBSession
+) -> TokenResponse:
     """Refresh access token using refresh token."""
     # FOR UPDATE: two parallel refreshes with one token must not both succeed
     stmt = select(RefreshToken).where(RefreshToken.token == body.refresh_token).with_for_update()
@@ -136,9 +138,13 @@ async def refresh_tokens(request: Request, body: RefreshRequest, session: DBSess
 
     if refresh_token and refresh_token.revoked:
         # A rotated-out token came back: it was copied. End every session of that user.
-        await session.execute(delete(RefreshToken).where(RefreshToken.user_id == refresh_token.user_id))
+        await session.execute(
+            delete(RefreshToken).where(RefreshToken.user_id == refresh_token.user_id)
+        )
         await session.commit()
-        logger.warning(f"Refresh token reuse for user {refresh_token.user_id}: all sessions revoked")
+        logger.warning(
+            f"Refresh token reuse for user {refresh_token.user_id}: all sessions revoked"
+        )
         raise invalid
     if not refresh_token or refresh_token.expires_at.replace(tzinfo=UTC) <= datetime.now(UTC):
         raise invalid

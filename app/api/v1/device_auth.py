@@ -26,7 +26,9 @@ _DEVICE_CODE_TTL_SECONDS = 300  # 5 minutes
 
 def _generate_user_code() -> str:
     """Generate a short human-readable 6-char uppercase code."""
-    chars = string.ascii_uppercase.replace("O", "").replace("I", "") + string.digits.replace("0", "")
+    chars = string.ascii_uppercase.replace("O", "").replace("I", "") + string.digits.replace(
+        "0", ""
+    )
     return "".join(secrets.choice(chars) for _ in range(6))
 
 
@@ -38,9 +40,7 @@ async def device_request(request: Request, session: DBSession) -> DeviceCodeResp
     expires_at = datetime.now(UTC) + timedelta(seconds=_DEVICE_CODE_TTL_SECONDS)
 
     # Cleanup expired codes
-    await session.execute(
-        delete(DeviceCode).where(DeviceCode.expires_at < datetime.now(UTC))
-    )
+    await session.execute(delete(DeviceCode).where(DeviceCode.expires_at < datetime.now(UTC)))
 
     for _ in range(5):
         user_code = _generate_user_code()

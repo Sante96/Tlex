@@ -57,7 +57,9 @@ async def _extract(media_id: int) -> int:
     try:
         async with async_session_maker() as session:
             result = await session.execute(
-                select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+                select(MediaItem)
+                .where(MediaItem.id == media_id)
+                .options(selectinload(MediaItem.streams))
             )
             media = result.scalar_one_or_none()
             if not media:
@@ -172,10 +174,7 @@ async def populate_all_caches(session: AsyncSession) -> None:
     Runs in background with concurrency limit to avoid overloading.
     """
     # Find all media with subtitle streams
-    query = (
-        select(MediaItem)
-        .options(selectinload(MediaItem.streams))
-    )
+    query = select(MediaItem).options(selectinload(MediaItem.streams))
     result = await session.execute(query)
     all_media = result.scalars().all()
 
@@ -194,7 +193,8 @@ async def populate_all_caches(session: AsyncSession) -> None:
         # Check if any subtitle is cached
         subtitle_cached = any(
             (SUBTITLE_CACHE_DIR / f"{media.id}_{s.stream_index}.ass").exists()
-            for s in media.streams if s.codec_type == CodecType.SUBTITLE
+            for s in media.streams
+            if s.codec_type == CodecType.SUBTITLE
         )
 
         if not fonts_cached or not subtitle_cached:
@@ -214,6 +214,7 @@ async def populate_all_caches(session: AsyncSession) -> None:
             try:
                 # Create new session for this extraction
                 from app.database import async_session_maker
+
                 async with async_session_maker() as extract_session:
                     await ensure_cache_populated(media_id, extract_session)
             except Exception as e:

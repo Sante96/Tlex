@@ -44,18 +44,13 @@ async def get_virtual_reader(
         reader, _ = _reader_cache[media_id]
         _reader_cache[media_id] = (reader, time.time())
         logger.info(
-            f"[READER] Reusing cached reader for media {media_id} "
-            f"({len(reader._clients)} clients)"
+            f"[READER] Reusing cached reader for media {media_id} ({len(reader._clients)} clients)"
         )
         crash_record("reader.cache_hit", media_id=media_id, clients=len(reader._clients))
         return reader
 
     # Create new reader
-    query = (
-        select(MediaItem)
-        .where(MediaItem.id == media_id)
-        .options(selectinload(MediaItem.parts))
-    )
+    query = select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.parts))
     result = await session.execute(query)
     media_item = result.scalar_one_or_none()
 
@@ -131,7 +126,8 @@ async def cleanup_stale_readers() -> None:
     """Release readers that haven't been used recently and have no active streams."""
     now = time.time()
     stale = [
-        mid for mid, (reader, last_access) in _reader_cache.items()
+        mid
+        for mid, (reader, last_access) in _reader_cache.items()
         if now - last_access > _READER_TTL and reader._active_streams == 0
     ]
     if stale:

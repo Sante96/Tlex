@@ -51,9 +51,13 @@ class BackupCreateMixin:
                 continue
             try:
                 new_topic = await client.create_forum_topic(backup_tg_id, topic.name)
-                new_topic_id = getattr(new_topic, "id", None) or getattr(new_topic, "message_thread_id", None)
+                new_topic_id = getattr(new_topic, "id", None) or getattr(
+                    new_topic, "message_thread_id", None
+                )
                 if not new_topic_id:
-                    logger.warning(f"[BACKUP] Could not extract topic id for '{topic.name}', skipping")
+                    logger.warning(
+                        f"[BACKUP] Could not extract topic id for '{topic.name}', skipping"
+                    )
                     continue
                 topic_map[str(topic.message_thread_id)] = {
                     "backup_id": new_topic_id,

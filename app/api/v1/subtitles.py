@@ -70,7 +70,9 @@ async def get_subtitle(
         from app.models.media import MediaItem
 
         result = await session.execute(
-            select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+            select(MediaItem)
+            .where(MediaItem.id == media_id)
+            .options(selectinload(MediaItem.streams))
         )
         media = result.scalar_one_or_none()
         if not media:
@@ -153,13 +155,15 @@ async def get_fonts(
             for f in cached_fonts:
                 font_data = f.read_bytes()
                 font_names = extract_font_names(font_data)
-                font_list.append({
-                    "filename": f.name,
-                    "mimetype": "application/x-font-ttf",
-                    "size": f.stat().st_size,
-                    "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
-                    "names": font_names,
-                })
+                font_list.append(
+                    {
+                        "filename": f.name,
+                        "mimetype": "application/x-font-ttf",
+                        "size": f.stat().st_size,
+                        "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
+                        "names": font_names,
+                    }
+                )
 
             return {
                 "media_id": media_id,
@@ -176,20 +180,24 @@ async def get_fonts(
         if cache_dir.exists():
             cached_fonts = list(cache_dir.glob("*"))
             if cached_fonts:
-                logger.info(f"Serving {len(cached_fonts)} cached fonts for media {media_id} (after lock)")
+                logger.info(
+                    f"Serving {len(cached_fonts)} cached fonts for media {media_id} (after lock)"
+                )
                 from app.services.subtitles import extract_font_names
 
                 font_list = []
                 for f in cached_fonts:
                     font_data = f.read_bytes()
                     font_names = extract_font_names(font_data)
-                    font_list.append({
-                        "filename": f.name,
-                        "mimetype": "application/x-font-ttf",
-                        "size": f.stat().st_size,
-                        "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
-                        "names": font_names,
-                    })
+                    font_list.append(
+                        {
+                            "filename": f.name,
+                            "mimetype": "application/x-font-ttf",
+                            "size": f.stat().st_size,
+                            "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
+                            "names": font_names,
+                        }
+                    )
 
                 return {
                     "media_id": media_id,
@@ -287,7 +295,9 @@ async def warm_subtitle_assets(
         return {"status": "cached", "media_id": media_id}
 
     # Check if media has subtitle streams
-    query = select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+    query = (
+        select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
+    )
     result = await session.execute(query)
     media = result.scalar_one_or_none()
 

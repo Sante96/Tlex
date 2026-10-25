@@ -29,7 +29,9 @@ async def trigger_scan(
     if scanner_service.is_scanning:
         raise HTTPException(status_code=409, detail="Scan already in progress")
 
-    result = await scanner_service.scan_all_channels(session, limit=request.limit, topic_id=request.topic_id)
+    result = await scanner_service.scan_all_channels(
+        session, limit=request.limit, topic_id=request.topic_id
+    )
 
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -41,6 +43,7 @@ async def trigger_scan(
 async def get_configured_channels(_admin=Depends(get_admin_user)) -> dict:
     """Return the channel IDs configured in SCANNER_CHANNEL_IDS."""
     from app.config import get_settings as _gs
+
     s = _gs()
     return {"channel_ids": s.channel_ids_list}
 

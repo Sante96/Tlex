@@ -36,9 +36,7 @@ class Profile(Base):
     """User profile model (Netflix-style multi-profile support)."""
 
     __tablename__ = "profiles"
-    __table_args__ = (
-        UniqueConstraint("worker_id", name="uq_profile_worker"),
-    )
+    __table_args__ = (UniqueConstraint("worker_id", name="uq_profile_worker"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -81,9 +79,7 @@ class RefreshToken(Base):
     token: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
         return f"<RefreshToken(id={self.id}, user_id={self.user_id}, revoked={self.revoked})>"
@@ -108,12 +104,12 @@ class Watchlist(Base):
     series_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("series.id", ondelete="CASCADE"), nullable=True
     )
-    added_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
-        return f"<Watchlist(user={self.user_id}, media={self.media_item_id}, series={self.series_id})>"
+        return (
+            f"<Watchlist(user={self.user_id}, media={self.media_item_id}, series={self.series_id})>"
+        )
 
 
 class WatchProgress(Base):
@@ -153,9 +149,7 @@ class UserMediaOverride(Base):
     """Per-user visual overrides for media items (poster, backdrop, etc.)."""
 
     __tablename__ = "user_media_overrides"
-    __table_args__ = (
-        UniqueConstraint("user_id", "media_item_id", name="uq_user_media_override"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "media_item_id", name="uq_user_media_override"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -175,9 +169,7 @@ class UserSeriesOverride(Base):
     """Per-user visual overrides for TV series (poster, backdrop, season posters)."""
 
     __tablename__ = "user_series_overrides"
-    __table_args__ = (
-        UniqueConstraint("user_id", "series_id", name="uq_user_series_override"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "series_id", name="uq_user_series_override"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -207,9 +199,7 @@ class DeviceCode(Base):
     )
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
         return f"<DeviceCode(user_code={self.user_code}, confirmed={self.confirmed})>"

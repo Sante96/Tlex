@@ -54,9 +54,7 @@ class TMDBClient:
         params.update(extra)
         async with httpx.AsyncClient() as client:
             try:
-                resp = await client.get(
-                    f"{TMDB_BASE_URL}{path}", params=params, timeout=10.0
-                )
+                resp = await client.get(f"{TMDB_BASE_URL}{path}", params=params, timeout=10.0)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPError as e:
@@ -78,15 +76,22 @@ class TMDBClient:
             return None
         r = data["results"][0]
         return TMDBResult(
-            tmdb_id=r["id"], title=r.get("title", title),
-            overview=r.get("overview"), poster_path=r.get("poster_path"),
-            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
+            tmdb_id=r["id"],
+            title=r.get("title", title),
+            overview=r.get("overview"),
+            poster_path=r.get("poster_path"),
+            backdrop_path=r.get("backdrop_path"),
+            release_date=r.get("release_date"),
             media_type="movie",
         )
 
-    async def get_movie_full_details(self, tmdb_id: int, language: str | None = None) -> MovieDetails | None:
+    async def get_movie_full_details(
+        self, tmdb_id: int, language: str | None = None
+    ) -> MovieDetails | None:
         """Get full movie details including genres, vote_average, content_rating."""
-        r = await self._get(f"/movie/{tmdb_id}", append_to_response="release_dates", language=language)
+        r = await self._get(
+            f"/movie/{tmdb_id}", append_to_response="release_dates", language=language
+        )
         if not r:
             return None
 
@@ -114,10 +119,14 @@ class TMDBClient:
                     break
 
         return MovieDetails(
-            tmdb_id=r["id"], title=r.get("title", ""),
-            overview=r.get("overview"), poster_path=r.get("poster_path"),
-            backdrop_path=r.get("backdrop_path"), release_date=r.get("release_date"),
-            genres=genres, vote_average=r.get("vote_average"),
+            tmdb_id=r["id"],
+            title=r.get("title", ""),
+            overview=r.get("overview"),
+            poster_path=r.get("poster_path"),
+            backdrop_path=r.get("backdrop_path"),
+            release_date=r.get("release_date"),
+            genres=genres,
+            vote_average=r.get("vote_average"),
             content_rating=content_rating,
         )
 
@@ -164,26 +173,41 @@ class TMDBClient:
 
         members: list[CastMember] = []
         for p in data.get("cast", []):
-            members.append(CastMember(
-                id=p["id"], name=p.get("name", ""), character=p.get("character"),
-                job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
-            ))
+            members.append(
+                CastMember(
+                    id=p["id"],
+                    name=p.get("name", ""),
+                    character=p.get("character"),
+                    job=None,
+                    profile_path=p.get("profile_path"),
+                    order=p.get("order", 99),
+                )
+            )
         seen_crew: set[str] = set()
         for p in data.get("crew", []):
             key = f"{p['id']}-{p.get('job')}"
             if key not in seen_crew:
                 seen_crew.add(key)
-                members.append(CastMember(
-                    id=p["id"], name=p.get("name", ""), character=None,
-                    job=p.get("job"), profile_path=p.get("profile_path"),
-                    order=100 + len(members),
-                ))
+                members.append(
+                    CastMember(
+                        id=p["id"],
+                        name=p.get("name", ""),
+                        character=None,
+                        job=p.get("job"),
+                        profile_path=p.get("profile_path"),
+                        order=100 + len(members),
+                    )
+                )
         return members
 
     # --- TV ---
 
     async def search_tv(
-        self, title: str, season: int | None = None, episode: int | None = None, language: str | None = None
+        self,
+        title: str,
+        season: int | None = None,
+        episode: int | None = None,
+        language: str | None = None,
     ) -> TMDBResult | None:
         """Search for a TV show by title."""
         clean_title = clean_tv_title(title)
@@ -209,9 +233,12 @@ class TMDBClient:
                     overview = sd["overview"]
 
         return TMDBResult(
-            tmdb_id=r["id"], title=r.get("name", title),
-            overview=overview, poster_path=poster_path,
-            backdrop_path=r.get("backdrop_path"), release_date=r.get("first_air_date"),
+            tmdb_id=r["id"],
+            title=r.get("name", title),
+            overview=overview,
+            poster_path=poster_path,
+            backdrop_path=r.get("backdrop_path"),
+            release_date=r.get("first_air_date"),
             media_type="tv",
         )
 
@@ -239,11 +266,14 @@ class TMDBClient:
             content_rating = ratings[0].get("rating")
 
         return TVDetails(
-            tmdb_id=data["id"], title=data.get("name", ""),
-            overview=data.get("overview"), poster_path=data.get("poster_path"),
+            tmdb_id=data["id"],
+            title=data.get("name", ""),
+            overview=data.get("overview"),
+            poster_path=data.get("poster_path"),
             backdrop_path=data.get("backdrop_path"),
             first_air_date=data.get("first_air_date"),
-            genres=genres, vote_average=data.get("vote_average"),
+            genres=genres,
+            vote_average=data.get("vote_average"),
             content_rating=content_rating,
         )
 
@@ -256,19 +286,29 @@ class TMDBClient:
         members: list[CastMember] = []
         for p in data.get("cast", []):
             roles = p.get("roles", [])
-            members.append(CastMember(
-                id=p["id"], name=p.get("name", ""),
-                character=roles[0].get("character") if roles else None,
-                job=None, profile_path=p.get("profile_path"), order=p.get("order", 99),
-            ))
+            members.append(
+                CastMember(
+                    id=p["id"],
+                    name=p.get("name", ""),
+                    character=roles[0].get("character") if roles else None,
+                    job=None,
+                    profile_path=p.get("profile_path"),
+                    order=p.get("order", 99),
+                )
+            )
         for p in data.get("crew", []):
             jobs = p.get("jobs", [])
             job = jobs[0].get("job") if jobs else None
-            members.append(CastMember(
-                id=p["id"], name=p.get("name", ""), character=None,
-                job=job, profile_path=p.get("profile_path"),
-                order=100 + len(members),
-            ))
+            members.append(
+                CastMember(
+                    id=p["id"],
+                    name=p.get("name", ""),
+                    character=None,
+                    job=job,
+                    profile_path=p.get("profile_path"),
+                    order=100 + len(members),
+                )
+            )
         return members
 
     # --- Season / Episode ---
@@ -290,8 +330,10 @@ class TMDBClient:
             EpisodeInfo(
                 episode_number=ep.get("episode_number", 0),
                 name=ep.get("name", f"Episode {ep.get('episode_number', '?')}"),
-                overview=ep.get("overview"), still_path=ep.get("still_path"),
-                air_date=ep.get("air_date"), runtime=ep.get("runtime"),
+                overview=ep.get("overview"),
+                still_path=ep.get("still_path"),
+                air_date=ep.get("air_date"),
+                runtime=ep.get("runtime"),
             )
             for ep in data.get("episodes", [])
         ]
@@ -308,8 +350,10 @@ class TMDBClient:
         return EpisodeInfo(
             episode_number=ep.get("episode_number", episode_number),
             name=ep.get("name", f"Episode {episode_number}"),
-            overview=ep.get("overview"), still_path=ep.get("still_path"),
-            air_date=ep.get("air_date"), runtime=ep.get("runtime"),
+            overview=ep.get("overview"),
+            still_path=ep.get("still_path"),
+            air_date=ep.get("air_date"),
+            runtime=ep.get("runtime"),
         )
 
     # --- Images (no language filter to get all results) ---
@@ -334,13 +378,9 @@ class TMDBClient:
             "backdrops": _image_list(data.get("backdrops", [])),
         }
 
-    async def get_season_images(
-        self, tmdb_id: int, season_number: int
-    ) -> dict:
+    async def get_season_images(self, tmdb_id: int, season_number: int) -> dict:
         """Get available poster images for a specific season."""
-        data = await self._get(
-            f"/tv/{tmdb_id}/season/{season_number}/images", use_language=False
-        )
+        data = await self._get(f"/tv/{tmdb_id}/season/{season_number}/images", use_language=False)
         if not data:
             return {"posters": []}
         return {"posters": _image_list(data.get("posters", []))}

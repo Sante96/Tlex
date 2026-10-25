@@ -22,21 +22,14 @@ class SeasonPosterUpdateBody(BaseModel):
 @router.get("/{series_id}/season/{season_number}")
 async def get_season(session: DBSession, series_id: int, season_number: int) -> dict:
     """Get all episodes for a specific season."""
-    query = (
-        select(Series)
-        .where(Series.id == series_id)
-        .options(selectinload(Series.episodes))
-    )
+    query = select(Series).where(Series.id == series_id).options(selectinload(Series.episodes))
     result = await session.execute(query)
     series = result.scalar_one_or_none()
 
     if not series:
         raise HTTPException(status_code=404, detail="Series not found")
 
-    episodes = [
-        ep for ep in series.episodes
-        if ep.season_number == season_number
-    ]
+    episodes = [ep for ep in series.episodes if ep.season_number == season_number]
     episodes.sort(key=lambda e: e.episode_number or 0)
 
     if series.tmdb_id:
@@ -102,9 +95,7 @@ async def update_season(
 
 
 @router.get("/{series_id}/season/{season_number}/tmdb-images")
-async def get_season_tmdb_images(
-    session: DBSession, series_id: int, season_number: int
-) -> dict:
+async def get_season_tmdb_images(session: DBSession, series_id: int, season_number: int) -> dict:
     """Fetch available images from TMDB for a specific season."""
     query = select(Series).where(Series.id == series_id)
     result = await session.execute(query)

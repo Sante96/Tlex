@@ -27,6 +27,7 @@ class SeriesUpdateBody(BaseModel):
     backdrop_path: str | None = None
     first_air_date: str | None = None
 
+
 router = APIRouter()
 
 
@@ -103,11 +104,7 @@ async def get_series(
     current_user: User | None = Depends(get_current_user_optional),
 ) -> dict:
     """Get series details with seasons."""
-    query = (
-        select(Series)
-        .where(Series.id == series_id)
-        .options(selectinload(Series.episodes))
-    )
+    query = select(Series).where(Series.id == series_id).options(selectinload(Series.episodes))
     result = await session.execute(query)
     series = result.scalar_one_or_none()
 
@@ -155,8 +152,13 @@ async def get_series(
             ep_data["watch_progress"] = {
                 "position_seconds": wp.position_seconds,
                 "duration_seconds": wp.duration_seconds,
-                "progress_percent": round((wp.position_seconds / wp.duration_seconds * 100) if wp.duration_seconds else 0, 1),
-                "is_completed": wp.position_seconds >= wp.duration_seconds * 0.9 if wp.duration_seconds else False,
+                "progress_percent": round(
+                    (wp.position_seconds / wp.duration_seconds * 100) if wp.duration_seconds else 0,
+                    1,
+                ),
+                "is_completed": wp.position_seconds >= wp.duration_seconds * 0.9
+                if wp.duration_seconds
+                else False,
             }
 
         seasons_data[season_num]["episodes"].append(ep_data)
@@ -325,10 +327,7 @@ async def refresh_series_metadata(
     tmdb_result = await tmdb_client.search_tv(series.title, language=lang)
 
     if not tmdb_result:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No TMDB results found for: {series.title}"
-        )
+        raise HTTPException(status_code=404, detail=f"No TMDB results found for: {series.title}")
 
     # Update series metadata
     old_title = series.title
@@ -357,9 +356,7 @@ async def refresh_series_metadata(
     episodes = ep_result.scalars().all()
 
     # Group episodes by season to minimise TMDB requests
-    seasons_needed: set[int] = {
-        ep.season_number for ep in episodes if ep.season_number is not None
-    }
+    seasons_needed: set[int] = {ep.season_number for ep in episodes if ep.season_number is not None}
     tmdb_episodes: dict[tuple[int, int], str | None] = {}  # (season, ep) -> title
     tmdb_overviews: dict[tuple[int, int], str | None] = {}
 
@@ -386,7 +383,9 @@ async def refresh_series_metadata(
 
     await session.commit()
 
-    logger.info(f"Refreshed series metadata: '{old_title}' -> '{series.title}' ({updated_eps} episodes updated)")
+    logger.info(
+        f"Refreshed series metadata: '{old_title}' -> '{series.title}' ({updated_eps} episodes updated)"
+    )
 
     return {
         "message": f"Metadata refreshed for: {series.title}",

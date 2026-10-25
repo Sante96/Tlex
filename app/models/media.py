@@ -40,7 +40,9 @@ class Series(Base):
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
     vote_average: Mapped[float | None] = mapped_column(nullable=True)  # TMDB rating 0-10
     content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)  # e.g. "TV-MA"
-    season_posters: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {season_num: poster_path}
+    season_posters: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True
+    )  # {season_num: poster_path}
 
     # Relationships
     episodes: Mapped[list["MediaItem"]] = relationship(

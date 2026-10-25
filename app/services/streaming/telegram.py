@@ -108,7 +108,9 @@ async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
             logger.error(f"[BACKUP] No document in backup message {backup_message_id}")
             crash_record("refresh_file_id.no_doc", part_id=part.id, source="backup")
         else:
-            logger.debug(f"No backup mapping found for channel={part.channel_id} msg={part.message_id}")
+            logger.debug(
+                f"No backup mapping found for channel={part.channel_id} msg={part.message_id}"
+            )
     except Exception as e:
         crash_record("refresh_file_id.backup_error", part_id=part.id, error=str(e))
         logger.error(f"[BACKUP] Fallback refresh failed for part {part.part_index}: {e}")
@@ -118,9 +120,7 @@ async def refresh_file_id(part: MediaPart, client: Client) -> str | None:
     return None
 
 
-async def refresh_all_file_ids(
-    clients: list[Client], parts: list[MediaPart]
-) -> None:
+async def refresh_all_file_ids(clients: list[Client], parts: list[MediaPart]) -> None:
     """
     Pre-refresh all file_ids to prevent FileReferenceExpired during streaming.
 
@@ -183,9 +183,7 @@ async def refresh_all_file_ids(
         crash_record("refresh_all.done", parts=len(parts))
 
 
-async def ensure_file_ids_for_client(
-    parts: list[MediaPart], client: Client
-) -> None:
+async def ensure_file_ids_for_client(parts: list[MediaPart], client: Client) -> None:
     """
     Ensure all parts have valid file_ids for the specified client.
 

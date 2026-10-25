@@ -88,7 +88,9 @@ def find_cues_position(header: bytes, segment_data_start: int) -> int | None:
                 continue
             fields = {i: (o, s) for i, o, s in _children(header, seek_off, seek_off + seek_size)}
             if SEEK_ID_ID in fields and SEEK_POSITION_ID in fields:
-                target = int.from_bytes(header[fields[SEEK_ID_ID][0] : sum(fields[SEEK_ID_ID])], "big")
+                target = int.from_bytes(
+                    header[fields[SEEK_ID_ID][0] : sum(fields[SEEK_ID_ID])], "big"
+                )
                 if target == CUES_ID:
                     return read_uint(header, *fields[SEEK_POSITION_ID])
         break  # only the first SeekHead (at the start of the Segment) is in the header
@@ -122,7 +124,9 @@ def parse_subtitle_cues(cues: bytes, track_numbers: set[int]) -> dict[int, list[
     size, size_len = read_vint(cues, id_len)
     if elem_id != CUES_ID:
         return found
-    for point_id, point_off, point_size in _children(cues, id_len + size_len, id_len + size_len + size):
+    for point_id, point_off, point_size in _children(
+        cues, id_len + size_len, id_len + size_len + size
+    ):
         if point_id != CUE_POINT_ID:
             continue
         time = None
@@ -131,10 +135,12 @@ def parse_subtitle_cues(cues: bytes, track_numbers: set[int]) -> dict[int, list[
             if child_id == CUE_TIME_ID:
                 time = read_uint(cues, child_off, child_size)
             elif child_id == CUE_TRACK_POSITIONS_ID:
-                positions.append({
-                    i: read_uint(cues, o, s)
-                    for i, o, s in _children(cues, child_off, child_off + child_size)
-                })
+                positions.append(
+                    {
+                        i: read_uint(cues, o, s)
+                        for i, o, s in _children(cues, child_off, child_off + child_size)
+                    }
+                )
         for p in positions:
             track = p.get(CUE_TRACK_ID)
             if (
@@ -143,12 +149,14 @@ def parse_subtitle_cues(cues: bytes, track_numbers: set[int]) -> dict[int, list[
                 and CUE_CLUSTER_POSITION_ID in p
                 and CUE_RELATIVE_POSITION_ID in p
             ):
-                found[track].append(SubtitleCue(
-                    time=time,
-                    cluster_position=p[CUE_CLUSTER_POSITION_ID],
-                    relative_position=p[CUE_RELATIVE_POSITION_ID],
-                    duration=p.get(CUE_DURATION_ID),
-                ))
+                found[track].append(
+                    SubtitleCue(
+                        time=time,
+                        cluster_position=p[CUE_CLUSTER_POSITION_ID],
+                        relative_position=p[CUE_RELATIVE_POSITION_ID],
+                        duration=p.get(CUE_DURATION_ID),
+                    )
+                )
     return found
 
 
@@ -290,20 +298,13 @@ async def extract_via_cues(
         if not cluster_positions:
             return events, False
 
-        logger.info(
-            f"Direct MKV extraction: Found {len(cluster_positions)} clusters via Cues"
-        )
+        logger.info(f"Direct MKV extraction: Found {len(cluster_positions)} clusters via Cues")
 
         read_ranges = _build_read_ranges(cluster_positions)
-        logger.info(
-            f"Plan: {len(read_ranges)} HTTP requests for "
-            f"{len(cluster_positions)} clusters"
-        )
+        logger.info(f"Plan: {len(read_ranges)} HTTP requests for {len(cluster_positions)} clusters")
 
         # Parallel fetch + parse
-        events = await _parallel_fetch_and_parse(
-            reader, read_ranges, tracks, timecode_scale
-        )
+        events = await _parallel_fetch_and_parse(reader, read_ranges, tracks, timecode_scale)
         return events, True
 
     except Exception as e:
@@ -326,7 +327,7 @@ def _scan_chunk_sync(
     events: list[SubtitleEvent] = []
     offset = 0
     while offset < len(chunk_data) - 4:
-        if chunk_data[offset:offset + 4] == CLUSTER_SIGNATURE:
+        if chunk_data[offset : offset + 4] == CLUSTER_SIGNATURE:
             cluster_size, size_len = read_vint(chunk_data, offset + 4)
             end = offset + 4 + size_len + cluster_size
             if cluster_size > 50_000_000:  # corrupted VINT, not a real cluster
@@ -334,9 +335,7 @@ def _scan_chunk_sync(
                 continue
             if not last and (size_len == 0 or end > len(chunk_data)):
                 return events, offset
-            events.extend(
-                parse_cluster_for_subtitles(chunk_data, offset, tracks, timecode_scale)
-            )
+            events.extend(parse_cluster_for_subtitles(chunk_data, offset, tracks, timecode_scale))
             offset = end if size_len else offset + 1
         else:
             offset += 1
@@ -371,7 +370,8 @@ async def extract_via_scan(
             break
 
         chunk_events, stop = await loop.run_in_executor(
-            None, _scan_chunk_sync,
+            None,
+            _scan_chunk_sync,
             bytes(chunk_data),
             tracks,
             timecode_scale,
@@ -496,7 +496,7 @@ async def _parse_clusters_in_chunk(
 
     while curr_offset < len(chunk_data) - 4:
         try:
-            if chunk_data[curr_offset:curr_offset + 4] != CLUSTER_SIGNATURE:
+            if chunk_data[curr_offset : curr_offset + 4] != CLUSTER_SIGNATURE:
                 next_pos = chunk_data.find(CLUSTER_SIGNATURE, curr_offset + 1)
                 if next_pos != -1:
                     curr_offset = next_pos
@@ -511,7 +511,9 @@ async def _parse_clusters_in_chunk(
 
             cluster_size, size_len = read_vint(chunk_data, size_pos)
             if cluster_size > 50_000_000:  # 50 MB hard cap — corrupted VINT guard
-                logger.debug(f"Skipping oversized cluster ({cluster_size} bytes) at {abs_start + curr_offset}")
+                logger.debug(
+                    f"Skipping oversized cluster ({cluster_size} bytes) at {abs_start + curr_offset}"
+                )
                 curr_offset += 1
                 continue
             full_cluster_end = size_pos + size_len + cluster_size
@@ -535,9 +537,12 @@ async def _parse_clusters_in_chunk(
                 try:
                     loop = asyncio.get_running_loop()
                     cluster_events = await loop.run_in_executor(
-                        None, parse_cluster_for_subtitles,
+                        None,
+                        parse_cluster_for_subtitles,
                         bytes(c_data),
-                        0, tracks, timecode_scale,
+                        0,
+                        tracks,
+                        timecode_scale,
                     )
                     if cluster_events:
                         events.extend(cluster_events)

@@ -100,9 +100,7 @@ def parse_tracks(data: bytes) -> list[MkvSubtitleTrack]:
     return []
 
 
-def _parse_tracks_content(
-    data: bytes, offset: int, size: int
-) -> list[MkvSubtitleTrack]:
+def _parse_tracks_content(data: bytes, offset: int, size: int) -> list[MkvSubtitleTrack]:
     """Parse the content of a Tracks element."""
     tracks_end = offset + size
     subtitle_tracks: list[MkvSubtitleTrack] = []
@@ -128,9 +126,7 @@ def _parse_tracks_content(
     return subtitle_tracks
 
 
-def _parse_track_entry(
-    data: bytes, offset: int, size: int
-) -> MkvSubtitleTrack | None:
+def _parse_track_entry(data: bytes, offset: int, size: int) -> MkvSubtitleTrack | None:
     """Parse a single TrackEntry element."""
     end = offset + size
 
@@ -155,9 +151,9 @@ def _parse_track_entry(
         elif elem_id == TRACK_TYPE_ID:
             track_type = read_uint(data, offset, elem_size)
         elif elem_id == CODEC_ID_ID:
-            codec_id = data[offset:offset + elem_size].decode("utf-8", errors="ignore")
+            codec_id = data[offset : offset + elem_size].decode("utf-8", errors="ignore")
         elif elem_id == CODEC_PRIVATE_ID:
-            codec_private = data[offset:offset + elem_size]
+            codec_private = data[offset : offset + elem_size]
 
         offset += elem_size
 
@@ -222,9 +218,7 @@ def parse_cluster_for_subtitles(
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
                 events.append(event)
         elif elem_id == BLOCK_GROUP_ID:
-            bg_events = _parse_block_group(
-                data, offset, elem_size, cluster_timecode, tracks
-            )
+            bg_events = _parse_block_group(data, offset, elem_size, cluster_timecode, tracks)
             for event in bg_events:
                 event.timestamp_ms = int((event.timestamp_ms * timecode_scale) / 1_000_000)
                 # BlockDuration is in the same timestamp units as the block time
@@ -261,7 +255,7 @@ def _parse_block(
         relative_time = relative_time - 0x10000
 
     data_offset = rel_offset + 3
-    payload = data[data_offset:offset + size]
+    payload = data[data_offset : offset + size]
 
     return SubtitleEvent(
         timestamp_ms=max(0, cluster_timecode + relative_time),
@@ -296,9 +290,7 @@ def _parse_block_group(
         offset += size_len
 
         if elem_id == BLOCK_ID:
-            block_event = _parse_block(
-                data, offset, elem_size, cluster_timecode, tracks
-            )
+            block_event = _parse_block(data, offset, elem_size, cluster_timecode, tracks)
         elif elem_id == 0x9B:  # BlockDuration
             duration = read_uint(data, offset, elem_size)
 

@@ -107,7 +107,8 @@ class SubtitleExtractor:
 
         # Filter font attachments
         font_attachments = [
-            att for att in attachments
+            att
+            for att in attachments
             if any(ext in att.get("file_name", "").lower() for ext in [".ttf", ".otf", ".woff"])
         ]
 

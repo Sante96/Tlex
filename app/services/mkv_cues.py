@@ -44,26 +44,57 @@ def read_vint(data: bytes | bytearray, offset: int) -> tuple[int, int]:
     elif first_byte & 0x10:  # 4 bytes
         if offset + 3 >= len(data):
             return 0, 0
-        return ((first_byte & 0x0F) << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3], 4
+        return ((first_byte & 0x0F) << 24) | (data[offset + 1] << 16) | (
+            data[offset + 2] << 8
+        ) | data[offset + 3], 4
     elif first_byte & 0x08:  # 5 bytes
         if offset + 4 >= len(data):
             return 0, 0
-        val = ((first_byte & 0x07) << 32) | (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4]
+        val = (
+            ((first_byte & 0x07) << 32)
+            | (data[offset + 1] << 24)
+            | (data[offset + 2] << 16)
+            | (data[offset + 3] << 8)
+            | data[offset + 4]
+        )
         return val, 5
     elif first_byte & 0x04:  # 6 bytes
         if offset + 5 >= len(data):
             return 0, 0
-        val = ((first_byte & 0x03) << 40) | (data[offset + 1] << 32) | (data[offset + 2] << 24) | (data[offset + 3] << 16) | (data[offset + 4] << 8) | data[offset + 5]
+        val = (
+            ((first_byte & 0x03) << 40)
+            | (data[offset + 1] << 32)
+            | (data[offset + 2] << 24)
+            | (data[offset + 3] << 16)
+            | (data[offset + 4] << 8)
+            | data[offset + 5]
+        )
         return val, 6
     elif first_byte & 0x02:  # 7 bytes
         if offset + 6 >= len(data):
             return 0, 0
-        val = ((first_byte & 0x01) << 48) | (data[offset + 1] << 40) | (data[offset + 2] << 32) | (data[offset + 3] << 24) | (data[offset + 4] << 16) | (data[offset + 5] << 8) | data[offset + 6]
+        val = (
+            ((first_byte & 0x01) << 48)
+            | (data[offset + 1] << 40)
+            | (data[offset + 2] << 32)
+            | (data[offset + 3] << 24)
+            | (data[offset + 4] << 16)
+            | (data[offset + 5] << 8)
+            | data[offset + 6]
+        )
         return val, 7
     elif first_byte & 0x01:  # 8 bytes
         if offset + 7 >= len(data):
             return 0, 0
-        val = (data[offset + 1] << 48) | (data[offset + 2] << 40) | (data[offset + 3] << 32) | (data[offset + 4] << 24) | (data[offset + 5] << 16) | (data[offset + 6] << 8) | data[offset + 7]
+        val = (
+            (data[offset + 1] << 48)
+            | (data[offset + 2] << 40)
+            | (data[offset + 3] << 32)
+            | (data[offset + 4] << 24)
+            | (data[offset + 5] << 16)
+            | (data[offset + 6] << 8)
+            | data[offset + 7]
+        )
         return val, 8
 
     return 0, 0
@@ -93,7 +124,9 @@ def read_element_id(data: bytes | bytearray, offset: int) -> tuple[int, int]:
     elif first_byte & 0x10:  # 4 byte ID
         if offset + 3 >= len(data):
             return 0, 0
-        return (first_byte << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3], 4
+        return (first_byte << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[
+            offset + 3
+        ], 4
 
     return 0, 0
 

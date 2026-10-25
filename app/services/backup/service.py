@@ -19,6 +19,5 @@ class BackupService(BackupSyncMixin, BackupMembersMixin):
     """
 
 
-
 # Singleton
 backup_service = BackupService()

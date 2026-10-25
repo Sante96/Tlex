@@ -28,7 +28,9 @@ class BackupChannel(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     synced_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    topic_map: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)  # {str(main_topic_id): backup_topic_id}
+    topic_map: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, default=None
+    )  # {str(main_topic_id): backup_topic_id}
     # Health / failover
     failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_failures: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
@@ -62,9 +64,9 @@ class BackupMessage(Base):
     backup_message_id: Mapped[int] = mapped_column(Integer, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
-    backup_channel: Mapped["BackupChannel"] = relationship("BackupChannel", back_populates="messages")
+    backup_channel: Mapped["BackupChannel"] = relationship(
+        "BackupChannel", back_populates="messages"
+    )
 
     def __repr__(self) -> str:
-        return (
-            f"<BackupMessage(main_msg={self.main_message_id} -> backup_msg={self.backup_message_id})>"
-        )
+        return f"<BackupMessage(main_msg={self.main_message_id} -> backup_msg={self.backup_message_id})>"

@@ -88,7 +88,13 @@ class ScannerService:
 
             for topic in topics:
                 await self._scan_topic(
-                    session, client, channel_id, topic["id"], limit, stats, topic_name=topic["title"]
+                    session,
+                    client,
+                    channel_id,
+                    topic["id"],
+                    limit,
+                    stats,
+                    topic_name=topic["title"],
                 )
 
         except Exception as e:

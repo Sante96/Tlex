@@ -68,30 +68,44 @@ class FFmpegRemuxer:
             "-hide_banner",
             "-loglevel",
             "warning",
-            "-probesize", probe_size,
-            "-analyzeduration", analyze_duration,
-            "-seekable", "1",
+            "-probesize",
+            probe_size,
+            "-analyzeduration",
+            analyze_duration,
+            "-seekable",
+            "1",
         ]
 
         # Seek configuration: use pre_seek_time before input for fast demuxer seek
         # This seeks BEFORE the target keyframe to give network time to deliver data
-        pre_seek = options.pre_seek_time if options.pre_seek_time is not None else options.start_time
+        pre_seek = (
+            options.pre_seek_time if options.pre_seek_time is not None else options.start_time
+        )
         if pre_seek is not None and pre_seek > 0:
-            cmd.extend([
-                "-ss", str(pre_seek),
-            ])
+            cmd.extend(
+                [
+                    "-ss",
+                    str(pre_seek),
+                ]
+            )
 
         # HTTP input options
-        cmd.extend([
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            # genpts: Generate PTS if missing (crucial for container formats)
-            # discardcorrupt: Drop bad packets to prevent sync issues
-            "-fflags", "+genpts+discardcorrupt",
-            "-i",
-            input_url,
-        ])
+        cmd.extend(
+            [
+                "-reconnect",
+                "1",
+                "-reconnect_streamed",
+                "1",
+                "-reconnect_delay_max",
+                "5",
+                # genpts: Generate PTS if missing (crucial for container formats)
+                # discardcorrupt: Drop bad packets to prevent sync issues
+                "-fflags",
+                "+genpts+discardcorrupt",
+                "-i",
+                input_url,
+            ]
+        )
 
         # Accurate seek AFTER input - this ensures A/V sync
         # Trim to the actual keyframe position (relative to pre_seek)
@@ -99,13 +113,19 @@ class FFmpegRemuxer:
             # Calculate offset from pre_seek to actual start
             trim_offset = options.start_time - (pre_seek if pre_seek else 0)
             if trim_offset > 0:
-                cmd.extend([
-                    "-ss", str(trim_offset),
-                ])
+                cmd.extend(
+                    [
+                        "-ss",
+                        str(trim_offset),
+                    ]
+                )
             else:
-                cmd.extend([
-                    "-ss", "0",
-                ])
+                cmd.extend(
+                    [
+                        "-ss",
+                        "0",
+                    ]
+                )
 
         # Video: copy (no transcode)
         cmd.extend(
@@ -133,11 +153,14 @@ class FFmpegRemuxer:
         cmd.extend(
             [
                 # Handle negative timestamps by shifting to zero
-                "-avoid_negative_ts", "make_zero",
-                "-max_interleave_delta", "0",
+                "-avoid_negative_ts",
+                "make_zero",
+                "-max_interleave_delta",
+                "0",
                 "-movflags",
                 "frag_keyframe+empty_moov+default_base_moof+faststart",
-                "-flush_packets", "1",
+                "-flush_packets",
+                "1",
                 "-f",
                 "mp4",
                 "-",  # Output to stdout
@@ -188,7 +211,9 @@ class FFmpegRemuxer:
         # No "kill the previous process for this URL": the URL is the same for every
         # viewer of a media, so that killed other people's streams. Each request
         # kills its own ffmpeg on disconnect (CancelledError / finally below).
-        logger.info(f"[FFMPEG] Starting remux for {input_url} (seek={options.start_time}, audio={options.audio_stream})")
+        logger.info(
+            f"[FFMPEG] Starting remux for {input_url} (seek={options.start_time}, audio={options.audio_stream})"
+        )
 
         process = subprocess.Popen(
             cmd,
@@ -222,7 +247,9 @@ class FFmpegRemuxer:
 
             if process.returncode != 0:
                 stderr = b"".join(stderr_tail).decode(errors="replace")
-                logger.error(f"[FFMPEG] PID={process.pid} error (code {process.returncode}): {stderr}")
+                logger.error(
+                    f"[FFMPEG] PID={process.pid} error (code {process.returncode}): {stderr}"
+                )
             else:
                 logger.info(f"[FFMPEG] PID={process.pid} finished OK")
 

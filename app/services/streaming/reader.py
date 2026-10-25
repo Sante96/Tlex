@@ -42,7 +42,9 @@ def _reclaim_spare_client() -> bool:
     if donor is None:
         return False
     worker_manager.release_clients([donor._clients.pop()])
-    logger.info(f"[STREAM] Reclaimed a client from a stream for a new viewer ({len(donor._clients)} left)")
+    logger.info(
+        f"[STREAM] Reclaimed a client from a stream for a new viewer ({len(donor._clients)} left)"
+    )
     return True
 
 
@@ -168,8 +170,7 @@ class VirtualStreamReader:
         released = self._clients.pop()
         worker_manager.release_clients([released])
         logger.info(
-            f"[STREAM] Scale-down: now {len(self._clients)} clients "
-            f"(pool pressure {pressure:.0%})"
+            f"[STREAM] Scale-down: now {len(self._clients)} clients (pool pressure {pressure:.0%})"
         )
 
     async def _swap_throttled(self) -> bool:
@@ -325,7 +326,10 @@ class VirtualStreamReader:
                     return
                 # ffmpeg and browsers keep one request open for a whole film: recheck the
                 # clients here too, not only when a request starts
-                if not self._batch_mode_active and time.monotonic() - last_rebalance >= REBALANCE_SECONDS:
+                if (
+                    not self._batch_mode_active
+                    and time.monotonic() - last_rebalance >= REBALANCE_SECONDS
+                ):
                     last_rebalance = time.monotonic()
                     self._try_scale_down()
                     await self._try_scale_up()
