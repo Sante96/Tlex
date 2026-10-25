@@ -414,5 +414,11 @@
     "poolWarning": "Connessione lenta",
     "noClientsWarning": "Nessun client disponibile. Lo streaming potrebbe non avviarsi.",
     "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento."
+  },
+  "errors": {
+    "crashTitle": "Qualcosa è andato storto",
+    "crashText": "Questa pagina ha avuto un problema. Riprova, o torna alla home.",
+    "notFoundTitle": "Pagina non trovata",
+    "notFoundText": "L'indirizzo non corrisponde a nessuna pagina."
   }
 }

@@ -414,5 +414,11 @@
     "poolWarning": "Slow connection",
     "noClientsWarning": "No clients available. Streaming may not start.",
     "highPressureWarning": "Client pool almost full. Streaming may be slower."
+  },
+  "errors": {
+    "crashTitle": "Something went wrong",
+    "crashText": "This page ran into a problem. Try again, or go back home.",
+    "notFoundTitle": "Page not found",
+    "notFoundText": "That address doesn't match any page."
   }
 }

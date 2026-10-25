@@ -12,8 +12,18 @@ import {
 } from "@/lib/api";
 import { cleanEpisodeTitle } from "@/lib/format";
 import { useProfile } from "@/contexts/profile-context";
+import { AuthGuard } from "@/components/auth-guard";
 
+// The player lives outside the (main) layout and its AuthGuard
 export default function WatchPage() {
+  return (
+    <AuthGuard>
+      <Watch />
+    </AuthGuard>
+  );
+}
+
+function Watch() {
   const params = useParams();
   const router = useRouter();
   const mediaId = Number(params.id);
