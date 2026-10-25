@@ -6,7 +6,6 @@ import asyncio
 import json
 import subprocess
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -82,13 +81,10 @@ class SubtitleExtractor:
         # Analyze with mkvmerge -J
         probe_cmd = [self._mkvmerge_path, "-J", str(header_file)]
 
-        def run_probe():
-            return subprocess.run(probe_cmd, capture_output=True, timeout=10)
-
         try:
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                result = await loop.run_in_executor(executor, run_probe)
+            result = await asyncio.to_thread(
+                subprocess.run, probe_cmd, capture_output=True, timeout=10
+            )
         except Exception as e:
             logger.warning(f"MKV probe failed: {e}")
             return []
@@ -124,14 +120,9 @@ class SubtitleExtractor:
             filename = safe_font_filename(att.get("file_name"), att_id)
             extract_cmd.append(f"{att_id}:{tmp_path / filename}")
 
-        def run_extract():
-            return subprocess.run(extract_cmd, capture_output=True, timeout=10)
-
         try:
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                # check=False - ignore errors as file is truncated
-                await loop.run_in_executor(executor, run_extract)
+            # check=False - ignore errors as file is truncated
+            await asyncio.to_thread(subprocess.run, extract_cmd, capture_output=True, timeout=10)
         except Exception as e:
             logger.warning(f"Font extraction failed: {e}")
             return []
