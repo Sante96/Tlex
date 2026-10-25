@@ -91,6 +91,9 @@ export function Sidebar() {
   return (
     <motion.aside
       className="hidden md:flex fixed left-0 top-0 h-screen flex-col z-40 overflow-hidden"
+      // Mounted at its saved width: it grew or shrank from its content's width on every
+      // reload and profile switch
+      initial={false}
       animate={{ width: sidebarWidth }}
       transition={collapsed
         ? { duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: 0.1 }

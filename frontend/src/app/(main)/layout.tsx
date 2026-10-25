@@ -65,6 +65,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
 
   return (
     <motion.div
+      initial={false}
       animate={{ marginLeft }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
