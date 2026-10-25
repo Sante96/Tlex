@@ -25,13 +25,24 @@ async def get_watchlist(
     result = await session.execute(query)
     watchlist_rows = result.scalars().all()
 
+    # Two queries for the whole list instead of one per entry
+    media_ids = [wl.media_item_id for wl in watchlist_rows if wl.media_item_id]
+    series_ids = [wl.series_id for wl in watchlist_rows if wl.series_id]
+    media_by_id = {
+        m.id: m
+        for m in (
+            await session.execute(select(MediaItem).where(MediaItem.id.in_(media_ids)))
+        ).scalars()
+    }
+    series_by_id = {
+        s.id: s
+        for s in (await session.execute(select(Series).where(Series.id.in_(series_ids)))).scalars()
+    }
+
     items: list[WatchlistMediaResponse] = []
     for wl in watchlist_rows:
         if wl.media_item_id:
-            media_result = await session.execute(
-                select(MediaItem).where(MediaItem.id == wl.media_item_id)
-            )
-            media = media_result.scalar_one_or_none()
+            media = media_by_id.get(wl.media_item_id)
             if media:
                 items.append(
                     WatchlistMediaResponse(
@@ -46,8 +57,7 @@ async def get_watchlist(
                     )
                 )
         elif wl.series_id:
-            series_result = await session.execute(select(Series).where(Series.id == wl.series_id))
-            series = series_result.scalar_one_or_none()
+            series = series_by_id.get(wl.series_id)
             if series:
                 items.append(
                     WatchlistMediaResponse(

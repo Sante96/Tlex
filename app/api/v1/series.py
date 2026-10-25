@@ -50,18 +50,26 @@ async def list_series(
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
-    # Get series with episode counts
-    query = (
-        select(Series)
-        .options(selectinload(Series.episodes))
-        .offset(offset)
-        .limit(page_size)
-        .order_by(Series.title)
-    )
+    query = select(Series).offset(offset).limit(page_size).order_by(Series.title)
     if search:
         query = query.where(Series.title.ilike(f"%{search}%"))
     result = await session.execute(query)
     series_list = result.scalars().all()
+
+    # Season/episode counts in SQL, instead of loading every episode just to count it.
+    # Seasons as Series.seasons counts them: distinct, ignoring None and 0
+    counts_result = await session.execute(
+        select(
+            MediaItem.series_id,
+            func.count(func.distinct(func.nullif(MediaItem.season_number, 0))),
+            func.count(MediaItem.id),
+        )
+        .where(MediaItem.series_id.in_([s.id for s in series_list]))
+        .group_by(MediaItem.series_id)
+    )
+    counts = {
+        series_id: (seasons, episodes) for series_id, seasons, episodes in counts_result.all()
+    }
 
     # Fetch per-user overrides
     overrides_map: dict = {}
@@ -83,8 +91,8 @@ async def list_series(
             "genres": s.genres.split(",") if s.genres else [],
             "vote_average": s.vote_average,
             "content_rating": s.content_rating,
-            "seasons_count": s.seasons_count,
-            "episodes_count": s.episodes_count,
+            "seasons_count": counts.get(s.id, (0, 0))[0],
+            "episodes_count": counts.get(s.id, (0, 0))[1],
         }
         apply_series_override(item_data, overrides_map.get(s.id))
         items.append(item_data)

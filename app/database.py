@@ -63,6 +63,12 @@ SCHEMA_UPGRADES = (
     " WHERE a.user_id = b.user_id AND a.media_item_id = b.media_item_id AND a.id < b.id",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_progress_user_media"
     " ON watch_progress (user_id, media_item_id)",
+    # PostgreSQL doesn't index foreign keys: every parts/streams/episodes load scanned
+    # the whole table. Same names as the models' index=True, so new databases match.
+    "CREATE INDEX IF NOT EXISTS ix_media_items_series_id ON media_items (series_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_parts_media_item_id ON media_parts (media_item_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_streams_media_item_id ON media_streams (media_item_id)",
+    "CREATE INDEX IF NOT EXISTS ix_media_parts_channel_message ON media_parts (channel_id, message_id)",
 )
 
 

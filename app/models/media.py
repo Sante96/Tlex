@@ -3,7 +3,18 @@
 import enum
 from datetime import date
 
-from sqlalchemy import JSON, BigInteger, Boolean, Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Date,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -93,7 +104,7 @@ class MediaItem(Base):
 
     # For episodes - link to series
     series_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("series.id", ondelete="CASCADE"), nullable=True
+        Integer, ForeignKey("series.id", ondelete="CASCADE"), nullable=True, index=True
     )
     season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -120,10 +131,12 @@ class MediaPart(Base):
     """Virtual file system - handles split files (>4GB)."""
 
     __tablename__ = "media_parts"
+    # The scanner looks parts up by their Telegram message, the failover by channel
+    __table_args__ = (Index("ix_media_parts_channel_message", "channel_id", "message_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     media_item_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True
     )
     telegram_file_id: Mapped[str] = mapped_column(String(255), nullable=False)
     part_index: Mapped[int] = mapped_column(Integer, nullable=False)  # 0, 1, 2...
@@ -158,7 +171,7 @@ class MediaStream(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     media_item_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True
     )
     stream_index: Mapped[int] = mapped_column(Integer, nullable=False)  # FFmpeg index
     codec_type: Mapped[CodecType] = mapped_column(Enum(CodecType), nullable=False)
