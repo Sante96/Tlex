@@ -1,5 +1,6 @@
 """Tests for the streaming pipeline (cache, reader, manager)."""
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -231,8 +232,21 @@ class TestFindPartForOffset:
 # ---------------------------------------------------------------------------
 
 
+def chunk_bytes(part, index: int) -> bytes:
+    """Deterministic content of a part's 1 MB chunk (shorter at the part's end)."""
+    mb = 1024 * 1024
+    return bytes([(part.part_index * 31 + index) % 256]) * min(mb, part.file_size - index * mb)
+
+
+def file_bytes(parts) -> bytes:
+    mb = 1024 * 1024
+    return b"".join(
+        chunk_bytes(p, i) for p in parts for i in range((p.file_size + mb - 1) // mb)
+    )
+
+
 class TestReadRangeByteCalculations:
-    """read_range() — clamping, part dispatch, and client round-robin."""
+    """read_range() — clamping, part dispatch, in-order pipelining, client round-robin."""
 
     MB = 1024 * 1024
 
@@ -270,6 +284,15 @@ class TestReadRangeByteCalculations:
 
         return reader, mock_client, part0, part1
 
+    def _fetch(self, mocker, calls: list, delay=None):
+        async def fake_fetch_chunk(client, part, index):
+            calls.append((client, part.part_index, index))
+            if delay:
+                await asyncio.sleep(delay(part, index))
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
+
     async def _collect(self, gen):
         chunks = []
         async for chunk in gen:
@@ -277,30 +300,20 @@ class TestReadRangeByteCalculations:
         return b"".join(chunks)
 
     async def test_clamps_negative_start(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+        reader, _, part0, part1 = patched_reader
         calls = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            calls.append((part.part_index, offset, length))
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        self._fetch(mocker, calls)
 
         data = await self._collect(reader.read_range(-100))
-        assert len(data) > 0
-        assert calls[0][1] == 0  # first call offset clamped to 0
+        assert data == file_bytes([part0, part1])
+        assert calls[0][1:] == (0, 0)  # starts at part 0, chunk 0
 
     async def test_clamps_end_beyond_total(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
-        total_size = reader.total_size
+        reader, *_ = patched_reader
+        self._fetch(mocker, [])
 
-        async def mock_stream_part(client, part, offset, length, *, is_force_released):
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=mock_stream_part)
-
-        data = await self._collect(reader.read_range(0, total_size + 9999))
-        assert len(data) == total_size
+        data = await self._collect(reader.read_range(0, reader.total_size + 9999))
+        assert len(data) == reader.total_size
 
     async def test_empty_range_yields_nothing(self, patched_reader):
         reader, *_ = patched_reader
@@ -313,98 +326,118 @@ class TestReadRangeByteCalculations:
         assert data == b""
 
     async def test_single_part_full_read(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+        reader, _, part0, _ = patched_reader
         calls = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            calls.append((part.part_index, offset, length))
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        self._fetch(mocker, calls)
 
         data = await self._collect(reader.read_range(0, self.MB))
-        assert len(calls) == 1
-        assert calls[0] == (0, 0, self.MB)
+        assert [c[1:] for c in calls] == [(0, 0)]
+        assert data == chunk_bytes(part0, 0)
 
     async def test_single_part_partial_read(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+        reader, _, part0, _ = patched_reader
         calls = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            calls.append((part.part_index, offset, length))
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        self._fetch(mocker, calls)
 
         data = await self._collect(reader.read_range(100, 900))
-        assert len(calls) == 1
-        assert calls[0] == (0, 100, 800)
+        assert [c[1:] for c in calls] == [(0, 0)]
+        assert data == chunk_bytes(part0, 0)[100:900]
 
-    async def test_cross_part_boundary_calls_two_parts(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+    async def test_cross_part_read_slices_both_parts(self, mocker, patched_reader):
+        reader, _, part0, part1 = patched_reader
         calls = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            calls.append(part.part_index)
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
-
-        # Read spans from 512KB (in part0) to 1MB+512KB (in part1)
-        await self._collect(reader.read_range(self.MB // 2, self.MB + self.MB // 2))
-        assert len(calls) == 2
-
-    async def test_cross_part_correct_offsets(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
-        calls = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            calls.append((part.part_index, offset, length))
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        self._fetch(mocker, calls)
 
         half = self.MB // 2
-        await self._collect(reader.read_range(half, self.MB + half))
-
-        assert calls[0] == (0, half, half)   # part0: local_offset=512KB, length=512KB
-        assert calls[1] == (1, 0, half)       # part1: local_offset=0, length=512KB
+        data = await self._collect(reader.read_range(half, self.MB + half))
+        assert [c[1:] for c in calls] == [(0, 0), (1, 0)]
+        assert data == chunk_bytes(part0, 0)[half:] + chunk_bytes(part1, 0)[:half]
 
     async def test_active_streams_incremented_and_decremented(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+        reader, *_ = patched_reader
         active_during = []
 
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
+        async def fake_fetch_chunk(client, part, index):
             active_during.append(reader._active_streams)
-            yield b"x" * length
+            return chunk_bytes(part, index)
 
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
 
         await self._collect(reader.read_range(0, 100))
         assert active_during[0] == 1  # counter incremented during streaming
         assert reader._active_streams == 0  # decremented after completion
 
     async def test_round_robin_client_used(self, mocker, patched_reader):
-        reader, mock_client, part0, part1 = patched_reader
+        reader, mock_client, *_ = patched_reader
         mock_client2 = MagicMock()
 
         # Inject two clients directly; persistent=True keeps them between calls
         reader._clients = [mock_client, mock_client2]
         reader._persistent = True
-
-        used_clients = []
-
-        async def capturing_stream_part(client, part, offset, length, *, is_force_released):
-            used_clients.append(client)
-            yield b"x" * length
-
-        mocker.patch("app.services.streaming.reader.stream_part", new=capturing_stream_part)
+        calls = []
+        self._fetch(mocker, calls)
 
         await self._collect(reader.read_range(0, 100))
         await self._collect(reader.read_range(0, 100))
 
-        assert used_clients[0] is mock_client   # rr_counter=0 → clients[0]
-        assert used_clients[1] is mock_client2  # rr_counter=1 → clients[1]
+        assert calls[0][0] is mock_client   # rr_counter=0 → clients[0]
+        assert calls[1][0] is mock_client2  # rr_counter=1 → clients[1]
+
+    async def test_chunks_download_in_parallel_and_come_out_in_order(self, mocker):
+        # 10 chunks, 2 clients: up to 8 in flight, answers arriving out of order
+        parts = [make_part(0, 0, 10 * self.MB - 123)]
+        reader = make_reader(parts)
+        reader._clients = [MagicMock(), MagicMock()]
+        reader._persistent = True
+        mocker.patch("app.services.streaming.reader.worker_manager.pool_pressure", return_value=0.0)
+        mocker.patch(
+            "app.services.streaming.reader.worker_manager.try_acquire_one",
+            new_callable=AsyncMock,
+            return_value=None,
+        )
+        mocker.patch("app.services.streaming.reader.refresh_all_file_ids", new_callable=AsyncMock)
+        mocker.patch("app.services.streaming.reader.ensure_file_ids_for_client", new_callable=AsyncMock)
+
+        in_flight = peak = 0
+
+        async def fake_fetch_chunk(client, part, index):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0.01 * ((7 * index) % 5))
+            in_flight -= 1
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
+
+        data = await self._collect(reader.read_range(5, 10 * self.MB - 200))
+        assert data == file_bytes(parts)[5 : 10 * self.MB - 200]
+        assert peak == 8
+
+    async def test_closing_the_stream_cancels_downloads_in_flight(self, mocker, patched_reader):
+        reader, *_ = patched_reader
+        started, cancelled = [], []
+
+        async def fake_fetch_chunk(client, part, index):
+            started.append((part.part_index, index))
+            if (part.part_index, index) != (0, 0):
+                try:
+                    await asyncio.sleep(10)
+                except asyncio.CancelledError:
+                    cancelled.append((part.part_index, index))
+                    raise
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fake_fetch_chunk)
+
+        gen = reader.read_range(0, reader.total_size)
+        await gen.__anext__()  # first chunk handed out, the next one still downloading
+        await gen.aclose()
+        await asyncio.sleep(0)
+
+        assert started == [(0, 0), (1, 0)]
+        assert cancelled == [(1, 0)]
+        assert reader._active_streams == 0
 
 
 # ---------------------------------------------------------------------------
@@ -536,3 +569,111 @@ class TestManagerGetVirtualReader:
         await cleanup_stale_readers()
 
         assert media.id not in manager_module._reader_cache
+
+
+# ---------------------------------------------------------------------------
+# TestFetchChunk — direct GetFile with Telegram's errors handled one by one
+# ---------------------------------------------------------------------------
+
+
+class FakeSession:
+    """A media session answering GetFile from a script of responses."""
+
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.requests = []
+        self.stopped = False
+
+    async def invoke(self, query, sleep_threshold=None):
+        from pyrogram import raw
+
+        self.requests.append((query.location.file_reference, query.offset, query.limit))
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return raw.types.upload.File(type=raw.types.storage.FileUnknown(), mtime=0, bytes=r)
+
+    async def stop(self):
+        self.stopped = True
+
+
+def encoded_file_id(reference: bytes) -> str:
+    from pyrogram.file_id import FileId, FileType
+
+    return FileId(
+        file_type=FileType.DOCUMENT, dc_id=4, media_id=1, access_hash=2, file_reference=reference
+    ).encode()
+
+
+class TestFetchChunk:
+    MB = 1024 * 1024
+
+    @pytest.fixture
+    def setup(self, mocker):
+        from app.services.streaming import download
+
+        sleep = mocker.patch.object(download.asyncio, "sleep", new_callable=AsyncMock)
+        part = make_part(900 + len(cache_module._FILE_ID_CACHE), 0, 3 * self.MB)
+        part.telegram_file_id = encoded_file_id(b"old")
+        client = MagicMock(sleep_threshold=10)
+        return download, part, client, sleep
+
+    async def test_reads_the_chunk_and_caches_it(self, setup):
+        download, part, client, _ = setup
+        session = FakeSession(b"a" * self.MB)
+        client.media_sessions = {4: session}
+
+        assert await download.fetch_chunk(client, part, 2) == b"a" * self.MB
+        assert await download.fetch_chunk(client, part, 2) == b"a" * self.MB  # from the cache
+        assert session.requests == [(b"old", 2 * self.MB, self.MB)]
+
+    async def test_expired_reference_is_refreshed_at_once(self, setup, mocker):
+        from pyrogram.errors import FileReferenceExpired
+
+        download, part, client, sleep = setup
+        session = FakeSession(FileReferenceExpired(), b"b")
+        client.media_sessions = {4: session}
+        mocker.patch.object(download, "refresh_file_id", AsyncMock(return_value=encoded_file_id(b"new")))
+
+        assert await download.fetch_chunk(client, part, 0) == b"b"
+        assert [r[0] for r in session.requests] == [b"old", b"new"]
+        sleep.assert_not_awaited()
+
+    async def test_flood_wait_is_waited_out(self, setup):
+        from pyrogram.errors import FloodWait
+
+        download, part, client, sleep = setup
+        client.media_sessions = {4: FakeSession(FloodWait(value=7), b"c")}
+
+        assert await download.fetch_chunk(client, part, 0) == b"c"
+        sleep.assert_awaited_once_with(7)
+
+    async def test_dead_connection_is_dropped_and_reopened_by_pyrogram(self, setup):
+        download, part, client, _ = setup
+        dead = FakeSession(OSError("Connection lost"))
+        client.media_sessions = {4: dead}
+        opened = []
+
+        async def stream_media(file_id, offset, limit):
+            opened.append((offset, limit))
+            client.media_sessions[4] = FakeSession()  # what get_file does on first use
+            yield b"d"
+
+        client.stream_media = stream_media
+
+        assert await download.fetch_chunk(client, part, 1) == b"d"
+        assert dead.stopped and client.media_sessions[4] is not dead
+        assert opened == [(1, 1)]
+
+    async def test_gives_up_after_max_attempts(self, setup):
+        download, part, client, _ = setup
+        client.media_sessions = {}
+
+        async def stream_media(file_id, offset, limit):
+            return
+            yield  # get_file swallowed the error: no data
+
+        client.stream_media = stream_media
+
+        with pytest.raises(RuntimeError, match="after 5 attempts"):
+            await download.fetch_chunk(client, part, 0)

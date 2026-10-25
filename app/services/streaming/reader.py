@@ -1,7 +1,8 @@
 """Virtual Stream Reader — unified file-like interface over Telegram parts."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections import deque
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 
 from loguru import logger
@@ -10,13 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
-from app.services.streaming.cache import _FILE_ID_CACHE
-from app.services.streaming.download import read_small, stream_part
+from app.services.streaming.cache import _FILE_ID_CACHE, PYROGRAM_CHUNK_SIZE
+from app.services.streaming.download import fetch_chunk, read_small
 from app.services.streaming.models import StreamPosition
 from app.services.streaming.telegram import (
     ensure_file_ids_for_client,
     refresh_all_file_ids,
 )
+
+IN_FLIGHT_PER_CLIENT = 4  # more requests per connection didn't add speed
+MAX_IN_FLIGHT = 8  # per read: 8 MB buffered at most
 
 
 class VirtualStreamReader:
@@ -116,7 +120,7 @@ class VirtualStreamReader:
         if worker_manager.pool_pressure() > 0.75:
             return
 
-        client = await worker_manager.try_acquire_one()
+        client = await worker_manager.try_acquire_one(spread_from=self._clients)
         if client is None:
             return
         if len(self._clients) >= MAX_CLIENTS_PER_STREAM:
@@ -162,6 +166,23 @@ class VirtualStreamReader:
 
     # --- Main streaming ---
 
+    def _chunk_plan(self, start: int, end: int) -> Iterator[tuple[MediaPart, int, int, int]]:
+        """(part, chunk index, bytes to skip, bytes to take) for each Telegram chunk the
+        range [start, end) touches."""
+        offset = start
+        while offset < end:
+            pos = self._find_part_for_offset(offset)
+            if not pos:
+                return
+            skip = pos.local_offset % PYROGRAM_CHUNK_SIZE
+            take = min(
+                PYROGRAM_CHUNK_SIZE - skip,
+                pos.part.file_size - pos.local_offset,
+                end - offset,
+            )
+            yield pos.part, pos.local_offset // PYROGRAM_CHUNK_SIZE, skip, take
+            offset += take
+
     async def read_window(self, start: int, end: int) -> bytes:
         """Read a small byte range (subtitle blocks) without pulling whole 1 MB chunks.
 
@@ -199,6 +220,7 @@ class VirtualStreamReader:
             return
 
         self._active_streams += 1
+        pending: deque[tuple[asyncio.Task, int, int]] = deque()
         try:
             if not self._batch_mode_active:
                 if not await self._ensure_workers():
@@ -212,41 +234,45 @@ class VirtualStreamReader:
             if not self._clients:
                 raise RuntimeError("No clients available")
 
-            client_idx = self._rr_counter % len(self._clients)
-            self._rr_counter += 1
-            client = self._clients[client_idx]
+            # This request's clients: a scale-down elsewhere may shrink self._clients
+            clients = list(self._clients)
+            for client in clients:
+                await ensure_file_ids_for_client(self._parts, client)
 
-            await ensure_file_ids_for_client(self._parts, client)
+            # Keep up to IN_FLIGHT_PER_CLIENT chunks downloading per client and hand them
+            # out in order: one client, one request at a time tops out around 9 MB/s;
+            # 4 in flight roughly double it (measured 2026-10-25).
+            plan = self._chunk_plan(start, end)
+            window = min(IN_FLIGHT_PER_CLIENT * len(clients), MAX_IN_FLIGHT)
 
-            current_offset = start
+            def launch() -> None:
+                step = next(plan, None)
+                if step is not None:
+                    part, index, skip, take = step
+                    client = clients[self._rr_counter % len(clients)]
+                    self._rr_counter += 1
+                    pending.append((asyncio.create_task(fetch_chunk(client, part, index)), skip, take))
 
-            while current_offset < end:
+            for _ in range(window):
+                launch()
+
+            while pending:
+                task, skip, take = pending.popleft()
+                data = await task
                 if self._force_released:
                     logger.info("[STREAM] Aborting read_range: reader was force-released")
                     return
-
-                pos = self._find_part_for_offset(current_offset)
-                if not pos:
-                    break
-
-                part_remaining = pos.part.file_size - pos.local_offset
-                chunk_len = min(part_remaining, end - current_offset)
-
-                async for chunk in stream_part(
-                    client,
-                    pos.part,
-                    offset=pos.local_offset,
-                    length=chunk_len,
-                    is_force_released=lambda: self._force_released,
-                ):
-                    yield chunk
-                    current_offset += len(chunk)
-                    if current_offset >= end:
-                        break
+                launch()
+                yield data[skip : skip + take]
 
         except asyncio.CancelledError:
             raise
         finally:
+            for task, _, _ in pending:
+                if task.done() and not task.cancelled():
+                    task.exception()  # retrieved: no "never retrieved" warning at GC
+                else:
+                    task.cancel()
             self._active_streams = max(0, self._active_streams - 1)
             if not self._batch_mode_active:
                 try:

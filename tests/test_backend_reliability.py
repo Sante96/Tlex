@@ -166,3 +166,47 @@ async def test_promote_remaps_message_and_topic_ids(test_session, mocker):
 
     assert (synced.channel_id, synced.message_id, synced.topic_id) == (-200, 55, 70)
     assert (unsynced.channel_id, unsynced.message_id) == (-100, 6)
+
+
+# -- the pool spreads streams over accounts (each account has its own speed cap) --
+
+
+def _pool(manager: WorkerManager, sizes: dict[int, int]) -> dict[int, list]:
+    clients = {wid: [MagicMock(name=f"w{wid}c{i}") for i in range(n)] for wid, n in sizes.items()}
+    for wid, cs in clients.items():
+        for c in cs:
+            manager._client_pool.append((wid, c))
+            manager._client_in_use[id(c)] = False
+    return clients
+
+
+async def test_second_client_of_a_stream_comes_from_another_account():
+    manager = WorkerManager()
+    clients = _pool(manager, {10: 4, 12: 6})
+
+    [first] = await manager.get_available_clients(limit=1)
+    second = await manager.try_acquire_one(spread_from=[first])
+
+    assert first in clients[10]
+    assert second in clients[12]
+
+
+async def test_new_streams_start_on_the_least_busy_account():
+    manager = WorkerManager()
+    clients = _pool(manager, {10: 4, 12: 6})
+    for c in clients[10][:2]:
+        manager._client_in_use[id(c)] = True
+
+    [client] = await manager.get_available_clients(limit=1)
+    assert client in clients[12]
+
+
+async def test_same_account_when_no_other_has_free_clients():
+    manager = WorkerManager()
+    clients = _pool(manager, {10: 2, 12: 1})
+    manager._client_in_use[id(clients[12][0])] = True
+
+    first = clients[10][0]
+    manager._client_in_use[id(first)] = True
+    assert await manager.try_acquire_one(spread_from=[first]) is clients[10][1]
+    assert await manager.try_acquire_one(spread_from=[first]) is None

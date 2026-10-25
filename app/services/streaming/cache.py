@@ -15,7 +15,6 @@ _FILE_ID_CACHE_TTL = 30 * 60  # 30 minutes
 _CHUNK_CACHE: dict[tuple[int, int], tuple[bytes, float]] = {}
 _CHUNK_CACHE_TTL = 60
 _CHUNK_CACHE_MAX_SIZE = 50
-_PREFETCH_CHUNKS = 3
 
 
 def _get_cached_chunk(part_id: int, chunk_index: int) -> bytes | None:

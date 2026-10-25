@@ -98,9 +98,9 @@ def mock_client():
 @pytest.fixture()
 def patches(mock_client):
     """Patch all external Telegram/pool dependencies at the reader module level."""
-    # stream_part: async generator that yields 100 bytes for the requested length
-    async def fake_stream_part(client, part, offset, length, *, is_force_released):
-        yield b"x" * length
+    # fetch_chunk: the requested 1 MB chunk (shorter at the end of a part)
+    async def fake_fetch_chunk(client, part, index):
+        return b"x" * min(1024 * 1024, part.file_size - index * 1024 * 1024)
 
     with (
         patch(
@@ -127,8 +127,8 @@ def patches(mock_client):
             new=AsyncMock(),
         ) as ensure_ids,
         patch(
-            "app.services.streaming.reader.stream_part",
-            new=fake_stream_part,
+            "app.services.streaming.reader.fetch_chunk",
+            new=fake_fetch_chunk,
         ),
     ):
         yield Patches(

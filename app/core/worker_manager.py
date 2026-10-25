@@ -1,6 +1,7 @@
 """Worker Manager for Telegram account pool coordination."""
 
 import asyncio
+from collections import Counter
 
 from loguru import logger
 from pyrogram import Client
@@ -19,8 +20,11 @@ CLIENTS_PER_WORKER_PREMIUM = 6
 CLIENTS_PER_WORKER_STANDARD = 4
 
 # Max clients a single stream can dynamically acquire
-# Streams start with 1 and scale up as they continue
-MAX_CLIENTS_PER_STREAM = 6
+# Streams start with 1 and scale up as they continue. Each client keeps 4 chunk requests
+# in flight (streaming/reader.py): measured 2026-10-25, one client does ~18-22 MB/s that
+# way and two ~35 MB/s on a premium account, more than any stream needs. A third client
+# would only take capacity from other viewers.
+MAX_CLIENTS_PER_STREAM = 2
 
 
 class WorkerManager:
@@ -208,13 +212,7 @@ class WorkerManager:
         IMPORTANT: Uses async lock to prevent race conditions.
         """
         async with self._lock:
-            available = []
-            for worker_id, client in self._client_pool:
-                client_id = id(client)
-                if not self._client_in_use.get(client_id, False):
-                    available.append((worker_id, client))
-                    if len(available) >= limit:
-                        break
+            available = self._free_clients()[:limit]
 
             if not available:
                 total_clients = len(self._client_pool)
@@ -245,24 +243,33 @@ class WorkerManager:
         in_use = sum(1 for v in self._client_in_use.values() if v)
         return in_use / total
 
-    async def try_acquire_one(self) -> Client | None:
+    async def try_acquire_one(self, spread_from: list[Client] | None = None) -> Client | None:
         """
         Try to acquire one additional client from the pool (non-blocking).
 
         Used for dynamic scaling: streams start with 1 client and
-        progressively acquire more as they continue.
+        progressively acquire more as they continue. Prefers an account none of
+        spread_from (the stream's clients) belongs to: each account has its own speed cap.
 
         Returns:
             A single Client or None if no clients available.
         """
         async with self._lock:
-            for worker_id, client in self._client_pool:
-                client_id = id(client)
-                if not self._client_in_use.get(client_id, False):
-                    self._client_in_use[client_id] = True
-                    logger.debug(f"Dynamic acquire: client {client_id} (worker {worker_id})")
-                    return client
-            return None
+            taken = {wid for wid, c in self._client_pool if c in (spread_from or [])}
+            free = sorted(self._free_clients(), key=lambda wc: wc[0] in taken)
+            if not free:
+                return None
+            worker_id, client = free[0]
+            self._client_in_use[id(client)] = True
+            logger.debug(f"Dynamic acquire: client {id(client)} (worker {worker_id})")
+            return client
+
+    def _free_clients(self) -> list[tuple[int, Client]]:
+        """Free clients, those of the accounts with the fewest clients in use first, so
+        streams spread over the accounts."""
+        busy = Counter(wid for wid, c in self._client_pool if self._client_in_use.get(id(c), False))
+        free = [(wid, c) for wid, c in self._client_pool if not self._client_in_use.get(id(c), False)]
+        return sorted(free, key=lambda wc: busy[wc[0]])
 
     def release_clients(self, clients: list[Client]) -> None:
         """
