@@ -28,6 +28,9 @@ class BackupSyncMixin(BackupFailoverMixin):
         Forward all new media messages from each topic in the main channel
         to the corresponding topic in the backup. Returns total synced count.
         """
+        # Read once: a failed batch's rollback expires `backup`, and reloading an attribute
+        # in async code raises MissingGreenlet
+        backup_id = backup.id
         main_channel_id = backup.main_channel_id
         backup_tg_id = backup.backup_channel_id
         topic_map: dict[str, dict] = backup.topic_map or {}
@@ -36,10 +39,11 @@ class BackupSyncMixin(BackupFailoverMixin):
             client, main_channel_id, backup_tg_id, topic_map
         )
         backup.topic_map = topic_map
+        await session.commit()  # topics just created on Telegram must not be created again
 
         existing_result = await session.execute(
             select(BackupMessage.main_message_id).where(
-                BackupMessage.backup_channel_db_id == backup.id
+                BackupMessage.backup_channel_db_id == backup_id
             )
         )
         already_synced: set[int] = set(existing_result.scalars().all())
@@ -57,7 +61,7 @@ class BackupSyncMixin(BackupFailoverMixin):
             synced = await self._sync_topic(
                 session,
                 client,
-                backup,
+                backup_id,
                 main_channel_id,
                 backup_tg_id,
                 main_topic_id,
@@ -107,7 +111,7 @@ class BackupSyncMixin(BackupFailoverMixin):
         self,
         session: AsyncSession,
         client: Client,
-        backup: BackupChannel,
+        backup_id: int,
         main_channel_id: int,
         backup_tg_id: int,
         main_topic_id: int,
@@ -163,7 +167,7 @@ class BackupSyncMixin(BackupFailoverMixin):
                 for orig_id, fwd_id in pairs:
                     session.add(
                         BackupMessage(
-                            backup_channel_db_id=backup.id,
+                            backup_channel_db_id=backup_id,
                             main_channel_id=main_channel_id,
                             main_message_id=orig_id,
                             backup_message_id=fwd_id,
@@ -171,7 +175,9 @@ class BackupSyncMixin(BackupFailoverMixin):
                         )
                     )
                     synced += 1
-                await session.flush()
+                # Commit each batch: these messages are on Telegram now, and a later
+                # batch's rollback must not drop them (the next run would forward them again)
+                await session.commit()
 
             except FloodWait as e:
                 logger.warning(f"[BACKUP] FloodWait {flood_seconds(e)}s during forward")
