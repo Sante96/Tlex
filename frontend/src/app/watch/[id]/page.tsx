@@ -125,6 +125,7 @@ function Watch() {
         subtitleTracks={subtitleTracks}
         initialDuration={media.duration_seconds || undefined}
         initialPosition={initialPosition}
+        chapters={media.chapters}
         seriesId={isEpisode ? media.series_id : undefined}
         currentSeason={media.season_number || 1}
         onEpisodeSelect={isEpisode ? handleEpisodeSelect : undefined}

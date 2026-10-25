@@ -10,7 +10,7 @@ import {
   SubtitleRenderer,
   type SubtitleRendererHandle,
 } from "./subtitle-renderer";
-import { releaseStream, type MediaStream, type Profile } from "@/lib/api";
+import { releaseStream, type Chapter, type MediaStream, type Profile } from "@/lib/api";
 
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
 import { usePoolStatus } from "@/hooks/player/use-pool-status";
@@ -31,6 +31,8 @@ import { useProfile } from "@/contexts/profile-context";
 const BUFFER_MARGIN = 0.5;
 // Skips (arrow keys, ±10 buttons) in a row restart the stream once, where they stop
 const SKIP_SETTLE_MS = 400;
+// Ctrl+← past this far into a chapter restarts it; before, it goes to the previous one
+const CHAPTER_RESTART_S = 3;
 
 /** The Settings' subtitle track for this media, until one is picked in the player. */
 function defaultSubtitle(tracks: MediaStream[], prefs: Profile["preferences"]): number | null {
@@ -60,6 +62,8 @@ interface VideoPlayerProps {
   subtitleTracks: MediaStream[];
   initialDuration?: number;
   initialPosition?: number;
+  /** Two or more: a segmented seekbar and Ctrl+←/→ to move between them */
+  chapters?: Chapter[] | null;
   seriesId?: number | null;
   currentSeason?: number;
   onEpisodeSelect?: (mediaId: number) => void;
@@ -73,6 +77,7 @@ export function VideoPlayer({
   subtitleTracks,
   initialDuration,
   initialPosition = 0,
+  chapters,
   seriesId,
   currentSeason = 1,
   onEpisodeSelect,
@@ -262,6 +267,23 @@ export function VideoPlayer({
     [duration, seekLocally, restartStreamAt],
   );
 
+  // Ctrl+→: the next chapter. Ctrl+←: back to the start of this one, or to the previous
+  // one within its first seconds (as YouTube does)
+  const jumpChapter = useCallback(
+    (direction: -1 | 1) => {
+      if (!chapters) return;
+      const now = currentTimeRef.current;
+      // A second of slack: a seek can land on the keyframe just before a chapter's start
+      const current = Math.max(0, chapters.filter((c) => c.start <= now + 1).length - 1);
+      const restart = now - chapters[current].start > CHAPTER_RESTART_S;
+      const index = direction > 0 ? current + 1 : Math.max(0, restart ? current : current - 1);
+      if (index >= chapters.length) return;
+      handleSeek(chapters[index].start);
+      currentTimeRef.current = chapters[index].start; // a second press goes on from here
+    },
+    [chapters, handleSeek],
+  );
+
   useEffect(
     () => () => {
       if (pendingSkip.current) clearTimeout(pendingSkip.current);
@@ -358,6 +380,7 @@ export function VideoPlayer({
     toggleFullscreen,
     toggleMute,
     skip,
+    jumpChapter: chapters && chapters.length > 1 ? jumpChapter : undefined,
     onActivity: handleMouseMove,
     controlsVisible,
     isTV,
@@ -496,6 +519,7 @@ export function VideoPlayer({
         isLoading={isLoading || isSeeking}
         currentTime={currentTime}
         duration={duration}
+        chapters={chapters}
         volume={volume}
         isMuted={isMuted}
         isFullscreen={isFullscreen}

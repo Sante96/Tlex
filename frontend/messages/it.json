@@ -372,7 +372,8 @@
     "noClientsWarning": "Nessun client disponibile. Lo streaming potrebbe non avviarsi.",
     "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento.",
     "streamError": "Impossibile riprodurre il video",
-    "seekHint": "← → sposta · Enter conferma · Esc annulla"
+    "seekHint": "← → sposta · Enter conferma · Esc annulla",
+    "chapter": "Capitolo {n}"
   },
   "errors": {
     "crashTitle": "Qualcosa è andato storto",

@@ -7,6 +7,8 @@ interface VideoHotkeysProps {
   toggleFullscreen: () => void;
   toggleMute: () => void;
   skip: (seconds: number) => void;
+  /** Ctrl+←/→, when the title has chapters */
+  jumpChapter?: (direction: -1 | 1) => void;
   onActivity?: () => void;
   /** The controls are on screen */
   controlsVisible: boolean;
@@ -22,6 +24,7 @@ export function useVideoHotkeys({
   toggleFullscreen,
   toggleMute,
   skip,
+  jumpChapter,
   onActivity,
   controlsVisible,
   isTV,
@@ -29,10 +32,23 @@ export function useVideoHotkeys({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      // Handled already (Radix only prevents the default of a slider's arrows), a
-      // shortcut of the browser's (Ctrl+F), or typing
-      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (target?.closest?.(OWN_KEYS)) return;
+      // Handled already (Radix only prevents the default of a slider's arrows), or typing
+      if (e.defaultPrevented || target?.closest?.(OWN_KEYS)) return;
+
+      if (
+        jumpChapter &&
+        e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key === "ArrowLeft" || e.key === "ArrowRight")
+      ) {
+        e.preventDefault();
+        onActivity?.();
+        jumpChapter(e.key === "ArrowLeft" ? -1 : 1);
+        return;
+      }
+      // A shortcut of the browser's (Ctrl+F)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const onControl = !!target?.closest?.(CONTROLS);
       if (e.key === " " || e.key === "Enter") {
@@ -83,5 +99,14 @@ export function useVideoHotkeys({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [togglePlay, toggleFullscreen, toggleMute, skip, onActivity, controlsVisible, isTV]);
+  }, [
+    togglePlay,
+    toggleFullscreen,
+    toggleMute,
+    skip,
+    jumpChapter,
+    onActivity,
+    controlsVisible,
+    isTV,
+  ]);
 }

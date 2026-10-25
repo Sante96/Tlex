@@ -372,7 +372,8 @@
     "noClientsWarning": "No clients available. Streaming may not start.",
     "highPressureWarning": "Client pool almost full. Streaming may be slower.",
     "streamError": "Couldn't play the video",
-    "seekHint": "← → move · Enter confirm · Esc cancel"
+    "seekHint": "← → move · Enter confirm · Esc cancel",
+    "chapter": "Chapter {n}"
   },
   "errors": {
     "crashTitle": "Something went wrong",

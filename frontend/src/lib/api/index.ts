@@ -36,6 +36,7 @@ export type {
   MediaItem,
   MediaStream,
   MediaDetails,
+  Chapter,
   CastMember,
   EpisodeInfo,
   NextEpisode,

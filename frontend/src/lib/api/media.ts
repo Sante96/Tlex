@@ -38,6 +38,16 @@ export interface MediaDetails extends MediaItem {
   }>;
   streams: MediaStream[];
   total_size: number;
+  /** null: not read yet; []: the file has none */
+  chapters?: Chapter[] | null;
+}
+
+/** A chapter of the file (seconds): a segment of the player's seekbar */
+export interface Chapter {
+  start: number;
+  end: number;
+  /** null when the file's name says nothing ("Chapter 01"): the player numbers it */
+  title: string | null;
 }
 
 export interface CastMember {

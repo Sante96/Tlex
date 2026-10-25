@@ -14,7 +14,7 @@ import { formatTime } from "@/lib/format";
 import { PlayerSettingsDropdown } from "./player-settings";
 import { VideoSeekbar } from "./video-seekbar";
 import { VolumeSlider } from "./volume-slider";
-import type { MediaStream } from "@/lib/api";
+import type { Chapter, MediaStream } from "@/lib/api";
 
 function PlayerTooltip({
   label,
@@ -39,6 +39,7 @@ interface PlayerControlsProps {
   isLoading: boolean;
   currentTime: number;
   duration: number;
+  chapters?: Chapter[] | null;
   volume: number;
   isMuted: boolean;
   isFullscreen: boolean;
@@ -79,6 +80,7 @@ export function PlayerControls({
   isLoading,
   currentTime,
   duration,
+  chapters,
   volume,
   isMuted,
   isFullscreen,
@@ -249,6 +251,7 @@ export function PlayerControls({
         <VideoSeekbar
           currentTime={currentTime}
           duration={duration}
+          chapters={chapters}
           onSeek={onSeek}
           onActivity={onActivity}
         />

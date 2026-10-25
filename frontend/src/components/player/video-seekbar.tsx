@@ -4,12 +4,16 @@ import { useState, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
+import type { Chapter } from "@/lib/api";
 
 const SEEK_STEP = 10; // seconds per arrow key press
+const CHAPTER_GAP_PX = 2;
 
 interface VideoSeekbarProps {
   currentTime: number;
   duration: number;
+  /** Two or more: the bar is split into one segment per chapter, as on YouTube */
+  chapters?: Chapter[] | null;
   onSeek: (time: number) => void;
   onActivity?: () => void; // Called on any interaction to keep controls visible
   className?: string;
@@ -18,6 +22,7 @@ interface VideoSeekbarProps {
 export function VideoSeekbar({
   currentTime,
   duration,
+  chapters,
   onSeek,
   onActivity,
   className,
@@ -71,7 +76,8 @@ export function VideoSeekbar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (duration <= 0) return;
+      // Ctrl+arrows go chapter by chapter (the player's hotkeys)
+      if (duration <= 0 || e.ctrlKey) return;
       const base = pendingTime ?? currentTime;
       switch (e.key) {
         case "ArrowLeft":
@@ -104,14 +110,24 @@ export function VideoSeekbar({
     [duration, currentTime, pendingTime, onSeek, onActivity],
   );
 
-  const tooltipLeft =
-    isFocused || isDragging
-      ? `${displayProgress}%`
-      : isHovering
-        ? `${hoverPosition}%`
-        : null;
+  const tooltipPosition =
+    isFocused || isDragging ? displayProgress : isHovering ? hoverPosition : null;
 
   const tooltipTime = isFocused || isDragging ? displayTime : hoverTime;
+
+  const segmented = !!chapters && chapters.length > 1 && duration > 0;
+  // The spans of time the bar is drawn in: one per chapter (the last one reaches the
+  // end of the bar), or the whole title. Before the duration is known: an empty bar
+  const total = duration > 0 ? duration : 1;
+  const spans = segmented
+    ? chapters.map((c, i) => (i === chapters.length - 1 ? { ...c, end: duration } : c))
+    : [{ start: 0, end: total, title: null }];
+  // The chapter under the mouse, under the dragged thumb, or at the keyboard's position
+  const activeChapter =
+    segmented && tooltipPosition !== null
+      ? Math.max(0, spans.filter((s) => s.start <= tooltipTime).length - 1)
+      : -1;
+  const pct = (time: number) => (time / total) * 100;
 
   return (
     <div
@@ -137,56 +153,78 @@ export function VideoSeekbar({
       }}
       onKeyDown={handleKeyDown}
     >
-      {/* Time tooltip — on hover or when focused with pending position */}
-      {tooltipLeft !== null && (
+      {/* Time tooltip — on hover or when focused with pending position. Slides across
+          its own width along the bar, so near the edges it stays on screen */}
+      {tooltipPosition !== null && (
         <div
-          className="absolute -top-8 transform -translate-x-1/2 bg-black/90 text-white text-xs px-2 py-1 rounded pointer-events-none z-10 font-mono"
-          style={{ left: tooltipLeft }}
+          className="absolute -top-8 bg-black/90 text-white text-xs px-2 py-1 rounded pointer-events-none z-10 font-mono whitespace-nowrap"
+          style={{ left: `${tooltipPosition}%`, transform: `translateX(-${tooltipPosition}%)` }}
         >
+          {activeChapter >= 0 &&
+            `${spans[activeChapter].title ?? t("player.chapter", { n: activeChapter + 1 })} · `}
           {formatTime(tooltipTime)}
         </div>
       )}
 
-      {/* Track background */}
-      <div
-        className={cn(
-          "relative w-full rounded-full transition-all duration-150 overflow-hidden",
-          isActive ? "h-2" : "h-1",
-        )}
-      >
-        {/* Background (unplayed) */}
-        <div className="absolute inset-0 bg-white/30" />
+      {/* Track: one segment per chapter, each filled with its own share of the time */}
+      <div className="relative h-2.5">
+        {spans.map((span, i) => {
+          // How much of this span a time covers, in % of the span
+          const fill = (time: number) =>
+            Math.max(0, Math.min(1, (time - span.start) / (span.end - span.start))) * 100;
+          const played = fill(dragTime ?? currentTime);
+          const pending = fill(displayTime);
+          const width = pct(span.end - span.start);
+          return (
+            <div
+              key={span.start}
+              className={cn(
+                "absolute top-1/2 -translate-y-1/2 rounded-full overflow-hidden transition-[height] duration-150",
+                i === activeChapter ? "h-2.5" : isActive ? (segmented ? "h-1.5" : "h-2") : "h-1",
+              )}
+              style={{
+                left: `${pct(span.start)}%`,
+                // The gap comes out of the segment's end: times keep their place on the bar
+                width:
+                  i < spans.length - 1 ? `calc(${width}% - ${CHAPTER_GAP_PX}px)` : `${width}%`,
+              }}
+            >
+              {/* Background (unplayed) */}
+              <div className="absolute inset-0 bg-white/30" />
 
-        {/* Hover preview bar (mouse only) */}
-        {isHovering && !isFocused && !isDragging && (
-          <div
-            className="absolute inset-y-0 left-0 bg-white/20"
-            style={{ width: `${hoverPosition}%` }}
-          />
-        )}
+              {/* Hover preview bar (mouse only) */}
+              {isHovering && !isFocused && !isDragging && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-white/20"
+                  style={{ width: `${fill(hoverTime)}%` }}
+                />
+              )}
 
-        {/* Real progress (played) - always visible */}
-        <div
-          className={cn(
-            "absolute inset-y-0 left-0 bg-plex-orange",
-            !isDragging && "transition-all",
-          )}
-          style={{ width: `${progress}%` }}
-        />
+              {/* Real progress (played) - always visible */}
+              <div
+                className={cn(
+                  "absolute inset-y-0 left-0 bg-plex-orange",
+                  !isDragging && "transition-all",
+                )}
+                style={{ width: `${played}%` }}
+              />
 
-        {/* Pending seek bar — shown in focus mode */}
-        {isFocused && pendingTime !== null && (
-          <div
-            className={cn(
-              "absolute inset-y-0 left-0 transition-all",
-              displayProgress > progress ? "bg-white/50" : "bg-black/40",
-            )}
-            style={{
-              left: `${Math.min(progress, displayProgress)}%`,
-              width: `${Math.abs(displayProgress - progress)}%`,
-            }}
-          />
-        )}
+              {/* Pending seek bar — shown in focus mode */}
+              {isFocused && pendingTime !== null && (
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 transition-all",
+                    displayProgress > progress ? "bg-white/50" : "bg-black/40",
+                  )}
+                  style={{
+                    left: `${Math.min(played, pending)}%`,
+                    width: `${Math.abs(pending - played)}%`,
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Thumb — visible on hover or focus */}
