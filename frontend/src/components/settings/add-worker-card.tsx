@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Phone, Plus, Loader2 } from "lucide-react";
-import ReactCountryFlag from "react-country-flag";
 import { DSButton, DSCard, DSInput } from "@/components/ds";
 import {
   Select,
@@ -126,28 +125,16 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                 disabled={step !== "idle" && step !== "sending"}
               >
                 <SelectTrigger className="w-[120px] shrink-0" style={{ height: "40px" }}>
-                  <div className="flex items-center gap-1.5 truncate">
-                    {selectedCountry && (
-                      <ReactCountryFlag
-                        countryCode={selectedCountry.iso}
-                        svg
-                        style={{ width: "1.2em", height: "1.2em" }}
-                      />
-                    )}
-                    <span className="text-sm">{prefix}</span>
-                  </div>
+                  {/* The country code, not a flag: the flag package loaded every flag
+                      from a CDN */}
+                  <span className="text-sm truncate">
+                    {selectedCountry?.iso} {prefix}
+                  </span>
                 </SelectTrigger>
                 <SelectContent position="popper" style={{ maxHeight: "200px", overflowY: "auto" }}>
                   {COUNTRY_PREFIXES.map((p) => (
                     <SelectItem key={p.dial} value={p.dial}>
-                      <span className="flex items-center gap-2">
-                        <ReactCountryFlag
-                          countryCode={p.iso}
-                          svg
-                          style={{ width: "1.2em", height: "1.2em" }}
-                        />
-                        <span>{p.iso} {p.dial}</span>
-                      </span>
+                      {p.iso} {p.dial}
                     </SelectItem>
                   ))}
                 </SelectContent>
