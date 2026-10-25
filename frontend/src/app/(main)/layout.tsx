@@ -49,7 +49,7 @@ function ProfileGate({ children }: { children: React.ReactNode }) {
 }
 
 function MainContent({ children }: { children: React.ReactNode }) {
-  const { isCollapsed, tvExpanded } = useSidebar();
+  const { isCollapsed } = useSidebar();
   const isMobile = useIsMobile();
   const isTV = useIsTV();
   const tvTier = useTVTier();
@@ -57,7 +57,9 @@ function MainContent({ children }: { children: React.ReactNode }) {
   const marginLeft = isMobile
     ? 0
     : isTV
-      ? tvExpanded ? tvWidths.expanded : tvWidths.collapsed
+      ? // The TV sidebar opens over the page: pushing it re-laid the poster grid on every
+        // frame of the animation, on the TV's weak hardware
+        tvWidths.collapsed
       : isCollapsed
         ? SIDEBAR_COLLAPSED
         : SIDEBAR_EXPANDED;
