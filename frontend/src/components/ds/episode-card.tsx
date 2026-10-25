@@ -36,7 +36,14 @@ export function EpisodeCard({
     >
       {/* Thumbnail */}
       {thumbnailUrl ? (
-        <Image src={thumbnailUrl} alt={title} fill className="object-cover" />
+        <Image
+          src={thumbnailUrl}
+          alt={title}
+          fill
+          // The season grid: 1, 2 md, 3 lg columns
+          sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover"
+        />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-[#52525b] text-lg font-medium">
           E{episodeNumber}

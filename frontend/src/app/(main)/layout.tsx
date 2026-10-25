@@ -84,6 +84,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const isTV = useIsTV();
+  const isMobile = useIsMobile();
 
   const [showSplash, setShowSplash] = useState(() => {
     if (typeof window !== "undefined") {
@@ -103,8 +104,9 @@ export default function MainLayout({
         {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
         <SidebarProvider>
           <div className="min-h-screen">
-            {/* Background — TVBackground (CSS) on TV, animated shader on web */}
-            {isTV ? (
+            {/* Background: the animated WebGL shader on desktop; the CSS one on the TV and
+                on phones, where the shader ran the GPU (and the battery) on every page */}
+            {isTV || isMobile ? (
               <div className="fixed inset-0 z-[-1]">
                 <TVBackground />
               </div>

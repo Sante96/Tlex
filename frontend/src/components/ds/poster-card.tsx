@@ -21,6 +21,10 @@ interface PosterCardProps {
   className?: string;
 }
 
+// The columns of POSTER_GRID (layout/library-page): 3, 4 sm, 5 md, 6 lg, 7 xl, 9 2xl
+const POSTER_GRID_SIZES =
+  "(min-width: 1536px) 11vw, (min-width: 1280px) 14vw, (min-width: 1024px) 17vw, (min-width: 768px) 20vw, (min-width: 640px) 25vw, 33vw";
+
 export function PosterCard({
   href,
   imageUrl,
@@ -51,7 +55,14 @@ export function PosterCard({
           style={isFluid ? undefined : { width: fixedW, height: fixedH }}
         >
           {imageUrl ? (
-            <Image src={imageUrl} alt={title} fill className="object-cover" />
+            <Image
+              src={imageUrl}
+              alt={title}
+              fill
+              // Without sizes the browser takes the variant as wide as the screen
+              sizes={isFluid ? POSTER_GRID_SIZES : `${fixedW}px`}
+              className="object-cover"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-[#52525b] text-sm">
               {title}

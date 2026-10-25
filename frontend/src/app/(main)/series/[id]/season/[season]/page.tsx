@@ -183,7 +183,7 @@ export default function SeasonDetailPage() {
                     : undefined
                 }
                 overview={ep.overview ?? undefined}
-                thumbnailUrl={getTmdbImageUrl(ep.still_path, "original")}
+                thumbnailUrl={getTmdbImageUrl(ep.still_path, "w500")}
                 progress={!isWatched ? progressPercent : undefined}
                 isWatched={isWatched}
                 onClick={() => router.push(`/watch/${ep.id}`)}

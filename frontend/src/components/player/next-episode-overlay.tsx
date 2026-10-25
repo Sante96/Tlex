@@ -88,7 +88,8 @@ export function NextEpisodeOverlay({
 
   if (!nextEpisode) return null;
 
-  const thumbUrl = getTmdbImageUrl(nextEpisode.still_path, "original");
+  // A 40vw thumbnail at most (and unoptimized: the browser gets this file as it is)
+  const thumbUrl = getTmdbImageUrl(nextEpisode.still_path, "w780");
   const title = cleanEpisodeTitle(nextEpisode.title);
   const duration = formatDuration(nextEpisode.duration_seconds);
   const epLabel = `S${nextEpisode.season_number || 1} · E${nextEpisode.episode_number || 1}`;
