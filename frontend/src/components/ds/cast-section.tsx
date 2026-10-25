@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { FadeImage } from "@/components/ui/fade-image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, UserRound } from "lucide-react";
 import { DSIconButton } from "@/components/ds";
 import { useIsTV } from "@/hooks/use-platform";
 import type { CastMember } from "@/lib/api";
@@ -86,30 +86,32 @@ function PeopleRow({
 
       <div
         ref={scrollRef}
-        className="flex gap-6 overflow-x-auto scrollbar-hide py-2 px-1"
+        className="flex gap-4 md:gap-5 overflow-x-auto scrollbar-hide py-2 px-1"
         style={{ scrollbarWidth: "none" }}
       >
         {members.map((member) => (
           <Link
             key={`${member.id}-${member.character ?? member.job}`}
             href={`/person/${member.id}`}
-            className="flex flex-col items-center gap-2 shrink-0 w-[200px] group outline-none"
+            className="flex flex-col items-center gap-2 shrink-0 w-24 md:w-[120px] group outline-none"
           >
             <div
-              className="w-50 h-50 rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-plex-orange group-focus-visible:ring-plex-orange transition-all duration-200 group-hover:scale-105 group-focus-visible:scale-105"
+              className="size-24 md:size-[120px] rounded-full overflow-hidden bg-[#27272a] shrink-0 ring-2 ring-transparent group-hover:ring-plex-orange group-focus-visible:ring-plex-orange transition-all duration-200 group-hover:scale-105 group-focus-visible:scale-105"
               style={{ boxShadow: "none" }}
             >
               {member.profile_path ? (
                 <FadeImage
                   src={getTmdbImageUrl(member.profile_path, "w300") || ""}
                   alt={member.name}
-                  width={200}
-                  height={200}
+                  width={120}
+                  height={120}
                   className="object-cover w-full h-full transition-[filter] duration-200 group-hover:brightness-110"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#52525b] group-hover:text-plex-orange text-lg font-semibold transition-colors duration-200">
-                  {member.name.charAt(0)}
+                // A silhouette, not the name's first letter (a lone ideogram for the
+                // Japanese staff looked like a broken image)
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#27272a] to-[#18181b] text-[#52525b] group-hover:text-plex-orange transition-colors duration-200">
+                  <UserRound className="w-1/2 h-1/2" strokeWidth={1.5} />
                 </div>
               )}
             </div>
