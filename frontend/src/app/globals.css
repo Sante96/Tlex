@@ -140,3 +140,20 @@ html[data-tv-tier]::view-transition-old(*),
 html[data-tv-tier]::view-transition-new(*) {
   animation: none !important;
 }
+
+/* The home hero: its text comes in with the title, the active card's bar runs to the
+   next one */
+@keyframes hero-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes hero-timer {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}

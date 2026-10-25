@@ -18,66 +18,63 @@ import {
 } from "@/lib/api";
 import { cleanEpisodeTitle, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { HomeHero, type HeroItem } from "@/components/home/home-hero";
-import { ContinueWatchingCard } from "@/components/home/continue-watching-card";
 import { PosterCardSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useDelayed } from "@/hooks/use-delayed";
 
 // Posters per home row
 const ROW = 7;
 
-// Continue Watching: landscape cards, fewer per row; a strip on phones
-const CONTINUE_GRID =
-  "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
-const TV_CONTINUE_GRID = "grid grid-cols-4 gap-5";
-const CONTINUE_CARD = "shrink-0 w-[260px] md:w-full";
-
-/** What the hero shows: the title last watched, else the newest one with a backdrop */
-function heroItem(
+/** The hero's titles: what's being watched, else the newest title with a backdrop */
+function heroItems(
   watching: ContinueWatchingItem[],
   movies: MediaItem[],
   series: SeriesItem[],
   t: ReturnType<typeof useTranslations>,
-): HeroItem | null {
-  const current = watching.find((w) => w.backdrop_path);
-  if (current) {
-    return {
+): HeroItem[] {
+  const current = watching.filter((w) => w.backdrop_path);
+  if (current.length) {
+    return current.map((w) => ({
+      id: w.id,
       label: t("home.continueWatching"),
-      title: current.series_title || current.title,
+      title: w.series_title || w.title,
       subtitle:
-        current.season_number && current.episode_number
-          ? `S${current.season_number} · E${current.episode_number} · ${cleanEpisodeTitle(current.title)}`
+        w.season_number && w.episode_number
+          ? `S${w.season_number} · E${w.episode_number} · ${cleanEpisodeTitle(w.title)}`
           : undefined,
-      overview: current.overview,
-      backdropUrl: getTmdbImageUrl(current.backdrop_path, "original")!,
-      playHref: `/watch/${current.id}`,
-      detailsHref: current.series_id ? `/series/${current.series_id}` : `/media/${current.id}`,
-      progressPercent: current.progress_percent,
-      remainingSeconds: current.duration_seconds - current.position_seconds,
-    };
+      overview: w.overview,
+      backdropUrl: getTmdbImageUrl(w.backdrop_path, "original")!,
+      stillUrl: getTmdbImageUrl(w.still_path ?? w.backdrop_path, "w500"),
+      playHref: `/watch/${w.id}`,
+      detailsHref: w.series_id ? `/series/${w.series_id}` : `/media/${w.id}`,
+      progressPercent: w.progress_percent,
+      remainingSeconds: w.duration_seconds - w.position_seconds,
+    }));
   }
   const movie = movies.find((m) => m.backdrop_path);
   if (movie) {
-    return {
+    return [{
+      id: movie.id,
       label: t("home.recentlyAdded"),
       title: movie.title,
       overview: movie.overview,
       backdropUrl: getTmdbImageUrl(movie.backdrop_path, "original")!,
       playHref: `/watch/${movie.id}`,
       detailsHref: `/media/${movie.id}`,
-    };
+    }];
   }
   const show = series.find((s) => s.backdrop_path);
   if (show) {
-    return {
+    return [{
+      id: show.id,
       label: t("home.recentlyAdded"),
       title: show.title,
       overview: show.overview,
       backdropUrl: getTmdbImageUrl(show.backdrop_path, "original")!,
       playHref: `/series/${show.id}`,
       detailsHref: `/series/${show.id}`,
-    };
+    }];
   }
-  return null;
+  return [];
 }
 
 export default function HomePage() {
@@ -191,23 +188,12 @@ export default function HomePage() {
     );
   }
 
-  const hero = heroItem(continueWatching, media, series, t);
+  const hero = heroItems(continueWatching, media, series, t);
 
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
-      {hero && <HomeHero item={hero} />}
-
-      {/* Continue Watching */}
-      {continueWatching.length > 0 && (
-        <section>
-          <SectionHeader title={t("home.continueWatching")} />
-          <div className={isTV ? TV_CONTINUE_GRID : CONTINUE_GRID}>
-            {continueWatching.map((item) => (
-              <ContinueWatchingCard key={item.id} item={item} className={isTV ? "" : CONTINUE_CARD} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Continue Watching lives in the hero: the title on top, the others in its strip */}
+      {hero.length > 0 && <HomeHero items={hero} />}
 
       {/* Film */}
       {media.length > 0 && (
@@ -270,18 +256,7 @@ function HomeSkeleton({
 }) {
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
-      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 h-[46vh] md:h-[56vh] min-h-[300px] max-h-[560px] bg-[#18181b] animate-pulse" />
-      <section>
-        <Skeleton className="h-8 w-48 mb-5" />
-        <div className={isTV ? TV_CONTINUE_GRID : CONTINUE_GRID}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className={isTV ? "" : CONTINUE_CARD}>
-              <Skeleton className="aspect-video" />
-              <Skeleton className="h-4 w-3/4 mt-2" />
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="-mx-4 md:-mx-8 -mt-6 md:-mt-8 min-h-[440px] md:min-h-[64vh] bg-[#18181b] animate-pulse" />
       {[0, 1].map((row) => (
         <section key={row}>
           <Skeleton className="h-8 w-48 mb-5" />
