@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.api.deps import DBSession
 from app.config import get_settings
+from app.core.security import INTERNAL_STREAM_TOKEN
 from app.core.worker_manager import worker_manager
 from app.models.media import MediaItem
 from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
@@ -272,7 +273,7 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
     # Extract via MKV Cues (fast: only reads ~3MB)
     logger.debug(f"Extracting keyframes for media {media_id}")
     base_url = f"http://127.0.0.1:{settings.app_port}"
-    input_url = f"{base_url}/api/v1/stream/raw/{media_id}"
+    input_url = f"{base_url}/api/v1/stream/raw/{media_id}?internal={INTERNAL_STREAM_TOKEN}"
 
     keyframes = await extract_keyframes_from_url(input_url, total_size=media.total_size)
 
@@ -357,7 +358,7 @@ async def stream_play(
 
     # Build internal URL for FFmpeg to read from
     base_url = f"http://127.0.0.1:{settings.app_port}"
-    input_url = f"{base_url}/api/v1/stream/raw/{media_id}"
+    input_url = f"{base_url}/api/v1/stream/raw/{media_id}?internal={INTERNAL_STREAM_TOKEN}"
 
     # Get keyframe time for the requested position
     keyframe_time = await _get_keyframe_for_time(session, media_id, t)

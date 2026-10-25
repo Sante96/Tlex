@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BASE_DIR = Path(__file__).parent.parent
@@ -69,7 +70,7 @@ class Settings(BaseSettings):
     # ============================================
     # Security (JWT)
     # ============================================
-    jwt_secret: str = "change_me_in_production"
+    jwt_secret: str  # required, see .env.example
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 30  # 30 minutes for access token
     jwt_refresh_expire_days: int = 30  # 30 days for refresh token
@@ -103,6 +104,18 @@ class Settings(BaseSettings):
     scanner_split_extensions: str = ".001,.002,.003"
     scanner_movies_topic_id: int | None = None  # Topic ID for Movies Archive (bucket strategy)
     scanner_auto_interval_hours: int = 0  # Auto-scan interval in hours (0 = disabled)
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _require_real_jwt_secret(cls, v: str) -> str:
+        # Anyone who knows the secret can mint admin tokens.
+        placeholders = {"change_me_in_production", "your_super_secret_jwt_key_change_in_production"}
+        if v in placeholders or len(v) < 32:
+            raise ValueError(
+                "JWT_SECRET must be a random value of 32+ chars, generate one with: "
+                'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        return v
 
     @property
     def channel_ids_list(self) -> list[int]:

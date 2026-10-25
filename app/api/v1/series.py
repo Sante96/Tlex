@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import DBSession, get_current_user, get_current_user_optional
+from app.api.deps import DBSession, get_admin_user, get_current_user, get_current_user_optional
 from app.models.media import MediaItem, Series
 from app.models.user import User, WatchProgress
 from app.services.overrides import (
@@ -306,7 +306,12 @@ async def get_series_tmdb_images(session: DBSession, series_id: int) -> dict:
 
 
 @router.post("/{series_id}/refresh-metadata")
-async def refresh_series_metadata(request: Request, session: DBSession, series_id: int) -> dict:
+async def refresh_series_metadata(
+    request: Request,
+    session: DBSession,
+    series_id: int,
+    _admin=Depends(get_admin_user),
+) -> dict:
     """Refresh TMDB metadata for a series."""
     query = select(Series).where(Series.id == series_id)
     result = await session.execute(query)

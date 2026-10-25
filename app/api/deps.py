@@ -1,9 +1,10 @@
 """Dependency injection for API routes."""
 
+import secrets
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +54,24 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+async def get_stream_user(
+    request: Request,
+    session: DBSession,
+    token: str | None = Depends(oauth2_scheme_optional),
+):
+    """get_current_user for stream/subtitle routes.
+
+    Also accepts the `token` cookie, since <video> and the libass worker can't send an
+    Authorization header, and the internal token ffmpeg uses to read /stream/raw.
+    """
+    from app.core.security import INTERNAL_STREAM_TOKEN
+
+    internal = request.query_params.get("internal", "")
+    if internal and secrets.compare_digest(internal, INTERNAL_STREAM_TOKEN):
+        return None
+    return await get_current_user(session, token or request.cookies.get("token") or "")
 
 
 async def get_current_user_optional(

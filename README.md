@@ -118,7 +118,7 @@ graph TD
     Edit `.env` and fill in your details:
     - `API_ID` / `API_HASH`: Your Telegram App credentials.
     - `POSTGRES_PASSWORD`: Secure database password.
-    - `JWT_SECRET`: Random string for security.
+    - `JWT_SECRET`: **Required**, random value of 32+ characters (the backend won't start without it). Generate with `python -c "import secrets; print(secrets.token_hex(32))"`.
 
 3.  **Start Services**
     ```bash

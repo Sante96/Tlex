@@ -23,7 +23,9 @@ from httpx import ASGITransport, AsyncClient
 
 import app.services.streaming.crash_log as crash_log_module
 import app.services.streaming.manager as manager_module
+from app.api.deps import get_stream_user
 from app.api.v1.stream import parse_range_header
+from app.core.security import INTERNAL_STREAM_TOKEN, create_access_token
 from app.main import app
 from app.services.streaming.crash_log import flush as crash_flush
 from app.services.streaming.crash_log import record as crash_record
@@ -80,6 +82,39 @@ def clear_reader_cache():
     manager_module._reader_cache.clear()
     yield
     manager_module._reader_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def skip_stream_auth():
+    app.dependency_overrides[get_stream_user] = lambda: None
+    yield
+    app.dependency_overrides.pop(get_stream_user, None)
+
+
+# ---------------------------------------------------------------------------
+# Stream/subtitle auth
+# ---------------------------------------------------------------------------
+
+
+class TestStreamAuth:
+    async def test_anonymous_request_rejected(self):
+        app.dependency_overrides.pop(get_stream_user, None)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            assert (await c.get("/api/v1/stream/raw/1")).status_code == 401
+            assert (await c.get("/api/v1/subtitles/1/tracks")).status_code == 401
+
+    async def test_cookie_token_accepted(self):
+        user = MagicMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        session = AsyncMock()
+        session.execute.return_value = result
+        request = MagicMock(query_params={}, cookies={"token": create_access_token({"sub": "1"})})
+        assert await get_stream_user(request, session, token=None) is user
+
+    async def test_internal_token_skips_user_lookup(self):
+        request = MagicMock(query_params={"internal": INTERNAL_STREAM_TOKEN}, cookies={})
+        assert await get_stream_user(request, session=None, token=None) is None
 
 
 # ---------------------------------------------------------------------------

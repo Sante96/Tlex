@@ -1,5 +1,7 @@
 """Security utilities for JWT and password hashing."""
 
+import hashlib
+import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -9,6 +11,12 @@ from jose import JWTError, jwt
 from app.config import get_settings
 
 settings = get_settings()
+
+# Lets the backend's own ffmpeg/mkv_cues read /stream/raw over loopback without a user JWT.
+# Derived from jwt_secret so it is stable across restarts and worker processes.
+INTERNAL_STREAM_TOKEN = hmac.new(
+    settings.jwt_secret.encode(), b"internal-stream", hashlib.sha256
+).hexdigest()
 
 
 def hash_password(password: str) -> str:

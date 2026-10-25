@@ -1,7 +1,8 @@
 """API v1 routes."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import get_stream_user
 from app.api.v1 import (
     auth,
     backup,
@@ -26,8 +27,11 @@ router.include_router(scanner.router, prefix="/scanner", tags=["scanner"])
 router.include_router(media.router, prefix="/media", tags=["media"])
 router.include_router(series.router, prefix="/series", tags=["series"])
 router.include_router(seasons.router, prefix="/series", tags=["seasons"])
-router.include_router(stream.router, prefix="/stream", tags=["stream"])
-router.include_router(subtitles.router, prefix="/subtitles", tags=["subtitles"])
+_stream_auth = [Depends(get_stream_user)]
+router.include_router(stream.router, prefix="/stream", tags=["stream"], dependencies=_stream_auth)
+router.include_router(
+    subtitles.router, prefix="/subtitles", tags=["subtitles"], dependencies=_stream_auth
+)
 router.include_router(progress.router)
 router.include_router(profiles.router)
 router.include_router(watchlist.router)

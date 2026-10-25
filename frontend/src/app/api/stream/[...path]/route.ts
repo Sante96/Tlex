@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
-// Headers to forward from the client request to the backend
-const FORWARD_HEADERS = ["range", "authorization"] as const;
+// Headers to forward from the client request to the backend.
+// <video> can't send Authorization, so the backend reads the `token` cookie instead.
+const FORWARD_HEADERS = ["range", "authorization", "cookie"] as const;
 
 async function proxyStream(request: NextRequest, path: string) {
   const query = new URL(request.url).search;
