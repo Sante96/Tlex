@@ -10,6 +10,7 @@ import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import { PosterCard } from "@/components/ds";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsTV } from "@/hooks/use-platform";
+import { POSTER_GRID, TV_POSTER_GRID } from "@/components/layout/library-page";
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -204,10 +205,8 @@ export default function PersonPage() {
               {t("person.inCatalog")})
             </span>
           </h2>
-          <div className={isTV
-            ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4"
-            : "grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-3 md:gap-4"
-          }>
+          {/* The library's grid: the same poster size everywhere */}
+          <div className={isTV ? TV_POSTER_GRID : POSTER_GRID}>
             {person.works.map((work) => {
               const year = work.release_date
                 ? yearOf(work.release_date)
@@ -294,7 +293,7 @@ function PersonSkeleton() {
         </div>
       </div>
       <Skeleton className="h-7 w-48 rounded-lg mb-6" />
-      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-3 md:gap-4">
+      <div className={POSTER_GRID}>
         {Array.from({ length: 14 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-2">
             <Skeleton className="w-full aspect-[2/3] rounded-xl" />
