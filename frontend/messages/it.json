@@ -191,10 +191,14 @@
       "italian": "Italiano",
       "english": "Inglese"
     },
-    "save": "Salva preferenze",
     "saving": "Salvataggio...",
-    "saved": "Impostazioni salvate",
-    "saveError": "Errore nel salvataggio"
+    "saved": "Salvato",
+    "saveError": "Errore nel salvataggio",
+    "tabs": {
+      "preferences": "Preferenze",
+      "account": "Account",
+      "admin": "Amministrazione"
+    }
   },
   "changePassword": {
     "title": "Cambia password",

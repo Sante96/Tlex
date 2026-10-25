@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { Save, Volume2, Subtitles, Monitor, Languages, User } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Volume2, Subtitles, Monitor, Languages, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSetLocale, getClientLocale, type Locale } from "@/lib/locale";
 import { Switch } from "@/components/ui/switch";
@@ -14,18 +14,10 @@ import {
 } from "@/components/ui/select";
 import { DSCard, TVButton } from "@/components/ds";
 import { useAuth } from "@/contexts/auth-context";
-import { useProfile } from "@/contexts/profile-context";
-import { updateProfile } from "@/lib/api";
-import { useToast } from "@/components/ui/toast";
+import { useProfilePreferences } from "@/hooks/use-profile-preferences";
+import { SaveIndicator } from "@/components/settings/save-indicator";
 import { useRegistration } from "@/hooks/use-settings-data";
 import { ChangePasswordModal } from "@/components/settings/change-password-modal";
-
-interface UserPreferences {
-  default_audio: string;
-  default_subtitle: string;
-  subtitles_enabled: boolean;
-  autoplay_next: boolean;
-}
 
 /* ─── Sub-components ─────────────────────────────────────── */
 
@@ -85,10 +77,8 @@ function TVRow({
 
 export function TVSettings() {
   const { user } = useAuth();
-  const { profile, refreshProfiles } = useProfile();
+  const { preferences, update, status } = useProfilePreferences();
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const toast = useToast();
   const t = useTranslations();
   const applyLocale = useSetLocale();
   const [currentLocale, setCurrentLocale] = useState<Locale>(getClientLocale);
@@ -101,38 +91,8 @@ export function TVSettings() {
     [applyLocale],
   );
 
-  const profilePrefs = useMemo<UserPreferences>(() => {
-    const p = (profile?.preferences ?? {}) as Record<string, unknown>;
-    return {
-      default_audio: (p.default_audio as string) || "ita",
-      default_subtitle: (p.default_subtitle as string) || "ita",
-      subtitles_enabled: p.subtitles_enabled !== false,
-      autoplay_next: p.autoplay_next !== false,
-    };
-  }, [profile?.preferences]);
-
-  const [localPrefs, setLocalPrefs] = useState<UserPreferences | null>(null);
-  const preferences = localPrefs ?? profilePrefs;
-  const setPreferences = (p: UserPreferences) => setLocalPrefs(p);
-
   const { registrationOpen, togglingRegistration, handleToggleRegistration } =
     useRegistration(!!user?.is_admin);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      if (profile) {
-        await updateProfile(profile.id, {
-          preferences: preferences as unknown as Record<string, unknown>,
-        });
-        await refreshProfiles(); // the player reads the profile in memory
-      }
-      toast(t("settings.saved"), "success");
-    } catch {
-      toast(t("settings.saveError"), "error");
-    }
-    setSaving(false);
-  };
 
   return (
     <div className="min-h-full px-16 py-12 flex flex-col gap-8">
@@ -146,7 +106,7 @@ export function TVSettings() {
             <TVRow label={t("settings.audio.defaultLanguage")}>
               <Select
                 value={preferences.default_audio}
-                onValueChange={(v) => setPreferences({ ...preferences, default_audio: v })}
+                onValueChange={(v) => update({ default_audio: v })}
               >
                 <SelectTrigger className="w-40" style={{ height: "40px" }}>
                   <SelectValue />
@@ -165,13 +125,13 @@ export function TVSettings() {
             <TVRow label={t("settings.subtitles.autoShow")}>
               <Switch
                 checked={preferences.subtitles_enabled}
-                onCheckedChange={(v) => setPreferences({ ...preferences, subtitles_enabled: v })}
+                onCheckedChange={(v) => update({ subtitles_enabled: v })}
               />
             </TVRow>
             <TVRow label={t("settings.subtitles.defaultLanguage")}>
               <Select
                 value={preferences.default_subtitle}
-                onValueChange={(v) => setPreferences({ ...preferences, default_subtitle: v })}
+                onValueChange={(v) => update({ default_subtitle: v })}
               >
                 <SelectTrigger className="w-40" style={{ height: "40px" }}>
                   <SelectValue />
@@ -190,7 +150,7 @@ export function TVSettings() {
             <TVRow label={t("settings.playback.autoplayNext")} description={t("settings.playback.autoplayDescription")}>
               <Switch
                 checked={preferences.autoplay_next}
-                onCheckedChange={(v) => setPreferences({ ...preferences, autoplay_next: v })}
+                onCheckedChange={(v) => update({ autoplay_next: v })}
               />
             </TVRow>
           </TVSection>
@@ -249,15 +209,9 @@ export function TVSettings() {
         </div>
       </div>
 
-      {/* Save */}
-      <div className="flex justify-center pt-2">
-        <TVButton
-          onClick={handleSave}
-          disabled={saving}
-          icon={<Save className="w-4 h-4" />}
-        >
-          {saving ? t("settings.saving") : t("settings.save")}
-        </TVButton>
+      {/* The preferences save as they change */}
+      <div className="flex justify-center pt-2 min-h-9">
+        <SaveIndicator status={status} />
       </div>
 
       {showChangePassword && (

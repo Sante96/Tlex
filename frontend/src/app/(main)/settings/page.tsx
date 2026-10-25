@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Volume2,
   Subtitles,
   Monitor,
   User,
-  Save,
   Languages,
+  UserPlus,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSetLocale, getClientLocale, type Locale } from "@/lib/locale";
@@ -20,9 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/auth-context";
-import { useProfile } from "@/contexts/profile-context";
-import { updateProfile } from "@/lib/api";
-import { useToast } from "@/components/ui/toast";
 import {
   WorkersCard,
   StatsCard,
@@ -34,15 +31,13 @@ import { ChangePasswordModal } from "@/components/settings/change-password-modal
 import { AddWorkerCard } from "@/components/settings/add-worker-card";
 import { DSCard, DSButton } from "@/components/ds";
 import { useSettingsData } from "@/hooks/use-settings-data";
+import { useProfilePreferences } from "@/hooks/use-profile-preferences";
+import { SaveIndicator } from "@/components/settings/save-indicator";
 import { useIsTV } from "@/hooks/use-platform";
+import { cn } from "@/lib/utils";
 import { TVSettings } from "./tv-settings";
 
-interface UserPreferences {
-  default_audio: string;
-  default_subtitle: string;
-  subtitles_enabled: boolean;
-  autoplay_next: boolean;
-}
+type Tab = "preferences" | "account" | "admin";
 
 export default function SettingsPage() {
   const isTV = useIsTV();
@@ -52,13 +47,23 @@ export default function SettingsPage() {
 
 function WebSettings() {
   const { user } = useAuth();
-  const { profile, refreshProfiles } = useProfile();
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const toast = useToast();
   const t = useTranslations();
   const applyLocale = useSetLocale();
   const [currentLocale, setCurrentLocale] = useState<Locale>(getClientLocale);
+  const { preferences, update, status } = useProfilePreferences();
+
+  // The tab survives a reload (?tab=admin)
+  const [tab, setTab] = useState<Tab>(() => {
+    const asked = new URLSearchParams(window.location.search).get("tab");
+    return asked === "account" || asked === "admin" ? asked : "preferences";
+  });
+  const tabs: Tab[] = user?.is_admin ? ["preferences", "account", "admin"] : ["preferences", "account"];
+  const shown = tabs.includes(tab) ? tab : "preferences";
+  const openTab = (next: Tab) => {
+    setTab(next);
+    window.history.replaceState(window.history.state, "", `?tab=${next}`);
+  };
 
   const handleSetLocale = useCallback(
     (loc: Locale) => {
@@ -67,20 +72,8 @@ function WebSettings() {
     },
     [applyLocale],
   );
-  const profilePrefs = useMemo<UserPreferences>(() => {
-    const p = (profile?.preferences ?? {}) as Record<string, unknown>;
-    return {
-      default_audio: (p.default_audio as string) || "ita",
-      default_subtitle: (p.default_subtitle as string) || "ita",
-      subtitles_enabled: p.subtitles_enabled !== false,
-      autoplay_next: p.autoplay_next !== false,
-    };
-  }, [profile?.preferences]);
 
-  const [localPrefs, setLocalPrefs] = useState<UserPreferences | null>(null);
-  const preferences = localPrefs ?? profilePrefs;
-  const setPreferences = (p: UserPreferences) => setLocalPrefs(p);
-
+  // The admin data loads when its tab opens, not for every visit to the settings
   const {
     workersData,
     statsData,
@@ -101,69 +94,69 @@ function WebSettings() {
     handleTriggerScan,
     handleToggleRegistration,
     loadUsers,
-  } = useSettingsData(!!user?.is_admin);
+  } = useSettingsData(!!user?.is_admin && shown === "admin");
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      if (profile) {
-        await updateProfile(profile.id, {
-          preferences: preferences as unknown as Record<string, unknown>,
-        });
-        await refreshProfiles(); // the player reads the profile in memory
-      }
-      toast(t("settings.saved"), "success");
-    } catch {
-      toast(t("settings.saveError"), "error");
-    }
-    setSaving(false);
-  };
+  const languageSelect = (id: string, value: string, onChange: (v: string) => void, last: "original" | "none") => (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id={id} className="w-40">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="ita">{t("settings.audio.italian")}</SelectItem>
+        <SelectItem value="eng">{t("settings.audio.english")}</SelectItem>
+        <SelectItem value="jpn">{t("settings.audio.japanese")}</SelectItem>
+        {last === "original" ? (
+          <SelectItem value="original">{t("settings.audio.original")}</SelectItem>
+        ) : (
+          <SelectItem value="none">{t("settings.subtitles.none")}</SelectItem>
+        )}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <div className="px-4 md:px-12 py-6 md:py-8">
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Left Column */}
-        <div className="flex-1 flex flex-col gap-6">
-          {/* Audio */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div
+          role="tablist"
+          aria-label={t("nav.settings")}
+          className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-full md:w-fit"
+        >
+          {tabs.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={shown === id}
+              onClick={() => openTab(id)}
+              className={cn(
+                "flex-1 md:flex-none px-4 h-9 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange",
+                shown === id
+                  ? "bg-plex-orange text-black"
+                  : "text-[#a1a1aa] hover:text-white hover:bg-white/5",
+              )}
+            >
+              {t(`settings.tabs.${id}`)}
+            </button>
+          ))}
+        </div>
+        {shown === "preferences" && <SaveIndicator status={status} />}
+      </div>
+
+      {shown === "preferences" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <DSCard
             icon={<Volume2 className="w-5 h-5 text-plex-orange" />}
             title={t("settings.audio.title")}
           >
             <div className="flex items-center justify-between">
-              <label
-                htmlFor="audio-lang"
-                className="text-sm font-medium text-[#fafafa]"
-              >
+              <label htmlFor="audio-lang" className="text-sm font-medium text-[#fafafa]">
                 {t("settings.audio.defaultLanguage")}
               </label>
-              <Select
-                value={preferences.default_audio}
-                onValueChange={(value) =>
-                  setPreferences({ ...preferences, default_audio: value })
-                }
-              >
-                <SelectTrigger id="audio-lang" className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ita">
-                    {t("settings.audio.italian")}
-                  </SelectItem>
-                  <SelectItem value="eng">
-                    {t("settings.audio.english")}
-                  </SelectItem>
-                  <SelectItem value="jpn">
-                    {t("settings.audio.japanese")}
-                  </SelectItem>
-                  <SelectItem value="original">
-                    {t("settings.audio.original")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              {languageSelect("audio-lang", preferences.default_audio, (v) => update({ default_audio: v }), "original")}
             </div>
           </DSCard>
 
-          {/* Sottotitoli */}
           <DSCard
             icon={<Subtitles className="w-5 h-5 text-plex-orange" />}
             title={t("settings.subtitles.title")}
@@ -176,47 +169,18 @@ function WebSettings() {
                 <Switch
                   id="subtitles-enabled"
                   checked={preferences.subtitles_enabled}
-                  onCheckedChange={(checked: boolean) =>
-                    setPreferences({
-                      ...preferences,
-                      subtitles_enabled: checked,
-                    })
-                  }
+                  onCheckedChange={(checked: boolean) => update({ subtitles_enabled: checked })}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <label htmlFor="subtitle-lang" className="text-[#fafafa]">
                   {t("settings.subtitles.defaultLanguage")}
                 </label>
-                <Select
-                  value={preferences.default_subtitle}
-                  onValueChange={(value) =>
-                    setPreferences({ ...preferences, default_subtitle: value })
-                  }
-                >
-                  <SelectTrigger id="subtitle-lang" className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ita">
-                      {t("settings.audio.italian")}
-                    </SelectItem>
-                    <SelectItem value="eng">
-                      {t("settings.audio.english")}
-                    </SelectItem>
-                    <SelectItem value="jpn">
-                      {t("settings.audio.japanese")}
-                    </SelectItem>
-                    <SelectItem value="none">
-                      {t("settings.subtitles.none")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                {languageSelect("subtitle-lang", preferences.default_subtitle, (v) => update({ default_subtitle: v }), "none")}
               </div>
             </div>
           </DSCard>
 
-          {/* Riproduzione */}
           <DSCard
             icon={<Monitor className="w-5 h-5 text-plex-orange" />}
             title={t("settings.playback.title")}
@@ -233,22 +197,17 @@ function WebSettings() {
               <Switch
                 id="autoplay"
                 checked={preferences.autoplay_next}
-                onCheckedChange={(checked: boolean) =>
-                  setPreferences({ ...preferences, autoplay_next: checked })
-                }
+                onCheckedChange={(checked: boolean) => update({ autoplay_next: checked })}
               />
             </div>
           </DSCard>
 
-          {/* Account */}
           <DSCard
             icon={<Languages className="w-5 h-5 text-plex-orange" />}
             title={t("settings.language.title")}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#fafafa]">
-                {t("settings.language.description")}
-              </span>
+              <span className="text-sm text-[#fafafa]">{t("settings.language.description")}</span>
               <div className="flex gap-2">
                 {(["it", "en"] as Locale[]).map((loc) => (
                   <DSButton
@@ -257,42 +216,34 @@ function WebSettings() {
                     onClick={() => handleSetLocale(loc)}
                     className="!h-8 !px-3"
                   >
-                    {loc === "en"
-                      ? t("settings.language.english")
-                      : t("settings.language.italian")}
+                    {loc === "en" ? t("settings.language.english") : t("settings.language.italian")}
                   </DSButton>
                 ))}
               </div>
             </div>
           </DSCard>
+        </div>
+      )}
 
+      {shown === "account" && (
+        <div className="max-w-xl">
           <DSCard
             icon={<User className="w-5 h-5 text-plex-orange" />}
             title={t("settings.account.title")}
           >
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">
-                  {t("settings.account.email")}
-                </span>
-                <span className="text-sm text-[#a1a1aa]">
-                  {user?.email || "—"}
-                </span>
+                <span className="text-sm text-[#fafafa]">{t("settings.account.email")}</span>
+                <span className="text-sm text-[#a1a1aa]">{user?.email || "—"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#fafafa]">
-                  {t("settings.account.role")}
-                </span>
+                <span className="text-sm text-[#fafafa]">{t("settings.account.role")}</span>
                 <span className="text-sm text-[#a1a1aa]">
                   {user?.is_admin ? t("common.admin") : t("common.user")}
                 </span>
               </div>
               <div className="h-px bg-[#27272a]" />
-              <DSButton
-                variant="secondary"
-                onClick={() => setShowChangePassword(true)}
-                className="w-full"
-              >
+              <DSButton variant="secondary" onClick={() => setShowChangePassword(true)} className="w-full">
                 {t("settings.account.changePassword")}
               </DSButton>
               <DSButton
@@ -302,45 +253,43 @@ function WebSettings() {
               >
                 {t("settings.account.manageProfiles")}
               </DSButton>
-              {user?.is_admin && registrationOpen !== null && (
-                <>
-                  <div className="h-px bg-[#27272a]" />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm text-[#fafafa]">
-                        {t("settings.account.registrations")}
-                      </span>
-                      <p className="text-xs text-[#71717a] mt-0.5">
-                        {registrationOpen
-                          ? t("settings.account.registrationsOpen")
-                          : t("settings.account.registrationsClosed")}
-                      </p>
-                    </div>
-                    <Switch
-                      id="registration"
-                      checked={registrationOpen}
-                      disabled={togglingRegistration}
-                      onCheckedChange={handleToggleRegistration}
-                    />
-                  </div>
-                </>
-              )}
             </div>
           </DSCard>
+        </div>
+      )}
 
-          {/* Gestione Utenti (admin only) */}
-          {user?.is_admin && (
+      {shown === "admin" && user?.is_admin && (
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex-1 flex flex-col gap-6">
+            {registrationOpen !== null && (
+              <DSCard
+                icon={<UserPlus className="w-5 h-5 text-plex-orange" />}
+                title={t("settings.account.registrations")}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-[#a1a1aa]">
+                    {registrationOpen
+                      ? t("settings.account.registrationsOpen")
+                      : t("settings.account.registrationsClosed")}
+                  </p>
+                  <Switch
+                    id="registration"
+                    checked={registrationOpen}
+                    disabled={togglingRegistration}
+                    onCheckedChange={handleToggleRegistration}
+                    aria-label={t("settings.account.registrations")}
+                  />
+                </div>
+              </DSCard>
+            )}
             <UsersCard
               users={usersData}
               currentUserId={user?.id ?? 0}
               loading={loadingUsers}
               onRefresh={loadUsers}
             />
-          )}
-        </div>
-
-        {/* Right Column (admin only) */}
-        {user?.is_admin && (
+            <StatsCard data={statsData} loading={loadingStats} onRefresh={loadStats} />
+          </div>
           <div className="flex-1 flex flex-col gap-6">
             <ScannerCard
               autoScanData={autoScanData}
@@ -351,41 +300,19 @@ function WebSettings() {
               onTriggerScan={handleTriggerScan}
               onAutoScanChange={setAutoScanData}
             />
-            <StatsCard
-              data={statsData}
-              loading={loadingStats}
-              onRefresh={loadStats}
-            />
-            <WorkersCard
-              data={workersData}
-              loading={loadingWorkers}
-              onRefresh={loadWorkersStatus}
-            />
+            <WorkersCard data={workersData} loading={loadingWorkers} onRefresh={loadWorkersStatus} />
             <AddWorkerCard onWorkersChanged={loadWorkersStatus} />
             <BackupCard />
           </div>
-        )}
-      </div>
-
-      {/* Save Button */}
-      <div className="flex justify-end pt-8">
-        <DSButton
-          onClick={handleSave}
-          disabled={saving}
-          icon={<Save className="w-4 h-4" />}
-        >
-          {saving ? t("settings.saving") : t("settings.save")}
-        </DSButton>
-      </div>
+        </div>
+      )}
 
       {/* Credit — mobile only (desktop has it in the sidebar) */}
       <p className="md:hidden text-[10px] text-[#3f3f46] text-center pt-6 tracking-wide select-none">
         {t("common.madeBy")}
       </p>
 
-      {showChangePassword && (
-        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
-      )}
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
   );
 }
