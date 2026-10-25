@@ -9,7 +9,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app._version import __version__
-from app.api.deps import DBSession
 from app.api.v1 import router as api_v1_router
 from app.config import get_settings
 from app.core.exceptions import TLEXException, tlex_exception_handler
@@ -159,53 +158,10 @@ async def root():
     }
 
 
-@app.get("/workers/status")
-async def workers_status(session: DBSession):
-    """Get detailed status of all Telegram workers including FloodWait info."""
-    return await worker_manager.get_workers_status(session)
-
-
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
     return get_metrics_response()
-
-
-@app.get("/stats")
-async def stats(session: DBSession):
-    """System stats for frontend dashboard."""
-    from sqlalchemy import func, select
-
-    from app.models.media import MediaItem, MediaType
-    from app.models.user import Profile, User
-
-    # Count media items
-    movies_count = await session.scalar(
-        select(func.count()).select_from(MediaItem).where(MediaItem.media_type == MediaType.MOVIE)
-    )
-    episodes_count = await session.scalar(
-        select(func.count()).select_from(MediaItem).where(MediaItem.media_type == MediaType.EPISODE)
-    )
-
-    # Count users and profiles
-    users_count = await session.scalar(select(func.count()).select_from(User))
-    profiles_count = await session.scalar(select(func.count()).select_from(Profile))
-
-    # Workers status
-    workers_data = await worker_manager.get_workers_status(session)
-
-    return {
-        "media": {
-            "movies": movies_count or 0,
-            "episodes": episodes_count or 0,
-            "total": (movies_count or 0) + (episodes_count or 0),
-        },
-        "users": {
-            "total": users_count or 0,
-            "profiles": profiles_count or 0,
-        },
-        "workers": workers_data["summary"],
-    }
 
 
 @app.get("/health")

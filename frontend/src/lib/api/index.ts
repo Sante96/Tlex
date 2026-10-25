@@ -1,9 +1,10 @@
 // Re-export everything from modules
-export { api, API_BASE_URL } from "./client";
+export { api, API_BASE_URL, saveTokens, clearTokens } from "./client";
 
 // Auth
 export {
   login,
+  logout,
   register,
   getCurrentUser,
   changePassword,

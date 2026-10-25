@@ -1,7 +1,11 @@
 """Pytest fixtures for TLEX tests."""
 
 import asyncio
+import os
 from collections.abc import AsyncGenerator
+
+# Before app imports (settings are cached): the auth tests register several users
+os.environ.setdefault("ENABLE_REGISTRATION", "true")
 
 import pytest
 import pytest_asyncio

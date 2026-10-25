@@ -2,12 +2,14 @@
 
 from datetime import UTC, datetime
 
+import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from loguru import logger
 from sqlalchemy import delete, select
 
 from app.api.deps import DBSession, get_admin_user, get_current_user
+from app.config import get_settings
 from app.core.rate_limit import AUTH_LIMIT, limiter
 from app.core.security import (
     create_access_token,
@@ -20,6 +22,27 @@ from app.models.user import RefreshToken, User
 from app.schemas import ChangePassword, RefreshRequest, TokenResponse, UserCreate, UserResponse
 
 router = APIRouter()
+
+# The admin toggle lives in Redis (like the scheduler intervals) so it survives restarts;
+# ENABLE_REGISTRATION is only the default.
+REDIS_KEY_REGISTRATION = "tlex:auth:registration_enabled"
+_redis: redis.Redis | None = None
+
+
+def _get_redis() -> redis.Redis:
+    global _redis
+    if _redis is None:
+        _redis = redis.from_url(get_settings().redis_url)
+    return _redis
+
+
+async def _registration_enabled() -> bool:
+    try:
+        value = await _get_redis().get(REDIS_KEY_REGISTRATION)
+    except Exception as e:
+        logger.warning(f"Failed to read registration toggle from Redis: {e}")
+        value = None
+    return get_settings().enable_registration if value is None else value == b"1"
 
 
 async def _create_tokens(session: DBSession, user: User) -> TokenResponse:
@@ -44,10 +67,9 @@ async def _create_tokens(session: DBSession, user: User) -> TokenResponse:
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(AUTH_LIMIT)
 async def register(request: Request, user_data: UserCreate, session: DBSession) -> User:
-    """Register a new user."""
-    from app.config import get_settings
-
-    if not get_settings().enable_registration:
+    """Register a new user. The first account is always allowed and becomes admin."""
+    is_first_user = (await session.execute(select(User.id).limit(1))).first() is None
+    if not is_first_user and not await _registration_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Registration is currently disabled",
@@ -66,7 +88,7 @@ async def register(request: Request, user_data: UserCreate, session: DBSession) 
     user = User(
         email=user_data.email,
         password_hash=hash_password(user_data.password),
-        is_admin=False,
+        is_admin=is_first_user,  # otherwise a fresh install has no one who can add workers
     )
     session.add(user)
     await session.commit()
@@ -103,19 +125,23 @@ async def login(
 @limiter.limit(AUTH_LIMIT)
 async def refresh_tokens(request: Request, body: RefreshRequest, session: DBSession) -> TokenResponse:
     """Refresh access token using refresh token."""
-    stmt = select(RefreshToken).where(
-        RefreshToken.token == body.refresh_token,
-        RefreshToken.revoked == False,  # noqa: E712
-        RefreshToken.expires_at > datetime.now(UTC),
-    )
+    # FOR UPDATE: two parallel refreshes with one token must not both succeed
+    stmt = select(RefreshToken).where(RefreshToken.token == body.refresh_token).with_for_update()
     result = await session.execute(stmt)
     refresh_token = result.scalar_one_or_none()
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+    )
 
-    if not refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
+    if refresh_token and refresh_token.revoked:
+        # A rotated-out token came back: it was copied. End every session of that user.
+        await session.execute(delete(RefreshToken).where(RefreshToken.user_id == refresh_token.user_id))
+        await session.commit()
+        logger.warning(f"Refresh token reuse for user {refresh_token.user_id}: all sessions revoked")
+        raise invalid
+    if not refresh_token or refresh_token.expires_at.replace(tzinfo=UTC) <= datetime.now(UTC):
+        raise invalid
 
     # Get user
     user_stmt = select(User).where(User.id == refresh_token.user_id)
@@ -128,8 +154,14 @@ async def refresh_tokens(request: Request, body: RefreshRequest, session: DBSess
             detail="User not found",
         )
 
-    # Revoke old refresh token (rotation)
+    # Revoke old refresh token (rotation). Revoked rows stay until they expire so reuse
+    # can be detected; expired ones are purged here so the table doesn't grow forever.
     refresh_token.revoked = True
+    await session.execute(
+        delete(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.expires_at < datetime.now(UTC))
+        .execution_options(synchronize_session=False)
+    )
 
     # Create new tokens
     logger.info(f"Token refreshed for: {user.email}")
@@ -139,13 +171,13 @@ async def refresh_tokens(request: Request, body: RefreshRequest, session: DBSess
 @router.post("/logout")
 async def logout(
     session: DBSession,
+    body: RefreshRequest | None = None,
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Logout and revoke all refresh tokens for the user."""
-    stmt = (
-        delete(RefreshToken)
-        .where(RefreshToken.user_id == current_user.id)
-    )
+    """Logout: revoke this device's refresh token, or all of the user's without one."""
+    stmt = delete(RefreshToken).where(RefreshToken.user_id == current_user.id)
+    if body:
+        stmt = stmt.where(RefreshToken.token == body.refresh_token)
     await session.execute(stmt)
     await session.commit()
 
@@ -153,13 +185,13 @@ async def logout(
     return {"message": "Logged out successfully"}
 
 
-@router.put("/change-password")
+@router.put("/change-password", response_model=TokenResponse)
 async def change_password(
     body: ChangePassword,
     session: DBSession,
     current_user: User = Depends(get_current_user),
-) -> dict:
-    """Change current user's password."""
+) -> TokenResponse:
+    """Change current user's password, end its other sessions, return fresh tokens."""
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -173,10 +205,11 @@ async def change_password(
         )
 
     current_user.password_hash = hash_password(body.new_password)
-    await session.commit()
+    # A stolen refresh token must stop working once the password changes
+    await session.execute(delete(RefreshToken).where(RefreshToken.user_id == current_user.id))
 
     logger.info(f"Password changed for: {current_user.email}")
-    return {"message": "Password changed successfully"}
+    return await _create_tokens(session, current_user)
 
 
 @router.get("/registration-status")
@@ -184,8 +217,7 @@ async def get_registration_status(
     _admin=Depends(get_admin_user),
 ) -> dict:
     """Get whether registration is open or closed (admin only)."""
-    from app.config import get_settings
-    return {"enabled": get_settings().enable_registration}
+    return {"enabled": await _registration_enabled()}
 
 
 @router.put("/registration-status")
@@ -193,14 +225,16 @@ async def set_registration_status(
     body: dict,
     _admin=Depends(get_admin_user),
 ) -> dict:
-    """Toggle registration open/closed at runtime (admin only)."""
-    from app.config import get_settings
-
+    """Toggle registration open/closed (admin only, persisted in Redis)."""
     enabled = body.get("enabled")
     if not isinstance(enabled, bool):
         raise HTTPException(status_code=400, detail="'enabled' must be a boolean")
 
-    get_settings().enable_registration = enabled
+    try:
+        await _get_redis().set(REDIS_KEY_REGISTRATION, "1" if enabled else "0")
+    except Exception as e:
+        logger.error(f"Failed to save registration toggle: {e}")
+        raise HTTPException(status_code=503, detail="Could not save the setting") from None
     logger.info(f"Registration {'enabled' if enabled else 'disabled'} by admin")
     return {"enabled": enabled}
 

@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -34,8 +34,8 @@ router = APIRouter()
 @router.get("", response_model=MediaListResponse)
 async def list_media(
     session: DBSession,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
     media_type: MediaType | None = None,
     search: str | None = None,
     current_user: User | None = Depends(get_current_user_optional),

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # ============================================
     environment: Literal["dev", "test", "prod"] = "dev"
     debug: bool = False
-    enable_registration: bool = True
+    enable_registration: bool = False  # the first account can always register (and is admin)
 
     # ============================================
     # Telegram API

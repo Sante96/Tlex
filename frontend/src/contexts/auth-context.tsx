@@ -11,7 +11,10 @@ import type { ReactNode } from "react";
 import Cookies from "js-cookie";
 import {
   login as apiLogin,
+  logout as apiLogout,
   getCurrentUser,
+  saveTokens,
+  clearTokens,
   type UserResponse,
 } from "@/lib/api";
 
@@ -43,10 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // An expired access token is renewed by the client's 401 handler first
       const userData = await getCurrentUser();
       setUser(userData);
     } catch {
-      Cookies.remove("token");
+      clearTokens();
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -59,18 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     const response = await apiLogin(credentials.email, credentials.password);
-    Cookies.set("token", response.access_token, { expires: 7 });
+    saveTokens(response.access_token, response.refresh_token);
     await fetchUser();
   };
 
   const loginWithToken = useCallback(async (accessToken: string, refreshToken?: string) => {
-    Cookies.set("token", accessToken, { expires: 7 });
-    if (refreshToken) Cookies.set("refresh_token", refreshToken, { expires: 30 });
+    saveTokens(accessToken, refreshToken);
     await fetchUser();
   }, [fetchUser]);
 
   const logout = () => {
-    Cookies.remove("token");
+    void apiLogout();
     setUser(null);
   };
 

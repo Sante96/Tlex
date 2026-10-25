@@ -58,18 +58,25 @@ export interface EpisodeInfo {
   runtime: number | null;
 }
 
-export async function getMediaList(params?: {
+export async function getMediaList({
+  skip = 0,
+  limit = 20,
+  ...filters
+}: {
   skip?: number;
   limit?: number;
   media_type?: string;
   search?: string;
-}) {
+} = {}) {
+  // The backend paginates with page/page_size: skip/limit used to be ignored (max 20 items)
   const response = await api.get<{
     items: MediaItem[];
     total: number;
-    skip: number;
-    limit: number;
-  }>("/api/v1/media/", { params });
+    page: number;
+    page_size: number;
+  }>("/api/v1/media", {
+    params: { ...filters, page_size: limit, page: Math.floor(skip / limit) + 1 },
+  });
   return response.data;
 }
 

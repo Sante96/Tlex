@@ -1,7 +1,10 @@
-import { api } from "./client";
+import Cookies from "js-cookie";
+
+import { api, clearTokens, saveTokens } from "./client";
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
 }
 
@@ -49,10 +52,28 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
-  await api.put("/api/v1/auth/change-password", {
+  // The backend ends every other session and returns fresh tokens for this one
+  const { data } = await api.put<LoginResponse>("/api/v1/auth/change-password", {
     current_password: currentPassword,
     new_password: newPassword,
   });
+  saveTokens(data.access_token, data.refresh_token);
+}
+
+/** Clear this device's tokens and revoke its refresh token. Tokens are cleared first so a
+ * slow request can't wipe a new login; the server call is best effort. */
+export async function logout(): Promise<void> {
+  const accessToken = Cookies.get("token");
+  const refreshToken = Cookies.get("refresh_token");
+  clearTokens();
+  if (!accessToken) return;
+  await api
+    .post(
+      "/api/v1/auth/logout",
+      refreshToken ? { refresh_token: refreshToken } : undefined,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    .catch(() => {});
 }
 
 export async function getRegistrationStatus(): Promise<{ enabled: boolean }> {

@@ -136,10 +136,11 @@ graph TD
         ```
 
 ### First Run Setup
-1.  **Add Workers**: You need to authenticate at least one Telegram account.
+1.  **Create your account**: Open the Web UI and register. The first account becomes the administrator; after that, sign-ups are closed unless you open them from Settings.
+2.  **Add Workers**: You need to authenticate at least one Telegram account.
     - Go to the **Settings / Workers** page in the Web UI.
     - Click **Add Worker** and follow the phone number verification flow.
-2.  **Scan Channels**:
+3.  **Scan Channels**:
     - Configure `SCANNER_CHANNEL_IDS` in your `.env`.
     - Trigger a scan via the API or specific dashboard button to populate your library.
 
