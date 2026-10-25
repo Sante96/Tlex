@@ -5,8 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
-from app.models.media import MediaItem, MediaType
-from app.services.ffprobe import FFProbeService, ProbeResult
+from app.models.media import CodecType, MediaItem, MediaType
+from app.services.ffprobe import FFProbeService, ProbeResult, StreamInfo
 
 
 def test_ffprobe_reads_chapters_and_drops_generic_names():
@@ -93,7 +93,7 @@ async def test_backfill_reads_only_the_titles_never_probed(test_session: AsyncSe
     assert rows == {"Old": found, "Done": [], "Broken": None}
 
 
-async def test_probe_head_reads_further_when_the_header_is_longer(mocker):
+async def test_probe_head_reads_further_when_the_header_is_longer(mocker, test_session):
     """Fonts attached before the tracks push the header past 4 MB: read on to 50 MB."""
     from app.services import chapters as chapters_service
 
@@ -105,12 +105,13 @@ async def test_probe_head_reads_further_when_the_header_is_longer(mocker):
             yield b"x"
 
     mocker.patch.object(chapters_service, "get_virtual_reader", return_value=Reader())
-    full = ProbeResult(duration_seconds=1447, streams=[object()], chapters=[])
+    video = StreamInfo(stream_index=0, codec_type=CodecType.VIDEO, codec_name="hevc")
+    full = ProbeResult(duration_seconds=1447, streams=[video], chapters=[])
     mocker.patch.object(
         chapters_service.ffprobe_service, "probe_file", side_effect=[None, full]
     )
 
-    assert await chapters_service.probe_head(None, 78) is full
+    assert await chapters_service.probe_head(test_session, 78) is full
     assert reads == [(0, 4 * 1024 * 1024), (4 * 1024 * 1024, 50 * 1024 * 1024)]
 
 
