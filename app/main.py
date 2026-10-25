@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(5)
             async with async_session_maker() as session:
                 from app.services.subtitles.cache import populate_all_caches
+
                 await populate_all_caches(session)
         except Exception as e:
             logger.warning(f"Background cache population failed: {e}")
@@ -57,6 +58,7 @@ async def lifespan(app: FastAPI):
     # Start auto-scan scheduler (always on: it idles while the interval is 0, and the
     # interval can be enabled later from the admin UI)
     from app.services.scheduler import auto_scan_scheduler, backup_sync_scheduler
+
     asyncio.create_task(auto_scan_scheduler.start())
     logger.info("Auto-scan scheduler started")
 
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
     # Background cleanup for stale stream readers (safety net)
     async def stream_reader_cleanup_loop():
         from app.services.streaming.manager import cleanup_stale_readers
+
         while True:
             await asyncio.sleep(30)
             try:
@@ -76,43 +79,9 @@ async def lifespan(app: FastAPI):
 
     cleanup_task = asyncio.create_task(stream_reader_cleanup_loop())
 
-    # Keepalive: send MTProto Ping to all Pyrogram clients every 60s to prevent TCP idle timeout
-    # Pyrogram closes connections after ~2min of inactivity → OSError on next stream_media call
-    # Use raw Ping (not get_me) to avoid FLOOD_WAIT on high-session accounts
-    async def client_keepalive_loop():
-        from pyrogram import raw
-
-        while True:
-            await asyncio.sleep(30)
-            for _worker_id, client in worker_manager._client_pool:
-                # Ping main session
-                try:
-                    await client.invoke(raw.functions.Ping(ping_id=0))
-                except Exception as e:
-                    logger.debug(f"Keepalive main ping failed for client {id(client)}: {e}")
-                # Ping all media sessions (used by stream_media/get_file — separate DC connections)
-                # If ping fails, drop the session so it gets recreated fresh on next get_file call
-                media_sessions = getattr(client, "media_sessions", {})
-                for dc_id, media_session in list(media_sessions.items()):
-                    try:
-                        await media_session.invoke(raw.functions.Ping(ping_id=0))
-                    except Exception as e:
-                        logger.warning(
-                            f"Keepalive: dropping media session DC{dc_id} for client {id(client)}: "
-                            f"{type(e).__name__}: {e}"
-                        )
-                        try:
-                            await media_session.stop()
-                        except Exception:
-                            pass
-                        media_sessions.pop(dc_id, None)
-
-    keepalive_task = asyncio.create_task(client_keepalive_loop())
-
     yield
 
     cleanup_task.cancel()
-    keepalive_task.cancel()
 
     # Shutdown
     logger.info("Shutting down TLEX...")
