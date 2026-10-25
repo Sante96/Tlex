@@ -10,25 +10,20 @@ from loguru import logger
 from app.api.deps import DBSession
 from app.config import get_settings
 from app.models.media import CodecType
-from app.services.streaming import get_virtual_reader
-from app.services.subtitles import subtitle_extractor
 from app.services.subtitles.cache import (
+    FONT_CACHE_DIR,
     extraction_task,
     finished_recently,
     is_extracting,
+    pre_extract_fonts,
     subtitle_file,
 )
 
 settings = get_settings()
 router = APIRouter(tags=["subtitles"])
 
-# Font cache directory
-FONT_CACHE_DIR = Path("cache/fonts")
-FONT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
 # Lock to prevent parallel font extraction for same media_id
 _font_extraction_locks: dict[int, asyncio.Lock] = {}
-_background_tasks: set[asyncio.Task] = set()
 
 
 def _cached(path: Path) -> bool:
@@ -132,111 +127,38 @@ async def get_subtitle_status(
     return {"status": "not_started"}
 
 
+def _font_list(media_id: int) -> list[dict]:
+    """The media's cached fonts with their names (parsed from the files: run in a thread)."""
+    from app.services.subtitles import extract_font_names
+
+    return [
+        {
+            "filename": f.name,
+            "mimetype": "application/x-font-ttf",
+            "size": f.stat().st_size,
+            "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
+            "names": extract_font_names(f.read_bytes()),
+        }
+        for f in sorted((FONT_CACHE_DIR / str(media_id)).glob("*"))
+    ]
+
+
 @router.get("/{media_id}/fonts")
 async def get_fonts(
     media_id: int,
     session: DBSession,
 ) -> dict:
     """
-    Extract and list all attached fonts from media.
+    List the media's attached fonts, extracting them on first use.
 
-    Returns font metadata. Use /fonts/{media_id}/{filename} to download.
+    Use /{media_id}/font/{filename} to download one.
     """
-    logger.info(f"GET fonts request: media_id={media_id}")
-    # Check cache first (before acquiring lock)
-    cache_dir = FONT_CACHE_DIR / str(media_id)
-    if cache_dir.exists():
-        cached_fonts = list(cache_dir.glob("*"))
-        if cached_fonts:
-            logger.info(f"Serving {len(cached_fonts)} cached fonts for media {media_id}")
-            from app.services.subtitles import extract_font_names
-
-            font_list = []
-            for f in cached_fonts:
-                font_data = f.read_bytes()
-                font_names = extract_font_names(font_data)
-                font_list.append(
-                    {
-                        "filename": f.name,
-                        "mimetype": "application/x-font-ttf",
-                        "size": f.stat().st_size,
-                        "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
-                        "names": font_names,
-                    }
-                )
-
-            return {
-                "media_id": media_id,
-                "fonts": font_list,
-                "count": len(cached_fonts),
-            }
-
-    # Acquire lock to prevent parallel extraction for same media_id
-    if media_id not in _font_extraction_locks:
-        _font_extraction_locks[media_id] = asyncio.Lock()
-
-    async with _font_extraction_locks[media_id]:
-        # Re-check cache after acquiring lock (another request may have populated it)
-        if cache_dir.exists():
-            cached_fonts = list(cache_dir.glob("*"))
-            if cached_fonts:
-                logger.info(
-                    f"Serving {len(cached_fonts)} cached fonts for media {media_id} (after lock)"
-                )
-                from app.services.subtitles import extract_font_names
-
-                font_list = []
-                for f in cached_fonts:
-                    font_data = f.read_bytes()
-                    font_names = extract_font_names(font_data)
-                    font_list.append(
-                        {
-                            "filename": f.name,
-                            "mimetype": "application/x-font-ttf",
-                            "size": f.stat().st_size,
-                            "url": f"/api/v1/subtitles/{media_id}/font/{f.name}",
-                            "names": font_names,
-                        }
-                    )
-
-                return {
-                    "media_id": media_id,
-                    "fonts": font_list,
-                    "count": len(cached_fonts),
-                }
-
-        reader = await get_virtual_reader(session, media_id)
-        if reader is None:
-            raise HTTPException(status_code=404, detail="Media not found")
-
-        # Use direct reader instead of HTTP self-request for better performance
-        try:
-            fonts = await subtitle_extractor.extract_all_fonts_from_reader(reader)
-        except Exception as e:
-            logger.error(f"Font extraction failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e)) from None
-
-        # Cache extracted fonts
-        if fonts:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            for f in fonts:
-                (cache_dir / f.filename).write_bytes(f.data)
-            logger.info(f"Cached {len(fonts)} fonts for media {media_id}")
-
-        return {
-            "media_id": media_id,
-            "fonts": [
-                {
-                    "filename": f.filename,
-                    "mimetype": f.mimetype,
-                    "size": len(f.data),
-                    "url": f"/api/v1/subtitles/{media_id}/font/{f.filename}",
-                    "names": f.font_names or [],
-                }
-                for f in fonts
-            ],
-            "count": len(fonts),
-        }
+    # Extracted once per media: its folder, left empty when the file has no fonts, then
+    # answers without reading Telegram again (it was re-read on every subtitle toggle)
+    async with _font_extraction_locks.setdefault(media_id, asyncio.Lock()):
+        await pre_extract_fonts(media_id, session)
+    fonts = await asyncio.to_thread(_font_list, media_id)
+    return {"media_id": media_id, "fonts": fonts, "count": len(fonts)}
 
 
 @router.get("/{media_id}/font/{filename}")
@@ -270,75 +192,3 @@ async def get_font_file(
         )
 
     raise HTTPException(status_code=404, detail=f"Font '{filename}' not found")
-
-
-@router.post("/{media_id}/warm")
-async def warm_subtitle_assets(
-    media_id: int,
-    session: DBSession,
-) -> dict:
-    """
-    Pre-warm subtitle assets (fonts) in background.
-
-    Called during stream warm to cache fonts before user selects subtitles.
-    Returns immediately, extraction happens in background task.
-    """
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
-    from app.models.media import MediaItem
-
-    # Check if fonts are already cached
-    cache_dir = FONT_CACHE_DIR / str(media_id)
-    if cache_dir.exists() and list(cache_dir.glob("*")):
-        logger.debug(f"Font cache exists for media {media_id}, skipping warm")
-        return {"status": "cached", "media_id": media_id}
-
-    # Check if media has subtitle streams
-    query = (
-        select(MediaItem).where(MediaItem.id == media_id).options(selectinload(MediaItem.streams))
-    )
-    result = await session.execute(query)
-    media = result.scalar_one_or_none()
-
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    has_subtitles = any(s.codec_type == CodecType.SUBTITLE for s in media.streams)
-    if not has_subtitles:
-        logger.debug(f"No subtitles in media {media_id}, skipping warm")
-        return {"status": "no_subtitles", "media_id": media_id}
-
-    # Start background extraction (don't await)
-    async def extract_in_background():
-        from app.database import async_session_maker
-
-        try:
-            # Own session: the request's one is closed once this endpoint returns.
-            # Same lock as get_fonts, so the player's request doesn't extract twice.
-            async with (
-                asyncio.timeout(120),  # 2 min max
-                _font_extraction_locks.setdefault(media_id, asyncio.Lock()),
-                async_session_maker() as s,
-            ):
-                if cache_dir.exists() and list(cache_dir.glob("*")):
-                    return
-                reader = await get_virtual_reader(s, media_id)
-                if reader:
-                    fonts = await subtitle_extractor.extract_all_fonts_from_reader(reader)
-                    if fonts:
-                        cache_dir.mkdir(parents=True, exist_ok=True)
-                        for f in fonts:
-                            (cache_dir / f.filename).write_bytes(f.data)
-                        logger.info(f"Background: cached {len(fonts)} fonts for media {media_id}")
-        except TimeoutError:
-            logger.warning(f"Background font extraction timed out for media {media_id}")
-        except Exception as e:
-            logger.warning(f"Background font extraction failed for media {media_id}: {e}")
-
-    # Fire and forget; keep a reference so the task isn't garbage-collected mid-run
-    task = asyncio.create_task(extract_in_background())
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return {"status": "warming", "media_id": media_id}

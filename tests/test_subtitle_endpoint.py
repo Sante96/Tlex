@@ -322,29 +322,38 @@ class TestGetFontFile:
         assert exc.value.status_code == 404
 
 
-class TestWarmSubtitleAssets:
-    async def test_background_extraction_uses_its_own_session(self, tmp_path, monkeypatch):
+class TestGetFonts:
+    @pytest.fixture
+    def fonts(self, tmp_path, monkeypatch):
+        """Font cache in tmp; returns the extractor mock (what Telegram would give)."""
+        import app.api.v1.subtitles as mod
+
+        monkeypatch.setattr(mod, "FONT_CACHE_DIR", tmp_path / "fonts")
+        monkeypatch.setattr(cache, "FONT_CACHE_DIR", tmp_path / "fonts")
+        monkeypatch.setattr(cache, "get_virtual_reader", AsyncMock(return_value=MagicMock()))
+        extract = AsyncMock(return_value=[])
+        monkeypatch.setattr(cache.subtitle_extractor, "extract_all_fonts_from_reader", extract)
+        return extract
+
+    async def test_media_without_fonts_is_read_once(self, fonts):
+        import app.api.v1.subtitles as mod
+
+        for _ in range(3):  # every subtitle toggle asks again
+            resp = await mod.get_fonts(media_id=1, session=MagicMock())
+            assert resp["fonts"] == []
+
+        fonts.assert_awaited_once()
+
+    async def test_extracted_fonts_are_listed(self, fonts, tmp_path):
         import app.api.v1.subtitles as mod
         from app.services.subtitles.models import AttachedFont
 
-        monkeypatch.setattr(mod, "FONT_CACHE_DIR", tmp_path / "fonts")
-        request_session = _make_session(_make_media([_make_stream(3)]))
-        own_session = AsyncMock()
-        maker = MagicMock()
-        maker.return_value.__aenter__.return_value = own_session
-        get_reader = AsyncMock(return_value=MagicMock())
-        font = AttachedFont(filename="A.ttf", mimetype="font/ttf", data=b"f", font_names=[])
+        fonts.return_value = [AttachedFont(filename="A.ttf", mimetype="font/ttf", data=b"f", font_names=[])]
 
-        with (
-            patch("app.database.async_session_maker", maker),
-            patch("app.api.v1.subtitles.get_virtual_reader", get_reader),
-            patch.object(
-                mod.subtitle_extractor, "extract_all_fonts_from_reader", AsyncMock(return_value=[font])
-            ),
-        ):
-            resp = await mod.warm_subtitle_assets(media_id=1, session=request_session)
-            await asyncio.gather(*mod._background_tasks)
+        first = await mod.get_fonts(media_id=1, session=MagicMock())
+        again = await mod.get_fonts(media_id=1, session=MagicMock())
 
-        assert resp["status"] == "warming"
-        get_reader.assert_awaited_once_with(own_session, 1)
+        assert [f["filename"] for f in first["fonts"]] == ["A.ttf"] == [f["filename"] for f in again["fonts"]]
+        assert first["fonts"][0]["url"] == "/api/v1/subtitles/1/font/A.ttf"
         assert (tmp_path / "fonts" / "1" / "A.ttf").read_bytes() == b"f"
+        fonts.assert_awaited_once()
