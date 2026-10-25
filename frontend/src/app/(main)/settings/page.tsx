@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, startTransition } from "react";
+import { motion } from "framer-motion";
 import {
   Volume2,
   Subtitles,
@@ -61,7 +62,8 @@ function WebSettings() {
   const tabs: Tab[] = user?.is_admin ? ["preferences", "account", "admin"] : ["preferences", "account"];
   const shown = tabs.includes(tab) ? tab : "preferences";
   const openTab = (next: Tab) => {
-    setTab(next);
+    // In a transition: the panels swap through the page's <ViewTransition>, like a page
+    startTransition(() => setTab(next));
     window.history.replaceState(window.history.state, "", `?tab=${next}`);
   };
 
@@ -130,13 +132,19 @@ function WebSettings() {
               aria-selected={shown === id}
               onClick={() => openTab(id)}
               className={cn(
-                "flex-1 md:flex-none px-4 h-9 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange",
-                shown === id
-                  ? "bg-plex-orange text-black"
-                  : "text-[#a1a1aa] hover:text-white hover:bg-white/5",
+                "relative flex-1 md:flex-none px-4 h-9 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange",
+                shown === id ? "text-black" : "text-[#a1a1aa] hover:text-white hover:bg-white/5",
               )}
             >
-              {t(`settings.tabs.${id}`)}
+              {/* The highlight slides to the chosen tab */}
+              {shown === id && (
+                <motion.span
+                  layoutId="settings-tab"
+                  className="absolute inset-0 rounded-lg bg-plex-orange"
+                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                />
+              )}
+              <span className="relative">{t(`settings.tabs.${id}`)}</span>
             </button>
           ))}
         </div>
