@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.orm import undefer
 
 from app.api.deps import DBSession
 from app.config import get_settings
@@ -178,6 +179,8 @@ async def stream_raw(
                 # release_reader has no internal awaits — safe inside finally/CancelledError.
                 await release_reader(media_id, only_if_idle=True)
 
+    # The request's session would hold its pool connection until the response ends
+    await session.close()
     return StreamingResponse(
         stream_generator(),
         status_code=206,
@@ -249,7 +252,11 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
         return 0.0
 
     # Query media item
-    query = select(MediaItem).where(MediaItem.id == media_id)
+    query = (
+        select(MediaItem)
+        .where(MediaItem.id == media_id)
+        .options(undefer(MediaItem.video_keyframes))
+    )
     result = await session.execute(query)
     media = result.scalar_one_or_none()
 
@@ -396,6 +403,8 @@ async def stream_play(
         hevc=video_codec == "hevc",
     )
 
+    # The request's session would hold its pool connection for the whole film
+    await session.close()
     # 200 without ranges: a live remux can't serve byte ranges, and Chromium
     # (desktop and the Android TV WebView) rejects the invalid
     # "Content-Range: bytes 0-*/*" this used to send as a format error.
