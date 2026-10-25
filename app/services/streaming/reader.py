@@ -13,7 +13,14 @@ from pyrogram import Client
 from app.core.worker_manager import MAX_CLIENTS_PER_STREAM, worker_manager
 from app.models.media import MediaItem, MediaPart
 from app.services.streaming.cache import FILE_ID_CACHE, PYROGRAM_CHUNK_SIZE
-from app.services.streaming.download import Throttled, fetch_chunk, read_small
+from app.services.streaming.download import (
+    MAX_ATTEMPTS,
+    SessionDown,
+    Throttled,
+    connected,
+    fetch_chunk,
+    read_small,
+)
 from app.services.streaming.models import StreamPosition
 from app.services.streaming.telegram import (
     ensure_file_ids_for_client,
@@ -198,10 +205,14 @@ class VirtualStreamReader:
 
     async def _fetch(self, part: MediaPart, index: int) -> bytes:
         """One chunk on one of this stream's clients, skipping those whose account Telegram
-        is slowing down: a throttled chunk moves to another client at once instead of
-        waiting out the FLOOD_PREMIUM_WAIT."""
+        is slowing down or whose connection is being re-established: such a chunk moves
+        to another client at once instead of waiting out the FLOOD_PREMIUM_WAIT or the
+        reconnection."""
+        reconnecting = 0
         while True:
-            usable = [c for c in self._clients if not worker_manager.is_throttled(c)]
+            usable = [
+                c for c in self._clients if not worker_manager.is_throttled(c) and connected(c)
+            ]
             clients = usable or self._clients
             if not clients:
                 return b""  # released: read_range stops at the force-release check
@@ -209,6 +220,14 @@ class VirtualStreamReader:
             self._rr_counter += 1
             try:
                 return await fetch_chunk(client, part, index)
+            except SessionDown:
+                # Next try on a connected client; with none, fetch_chunk waits for this one
+                # to come back, so a stream whose connections all stay down still ends
+                reconnecting += 1
+                if reconnecting >= MAX_ATTEMPTS:
+                    raise RuntimeError(
+                        f"Failed to fetch chunk {index} of part {part.id}: no client reconnected"
+                    ) from None
             except Throttled as e:
                 if any(not worker_manager.is_throttled(c) for c in self._clients):
                     continue

@@ -667,6 +667,25 @@ class TestFetchChunk:
         assert await download.fetch_chunk(client, part, 1) == b"f"
         assert not session.stopped and client.media_sessions[4] is session
 
+    async def test_dropped_connection_hands_the_chunk_back(self, setup):
+        # A restart that wakes the request means the session is down for a while (a minute
+        # when its reconnects kept failing): the reader gives the chunk to another client
+        download, part, client, sleep = setup
+        session = FakeSession(TimeoutError())
+        send = session.send
+
+        async def dropped_send(*args, **kwargs):
+            session.is_connected.clear()  # Pyrogram's restart, which woke the request
+            return await send(*args, **kwargs)
+
+        session.send = dropped_send
+        client.media_sessions = {4: session}
+
+        with pytest.raises(download.SessionDown):
+            await download.fetch_chunk(client, part, 1)
+        assert not session.stopped
+        sleep.assert_not_awaited()
+
     async def test_new_dc_session_is_opened_by_pyrogram(self, setup):
         download, part, client, _ = setup
         client.media_sessions = {}
@@ -808,7 +827,8 @@ class TestDynamicClients:
 
 
 # ---------------------------------------------------------------------------
-# TestThrottledAccounts — chunks move off an account Telegram is slowing down
+# TestThrottledAccounts — chunks move off an account Telegram is slowing down, or off a
+# client whose connection is being re-established
 # ---------------------------------------------------------------------------
 
 
@@ -864,6 +884,36 @@ class TestThrottledAccounts:
 
         assert data == file_bytes(reader._parts)
         assert sum(1 for _, c in calls if c is standard) == 1  # never asked again
+        sleep.assert_not_awaited()
+
+    async def test_chunks_skip_a_client_that_is_reconnecting(self, mocker, env):
+        download, reader, _, _, _, _ = env
+        down, up = MagicMock(name="down"), MagicMock(name="up")
+        down.media_sessions = {4: FakeSession()}
+        down.media_sessions[4].is_connected.clear()
+        reader._clients = [down, up]
+        calls = []
+        self._fetch_raising_for(mocker, download, set(), calls)
+
+        assert await self._read_all(reader) == file_bytes(reader._parts)
+        assert {c for _, c in calls} == {up}
+
+    async def test_chunk_moves_on_when_its_connection_drops(self, mocker, env):
+        download, reader, _, _, _, sleep = env
+        flaky, steady = MagicMock(name="flaky"), MagicMock(name="steady")
+        reader._clients = [flaky, steady]
+        calls = []
+
+        async def fetch(client, part, index):
+            calls.append((index, client))
+            if len(calls) == 1:
+                raise download.SessionDown
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fetch)
+
+        assert await self._read_all(reader) == file_bytes(reader._parts)
+        assert calls[:2] == [(0, flaky), (0, steady)]
         sleep.assert_not_awaited()
 
     async def test_all_throttled_swaps_in_a_client_of_another_account(self, mocker, env):

@@ -42,6 +42,17 @@ class Throttled(Exception):
         self.seconds = seconds
 
 
+class SessionDown(Exception):
+    """The client's media connection is being re-established (Telegram drops busy media
+    connections, with -429 transport floods in bursts): the caller should give the chunk
+    to another client instead of waiting for this one."""
+
+
+def connected(client: Client) -> bool:
+    """False while one of the client's media sessions is reconnecting."""
+    return all(s.is_connected.is_set() for s in client.media_sessions.values())
+
+
 # Opening a media session (or following a CDN redirect) is left to Pyrogram's get_file,
 # one call per client at a time so concurrent fetches don't each open a session.
 _open_locks: dict[int, asyncio.Lock] = {}
@@ -115,9 +126,9 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
     """Chunk `index` (1 MB) of a part, from the chunk cache or Telegram.
 
     Uses this client's own file_id: access hashes and file references belong to the
-    account. An expired reference is refreshed at once, a FloodWait is waited out, a
-    connection Telegram closed is waited for while Pyrogram reconnects it. Raises
-    Throttled when the account is being slowed down.
+    account. An expired reference is refreshed at once, a FloodWait is waited out. Raises
+    Throttled when the account is being slowed down, SessionDown while Pyrogram
+    reconnects a connection Telegram closed.
     """
     cached = get_cached_chunk(part.id, index)
     if cached is not None:
@@ -163,9 +174,15 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             # (no data for 10 s while a pong is due every 5), its restart wakes the requests
             # in flight with a TimeoutError, and its start() retries until connected, so
             # stopping it from outside only left zombies reconnecting (measured: ~8x the
-            # disconnects). The next attempt waits for the reconnection.
-            restarting = session is not None and not session.is_connected.is_set()
-            (logger.debug if restarting else logger.warning)(
+            # disconnects). Retrying here waited for it: up to a minute when its restarts
+            # kept failing, while the stream's other client was fine.
+            if session is not None and not session.is_connected.is_set():
+                logger.debug(
+                    f"[STREAM] Chunk {index} of part {part.id}: session reconnecting "
+                    f"({type(e).__name__})"
+                )
+                raise SessionDown from e
+            logger.warning(
                 f"[STREAM] Chunk {index} of part {part.id} failed ({type(e).__name__}: {e}), "
                 f"retry {attempt}/{MAX_ATTEMPTS}"
             )
