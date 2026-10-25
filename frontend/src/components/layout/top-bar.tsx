@@ -120,7 +120,7 @@ export function TopBar() {
   if (isTV) {
     return (
       <header
-        className="h-10 tv-1080:h-12 tv-4k:h-14 flex items-center gap-3 tv-1080:gap-4 tv-4k:gap-5 px-4 tv-4k:px-6 sticky top-0 z-30 relative"
+        className="vt-topbar h-10 tv-1080:h-12 tv-4k:h-14 flex items-center gap-3 tv-1080:gap-4 tv-4k:gap-5 px-4 tv-4k:px-6 sticky top-0 z-30 relative"
         style={{ borderBottom: "1px solid rgba(39, 39, 42, 0.15)" }}
       >
         <div className="absolute inset-0 -z-10 pointer-events-none" style={{ background: "rgba(9, 9, 11, 0.60)" }} />
@@ -166,7 +166,7 @@ export function TopBar() {
 
   return (
     <header
-      className="h-14 flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 relative"
+      className="vt-topbar h-14 flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 relative"
       style={{ borderBottom: "1px solid rgba(39, 39, 42, 0.5)" }}
     >
       {/* Blur layer as sibling — keeps header from creating a stacking context */}

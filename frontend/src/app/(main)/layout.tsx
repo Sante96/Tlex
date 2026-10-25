@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -69,7 +69,11 @@ function MainContent({ children }: { children: React.ReactNode }) {
     >
       <TopBar />
       <main className="pb-16 md:pb-0 landscape:pb-0">
-        {children}
+        {/* Navigations run in a transition: the old page fades out and the new one in
+            (globals.css). The browser animates snapshots, so the glass keeps its blur. */}
+        <ViewTransition name="page">
+          <div>{children}</div>
+        </ViewTransition>
       </main>
     </motion.div>
   );

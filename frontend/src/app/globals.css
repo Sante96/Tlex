@@ -79,3 +79,64 @@
   scrollbar-width: none;
 }
 
+/* Page changes (View Transitions, the (main) layout's <ViewTransition name="page">).
+   The root isn't captured: the background and everything else stay live. The bars get a
+   name only while a transition runs (a permanent one makes them stacking contexts), so
+   they stay above the page's snapshot: a detail page's backdrop covered them. */
+:root {
+  view-transition-name: none;
+}
+:active-view-transition .vt-sidebar {
+  view-transition-name: sidebar;
+}
+:active-view-transition .vt-topbar {
+  view-transition-name: topbar;
+}
+:active-view-transition .vt-bottombar {
+  view-transition-name: bottombar;
+}
+::view-transition-old(sidebar),
+::view-transition-old(topbar),
+::view-transition-old(bottombar) {
+  display: none;
+}
+::view-transition-new(sidebar),
+::view-transition-new(topbar),
+::view-transition-new(bottombar) {
+  animation: none;
+}
+
+::view-transition-group(page) {
+  animation-duration: 300ms;
+}
+::view-transition-old(page) {
+  animation: vt-page-out 120ms ease-in both;
+}
+::view-transition-new(page) {
+  animation: vt-page-in 260ms cubic-bezier(0.4, 0, 0.2, 1) 40ms both;
+}
+@keyframes vt-page-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* No page animation for reduced motion, nor on the TV's weak hardware */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+html[data-tv-tier]::view-transition-group(*),
+html[data-tv-tier]::view-transition-old(*),
+html[data-tv-tier]::view-transition-new(*) {
+  animation: none !important;
+}

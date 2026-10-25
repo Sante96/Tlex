@@ -8,6 +8,10 @@ const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
+  experimental: {
+    // Page changes animate through React's <ViewTransition> (see the (main) layout)
+    viewTransition: true,
+  },
   // `npm run dev:mobile`: let LAN devices load the dev server (wildcards, not CIDR)
   allowedDevOrigins: ["192.168.*.*"],
   images: {
