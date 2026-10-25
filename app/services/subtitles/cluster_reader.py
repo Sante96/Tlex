@@ -11,7 +11,7 @@ Strategies, fastest first:
 
 import asyncio
 from collections import Counter
-from collections.abc import Collection, Iterator
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from loguru import logger
@@ -22,6 +22,7 @@ from app.services.mkv_cues import (
     CUE_TRACK_ID,
     CUE_TRACK_POSITIONS_ID,
     CUES_ID,
+    children,
     find_cues_offset,
     parse_cues_for_clusters,
     read_element_id,
@@ -64,29 +65,15 @@ class SubtitleCue:
     duration: int | None
 
 
-def _children(data: bytes, start: int, end: int) -> Iterator[tuple[int, int, int]]:
-    """Yield (element_id, data_offset, size) for the EBML elements in data[start:end]."""
-    end = min(end, len(data))
-    while start < end:
-        elem_id, id_len = read_element_id(data, start)
-        if id_len == 0:
-            return
-        size, size_len = read_vint(data, start + id_len)
-        if size_len == 0:
-            return
-        yield elem_id, start + id_len + size_len, size
-        start += id_len + size_len + size
-
-
 def find_cues_position(header: bytes, segment_data_start: int) -> int | None:
     """Cues position (relative to the Segment data) from the SeekHead, if the header has it."""
-    for elem_id, offset, size in _children(header, segment_data_start, len(header)):
+    for elem_id, offset, size in children(header, segment_data_start, len(header)):
         if elem_id != SEEK_HEAD_ID:
             continue
-        for seek_id, seek_off, seek_size in _children(header, offset, offset + size):
+        for seek_id, seek_off, seek_size in children(header, offset, offset + size):
             if seek_id != SEEK_ID:
                 continue
-            fields = {i: (o, s) for i, o, s in _children(header, seek_off, seek_off + seek_size)}
+            fields = {i: (o, s) for i, o, s in children(header, seek_off, seek_off + seek_size)}
             if SEEK_ID_ID in fields and SEEK_POSITION_ID in fields:
                 target = int.from_bytes(
                     header[fields[SEEK_ID_ID][0] : sum(fields[SEEK_ID_ID])], "big"
@@ -124,21 +111,21 @@ def parse_subtitle_cues(cues: bytes, track_numbers: set[int]) -> dict[int, list[
     size, size_len = read_vint(cues, id_len)
     if elem_id != CUES_ID:
         return found
-    for point_id, point_off, point_size in _children(
+    for point_id, point_off, point_size in children(
         cues, id_len + size_len, id_len + size_len + size
     ):
         if point_id != CUE_POINT_ID:
             continue
         time = None
         positions = []
-        for child_id, child_off, child_size in _children(cues, point_off, point_off + point_size):
+        for child_id, child_off, child_size in children(cues, point_off, point_off + point_size):
             if child_id == CUE_TIME_ID:
                 time = read_uint(cues, child_off, child_size)
             elif child_id == CUE_TRACK_POSITIONS_ID:
                 positions.append(
                     {
                         i: read_uint(cues, o, s)
-                        for i, o, s in _children(cues, child_off, child_off + child_size)
+                        for i, o, s in children(cues, child_off, child_off + child_size)
                     }
                 )
         for p in positions:

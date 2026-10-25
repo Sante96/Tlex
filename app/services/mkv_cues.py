@@ -15,6 +15,8 @@ EBML Element IDs used:
 - CueTrack: 0xF7
 """
 
+from collections.abc import Iterator
+
 import httpx
 from loguru import logger
 
@@ -142,6 +144,20 @@ def read_uint(data: bytes | bytearray, offset: int, length: int) -> int:
     return value
 
 
+def children(data: bytes, start: int, end: int) -> Iterator[tuple[int, int, int]]:
+    """Yield (element_id, data_offset, size) for the EBML elements in data[start:end]."""
+    end = min(end, len(data))
+    while start < end:
+        elem_id, id_len = read_element_id(data, start)
+        if id_len == 0:
+            return
+        size, size_len = read_vint(data, start + id_len)
+        if size_len == 0:
+            return
+        yield elem_id, start + id_len + size_len, size
+        start += id_len + size_len + size
+
+
 # EBML Element IDs
 SEGMENT_INFO_ID = 0x1549A966
 TIMECODE_SCALE_ID = 0x2AD7B1
@@ -150,6 +166,35 @@ CUE_POINT_ID = 0xBB
 CUE_TIME_ID = 0xB3
 CUE_TRACK_POSITIONS_ID = 0xB7
 CUE_TRACK_ID = 0xF7
+TRACKS_ID = 0x1654AE6B
+TRACK_ENTRY_ID = 0xAE
+TRACK_NUMBER_ID = 0xD7
+TRACK_TYPE_ID = 0x83
+TRACK_TYPE_VIDEO = 1
+
+
+def video_track_number(header: bytes) -> int | None:
+    """Number of the first video track in the header's Tracks element.
+
+    The Tracks ID also appears in the SeekHead (as a Seek target), hence trying each hit.
+    """
+    at = header.find(TRACKS_ID.to_bytes(4, "big"))
+    while at >= 0:
+        tracks = next(children(header, at, len(header)), None)
+        if tracks and tracks[0] == TRACKS_ID:
+            for entry_id, off, size in children(header, tracks[1], tracks[1] + tracks[2]):
+                if entry_id != TRACK_ENTRY_ID:
+                    continue
+                fields = {
+                    i: read_uint(header, o, s)
+                    for i, o, s in children(header, off, off + size)
+                    if i in (TRACK_NUMBER_ID, TRACK_TYPE_ID)
+                }
+                if fields.get(TRACK_TYPE_ID) == TRACK_TYPE_VIDEO:
+                    return fields.get(TRACK_NUMBER_ID)
+        at = header.find(TRACKS_ID.to_bytes(4, "big"), at + 4)
+    return None
+
 
 # Default timecode scale: 1000000 ns = 1ms per unit
 DEFAULT_TIMECODE_SCALE = 1000000
@@ -313,7 +358,9 @@ def parse_cues_for_clusters(
     return sorted(cluster_positions)
 
 
-def parse_cues(data: bytes, offset: int, timecode_scale: int) -> list[float]:
+def parse_cues(
+    data: bytes, offset: int, timecode_scale: int, track: int | None = None
+) -> list[float]:
     """
     Parse Cues element and extract keyframe timestamps.
 
@@ -321,64 +368,36 @@ def parse_cues(data: bytes, offset: int, timecode_scale: int) -> list[float]:
         data: Raw bytes containing the Cues element.
         offset: Offset where Cues element starts.
         timecode_scale: TimecodeScale from Segment Info.
+        track: Keep only this track's cue points. mkvmerge also indexes every subtitle
+            block, and a seek snapped to one of those starts the copied video on a
+            non-keyframe.
 
     Returns:
         List of keyframe timestamps in seconds.
     """
-    keyframes: list[float] = []
-
-    # Read Cues element header
     element_id, id_len = read_element_id(data, offset)
     if element_id != CUES_ID:
         return []
+    cues_size, size_len = read_vint(data, offset + id_len)
+    start = offset + id_len + size_len
 
-    offset += id_len
-    cues_size, size_len = read_vint(data, offset)
-    offset += size_len
-
-    cues_end = offset + cues_size
-
-    # Parse CuePoint elements
-    while offset < cues_end and offset < len(data):
-        elem_id, id_len = read_element_id(data, offset)
-        if id_len == 0:
-            break
-        offset += id_len
-
-        elem_size, size_len = read_vint(data, offset)
-        if size_len == 0:
-            break
-        offset += size_len
-
-        if elem_id == CUE_POINT_ID:
-            cue_end = offset + elem_size
-            cue_time = None
-
-            while offset < cue_end and offset < len(data):
-                inner_id, inner_id_len = read_element_id(data, offset)
-                if inner_id_len == 0:
-                    break
-                offset += inner_id_len
-
-                inner_size, inner_size_len = read_vint(data, offset)
-                if inner_size_len == 0:
-                    break
-                offset += inner_size_len
-
-                if inner_id == CUE_TIME_ID:
-                    raw_time = read_uint(data, offset, inner_size)
-                    # Convert to seconds: raw_time * timecode_scale (ns) / 1e9
-                    cue_time = (raw_time * timecode_scale) / 1_000_000_000.0
-
-                offset += inner_size
-
-            if cue_time is not None:
-                keyframes.append(cue_time)
-
-            offset = cue_end
-        else:
-            offset += elem_size
-
+    keyframes: list[float] = []
+    for point_id, point_off, point_size in children(data, start, start + cues_size):
+        if point_id != CUE_POINT_ID:
+            continue
+        cue_time = None
+        tracks: set[int] = set()
+        for child_id, child_off, child_size in children(data, point_off, point_off + point_size):
+            if child_id == CUE_TIME_ID:
+                cue_time = read_uint(data, child_off, child_size) * timecode_scale / 1e9
+            elif child_id == CUE_TRACK_POSITIONS_ID:
+                tracks.update(
+                    read_uint(data, o, s)
+                    for i, o, s in children(data, child_off, child_off + child_size)
+                    if i == CUE_TRACK_ID
+                )
+        if cue_time is not None and (track is None or track in tracks):
+            keyframes.append(cue_time)
     return keyframes
 
 
@@ -420,10 +439,12 @@ async def extract_keyframes_from_url(
         header_response = await client.get(url, headers=header_headers)
 
         timecode_scale = DEFAULT_TIMECODE_SCALE
+        video_track = None
         if header_response.status_code in (200, 206):
             header_data = header_response.content
             logger.debug(f"Read {len(header_data)} bytes from MKV header")
             timecode_scale = extract_timecode_scale(header_data)
+            video_track = video_track_number(header_data)
         else:
             logger.warning(f"Failed to read MKV header: HTTP {header_response.status_code}")
 
@@ -447,7 +468,7 @@ async def extract_keyframes_from_url(
 
         logger.debug(f"Found Cues at offset {cues_offset}")
 
-        keyframes = parse_cues(tail_data, cues_offset, timecode_scale)
+        keyframes = parse_cues(tail_data, cues_offset, timecode_scale, video_track)
         keyframes.sort()
 
         logger.debug(f"Extracted {len(keyframes)} keyframes from MKV Cues")

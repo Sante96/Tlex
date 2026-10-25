@@ -257,9 +257,9 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
         return target_time
 
     # Check cache
-    if media.keyframes_index:
+    if media.video_keyframes:
         try:
-            keyframes = json.loads(media.keyframes_index)
+            keyframes = json.loads(media.video_keyframes)
             if keyframes:
                 # Find keyframe closest to target (no pre-roll)
                 # FFmpeg will start from this keyframe, video may start slightly after target
@@ -286,7 +286,7 @@ async def _get_keyframe_for_time(session: DBSession, media_id: int, target_time:
         return target_time
 
     if keyframes:
-        media.keyframes_index = json.dumps(keyframes)
+        media.video_keyframes = json.dumps(keyframes)
         await session.commit()
         logger.debug(f"Cached {len(keyframes)} keyframes for media {media_id}")
 

@@ -704,6 +704,31 @@ class TestCacheAllSubtitleTracks:
         assert not (tmp_path / "7_5.ass").exists()  # the PGS track
 
 
+class TestVideoKeyframes:
+    """Seek keyframes come from the Cues of the video track only: mkvmerge also indexes
+    every subtitle block, and a seek snapped to one starts the copied video mid-GOP."""
+
+    def test_only_the_video_tracks_cue_points(self):
+        from app.services.mkv_cues import parse_cues, video_track_number
+
+        data = _mkv()
+        cues = data.rfind(b"\x1c\x53\xbb\x6b")  # the Cues element, past the SeekHead's entry
+        video = [(start * 2 - 100) * 0.0005 for start, _, _ in LINES]  # cluster times
+
+        assert parse_cues(data, cues, 500_000, video_track_number(data)) == pytest.approx(video)
+        assert len(parse_cues(data, cues, 500_000)) == 2 * len(LINES)  # subtitle cues too
+
+    def test_video_track_found_past_the_seek_head_entry(self):
+        from app.services.mkv_cues import video_track_number
+
+        seek = _elem(b"\x53\xab", b"\x16\x54\xae\x6b") + _elem(b"\x53\xac", (64).to_bytes(8, "big"))
+        header = _elem(b"\x11\x4d\x9b\x74", _elem(b"\x4d\xbb", seek)) + _tracks_block(
+            [_track_entry(1, 17, "S_TEXT/UTF8"), _track_entry(2, 1, "V_MPEGH/ISO/HEVC")]
+        )
+
+        assert video_track_number(header) == 2
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # read_small: Telegram GetFile rules
 # ─────────────────────────────────────────────────────────────────────────────

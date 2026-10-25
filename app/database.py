@@ -69,6 +69,9 @@ SCHEMA_UPGRADES = (
     "CREATE INDEX IF NOT EXISTS ix_media_parts_media_item_id ON media_parts (media_item_id)",
     "CREATE INDEX IF NOT EXISTS ix_media_streams_media_item_id ON media_streams (media_item_id)",
     "CREATE INDEX IF NOT EXISTS ix_media_parts_channel_message ON media_parts (channel_id, message_id)",
+    # Keyframe lists also held subtitle cue times: a new column starts them over
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS video_keyframes TEXT",
+    "ALTER TABLE media_items DROP COLUMN IF EXISTS keyframes_index",
 )
 
 

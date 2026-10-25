@@ -96,8 +96,9 @@ class MediaItem(Base):
     )
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # Keyframe index for precise seeking (JSON array of timestamps in seconds)
-    keyframes_index: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Video keyframe times for precise seeking (JSON array of seconds). Replaced the
+    # keyframes_index column, whose lists also held subtitle cue times
+    video_keyframes: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vote_average: Mapped[float | None] = mapped_column(nullable=True)
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma-separated
