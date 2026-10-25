@@ -9,6 +9,7 @@ export { DSIconButton } from "./icon-button";
 export { DSDropdownMenu } from "./dropdown-menu";
 export { DSAvatar } from "./avatar";
 export { DSNavItem } from "./nav-item";
+export { DSModal } from "./modal";
 
 // Composites
 export { PosterCard } from "./poster-card";
