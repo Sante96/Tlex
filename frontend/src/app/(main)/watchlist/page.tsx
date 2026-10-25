@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { Heart } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PosterCard } from "@/components/ds";
@@ -31,7 +31,8 @@ export default function WatchlistPage() {
       setItems(data.items);
     } catch {
     } finally {
-      setLoading(false);
+      // In a transition: the page fades in (the (main) layout's <ViewTransition>)
+      startTransition(() => setLoading(false));
     }
   };
 

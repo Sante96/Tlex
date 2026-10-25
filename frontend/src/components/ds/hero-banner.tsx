@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { FadeImage } from "@/components/ui/fade-image";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/lib/breakpoints";
 
@@ -51,7 +51,7 @@ export function HeroBanner({
       }}
     >
       {posterUrl ? (
-        <Image
+        <FadeImage
           src={posterUrl}
           alt={posterAlt}
           width={isMobile ? MOBILE_W : posterWidth}

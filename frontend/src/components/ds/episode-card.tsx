@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { FadeImage } from "@/components/ui/fade-image";
 import { Play, Check, Pencil } from "lucide-react";
 
 interface EpisodeCardProps {
@@ -36,7 +36,7 @@ export function EpisodeCard({
     >
       {/* Thumbnail */}
       {thumbnailUrl ? (
-        <Image
+        <FadeImage
           src={thumbnailUrl}
           alt={title}
           fill

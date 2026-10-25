@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { RefreshCw, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, TVButton, PosterCard, SectionHeader } from "@/components/ds";
@@ -65,7 +65,8 @@ export default function HomePage() {
     } catch {
       setFailed(true); // not "your library is empty"
     } finally {
-      setLoading(false);
+      // In a transition: the page fades in (the (main) layout's <ViewTransition>)
+      startTransition(() => setLoading(false));
     }
   };
 

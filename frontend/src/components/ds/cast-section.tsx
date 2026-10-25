@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
+import { FadeImage } from "@/components/ui/fade-image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DSIconButton } from "@/components/ds";
@@ -100,7 +100,7 @@ function PeopleRow({
               style={{ boxShadow: "none" }}
             >
               {member.profile_path ? (
-                <Image
+                <FadeImage
                   src={getTmdbImageUrl(member.profile_path, "w300") || ""}
                   alt={member.name}
                   width={200}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { FadeImage } from "@/components/ui/fade-image";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +55,7 @@ export function PosterCard({
           style={isFluid ? undefined : { width: fixedW, height: fixedH }}
         >
           {imageUrl ? (
-            <Image
+            <FadeImage
               src={imageUrl}
               alt={title}
               fill

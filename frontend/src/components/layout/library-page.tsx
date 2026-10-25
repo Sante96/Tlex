@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode, startTransition } from "react";
 import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, TVButton } from "@/components/ds";
@@ -48,7 +48,8 @@ export function LibraryPage<T>({ title, emptyText, load, renderItem }: LibraryPa
     } catch {
       setFailed(true);
     } finally {
-      setLoading(false);
+      // In a transition: the page fades in (the (main) layout's <ViewTransition>)
+      startTransition(() => setLoading(false));
     }
   }, [load]);
 

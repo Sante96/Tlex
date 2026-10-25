@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
@@ -101,7 +101,7 @@ export default function MediaDetailPage() {
     getMediaDetails(mediaId)
       .then((data) => alive && setMedia(data))
       .catch((e) => alive && setFailed(!(isAxiosError(e) && e.response?.status === 404)))
-      .finally(() => alive && setLoading(false));
+      .finally(() => alive && startTransition(() => setLoading(false)));
     checkWatchlistStatus(mediaId).then((s) => alive && setInWatchlist(s), () => {});
     getMediaCast(mediaId).then((c) => alive && setCast(c), () => {});
     getMediaTrailer(mediaId).then((k) => alive && setTrailerKey(k), () => {});

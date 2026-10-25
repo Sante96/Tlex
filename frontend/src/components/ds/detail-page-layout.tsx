@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { FadeImage } from "@/components/ui/fade-image";
 
 interface DetailPageLayoutProps {
   backdropUrl: string | null;
@@ -21,7 +21,7 @@ export function DetailPageLayout({
       {/* Backdrop — fixed to viewport, visible through semi-transparent sidebar/nav */}
       {backdropUrl && (
         <div className="fixed inset-0 z-0 overflow-hidden">
-          <Image
+          <FadeImage
             src={backdropUrl}
             alt=""
             fill

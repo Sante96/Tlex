@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import Image from "next/image";
@@ -50,7 +50,8 @@ export default function PersonPage() {
         setPerson(data);
       } catch {
       } finally {
-        setLoading(false);
+        // In a transition: the page fades in (the (main) layout's <ViewTransition>)
+        startTransition(() => setLoading(false));
       }
     };
     if (personId) load();
