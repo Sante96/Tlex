@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Phone, Trash2, Plus, Loader2, Crown } from "lucide-react";
+import { Phone, Plus, Loader2 } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { DSButton, DSCard, DSInput } from "@/components/ds";
 import {
@@ -14,8 +14,6 @@ import {
 import {
   sendWorkerCode,
   verifyWorkerCode,
-  deleteWorker,
-  type WorkerInfo,
 } from "@/lib/api";
 import { AxiosError } from "axios";
 
@@ -43,14 +41,10 @@ const COUNTRY_PREFIXES = [
 type Step = "idle" | "sending" | "code" | "2fa" | "verifying" | "done";
 
 interface AddWorkerCardProps {
-  workers: WorkerInfo[];
   onWorkersChanged: () => void;
 }
 
-export function AddWorkerCard({
-  workers,
-  onWorkersChanged,
-}: AddWorkerCardProps) {
+export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
   const t = useTranslations();
   const [step, setStep] = useState<Step>("idle");
   const [prefix, setPrefix] = useState("+39");
@@ -61,7 +55,6 @@ export function AddWorkerCard({
   const fullPhone = `${prefix}${localNumber.replace(/\s/g, "")}`;
   const [password2fa, setPassword2fa] = useState("");
   const [error, setError] = useState("");
-  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const getErrorMessage = (err: unknown): string => {
     if (err instanceof AxiosError && err.response?.data?.detail) {
@@ -108,17 +101,6 @@ export function AddWorkerCard({
     }
   };
 
-  const handleDelete = async (workerId: number) => {
-    setDeletingId(workerId);
-    try {
-      await deleteWorker(workerId);
-      onWorkersChanged();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-    setDeletingId(null);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
     if (e.key === "Enter") action();
   };
@@ -129,49 +111,6 @@ export function AddWorkerCard({
       title="Worker Telegram"
     >
       <div className="flex flex-col gap-4">
-        {/* Existing workers list */}
-        {workers.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {workers.map((w) => (
-              <DSCard
-                key={w.id}
-                level="secondary"
-                className="py-2 px-3 rounded-lg shadow-none backdrop-blur-none flex-row items-center justify-between gap-0"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      w.status === "ACTIVE"
-                        ? "bg-green-500"
-                        : w.status === "FLOOD_WAIT"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <span className="text-sm text-[#fafafa]">****{w.phone}</span>
-                  {w.is_premium && (
-                    <Crown className="w-3.5 h-3.5 text-plex-orange" />
-                  )}
-                  <span className="text-xs text-[#71717a]">
-                    {w.clients_total} client{w.clients_total !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleDelete(w.id)}
-                  disabled={deletingId === w.id}
-                  className="text-[#71717a] hover:text-red-400 transition-colors disabled:opacity-50"
-                >
-                  {deletingId === w.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                </button>
-              </DSCard>
-            ))}
-          </div>
-        )}
-
         {/* Add worker form */}
         {step === "done" ? (
           <p className="text-green-400 text-sm text-center py-2">

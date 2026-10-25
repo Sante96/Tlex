@@ -361,10 +361,7 @@ function WebSettings() {
               loading={loadingWorkers}
               onRefresh={loadWorkersStatus}
             />
-            <AddWorkerCard
-              workers={workersData?.workers ?? []}
-              onWorkersChanged={loadWorkersStatus}
-            />
+            <AddWorkerCard onWorkersChanged={loadWorkersStatus} />
             <BackupCard />
           </div>
         )}

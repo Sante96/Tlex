@@ -1,9 +1,11 @@
 "use client";
 
-import { RefreshCw, Server } from "lucide-react";
+import { useState } from "react";
+import { Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSButton, DSCard } from "@/components/ds";
-import type { WorkersStatusResponse } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { deleteWorker, errorText, type WorkersStatusResponse } from "@/lib/api";
 
 interface WorkersCardProps {
   data: WorkersStatusResponse | null;
@@ -13,6 +15,20 @@ interface WorkersCardProps {
 
 export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
   const t = useTranslations();
+  const toast = useToast();
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // The list lives here only: the add card showed the same workers a second time
+  const handleDelete = async (workerId: number) => {
+    setDeletingId(workerId);
+    try {
+      await deleteWorker(workerId);
+      onRefresh();
+    } catch (e) {
+      toast(errorText(e, t("common.actionFailed")), "error");
+    }
+    setDeletingId(null);
+  };
   return (
     <DSCard
       icon={<Server className="w-5 h-5 text-plex-orange" />}
@@ -133,16 +149,31 @@ export function WorkersCard({ data, loading, onRefresh }: WorkersCardProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm">
-                      {worker.clients_in_use}/{worker.clients_total} client
-                    </div>
-                    {worker.flood_wait_remaining_seconds && (
-                      <div className="text-xs text-yellow-500">
-                        FloodWait:{" "}
-                        {Math.ceil(worker.flood_wait_remaining_seconds / 60)}m
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-sm">
+                        {worker.clients_in_use}/{worker.clients_total} client
                       </div>
-                    )}
+                      {worker.flood_wait_remaining_seconds && (
+                        <div className="text-xs text-yellow-500">
+                          FloodWait:{" "}
+                          {Math.ceil(worker.flood_wait_remaining_seconds / 60)}m
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDelete(worker.id)}
+                      disabled={deletingId === worker.id}
+                      aria-label={t("common.delete")}
+                      title={t("common.delete")}
+                      className="text-[#71717a] hover:text-red-400 transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === worker.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
                 </DSCard>
               ))}
