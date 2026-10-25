@@ -30,11 +30,13 @@ TEXT_CODECS = ("S_TEXT/", "S_ASS", "S_SSA")  # not PGS/VobSub images
 
 
 async def extract_all_subtitles(
-    reader,
+    reader, full_read: bool = True
 ) -> list[tuple[MkvSubtitleTrack, list[SubtitleEvent] | None]] | None:
     """Every subtitle track of the MKV, in file order, with its events.
 
-    Image tracks get None instead of events: they can't become ASS/SRT.
+    Image tracks get None instead of events: they can't become ASS/SRT. So do text
+    tracks without subtitle cues when full_read is False: reading them means reading
+    about the whole file, which background warm-ups leave to an actual request.
     Returns None if the header can't be read; later read errors propagate.
     """
     async with reader.batch_mode():
@@ -60,7 +62,9 @@ async def extract_all_subtitles(
                 events = await extract_cued_blocks(reader, cued, segment_data_start, timecode_scale)
 
             rest = text - events.keys()
-            if rest:
+            if rest and not full_read:
+                logger.info(f"No subtitle cues for tracks {sorted(rest)}: left for a request")
+            elif rest:
                 logger.info(f"No subtitle cues for tracks {sorted(rest)}: reading the clusters")
                 found, cues_found = await extract_via_cues(reader, header, rest, timecode_scale)
                 if not cues_found:

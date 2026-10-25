@@ -1,7 +1,10 @@
 """FFprobe service for extracting media stream metadata."""
 
+import asyncio
 import json
+import os
 import subprocess
+import tempfile
 from dataclasses import dataclass
 
 from loguru import logger
@@ -26,9 +29,7 @@ class ProbeResult:
     """Result of ffprobe analysis."""
 
     duration_seconds: int | None
-    bit_rate: int | None  # bits per second, for estimating multi-part duration
     streams: list[StreamInfo]
-    keyframes: list[float] | None = None  # Keyframe timestamps in seconds
 
 
 class FFProbeService:
@@ -68,11 +69,9 @@ class FFProbeService:
         ]
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60,
+            # In a thread: a 60 s ffprobe must not freeze the event loop (and every stream)
+            result = await asyncio.to_thread(
+                subprocess.run, cmd, capture_output=True, text=True, timeout=60
             )
 
             if result.returncode != 0:
@@ -99,22 +98,12 @@ class FFProbeService:
         """Parse ffprobe JSON output into ProbeResult."""
         streams: list[StreamInfo] = []
 
-        # Extract duration and bitrate from format
         duration_seconds = None
-        bit_rate = None
-
-        if "format" in data:
-            fmt = data["format"]
-            if "duration" in fmt:
-                try:
-                    duration_seconds = int(float(fmt["duration"]))
-                except (ValueError, TypeError):
-                    pass
-            if "bit_rate" in fmt:
-                try:
-                    bit_rate = int(fmt["bit_rate"])
-                except (ValueError, TypeError):
-                    pass
+        if "duration" in data.get("format", {}):
+            try:
+                duration_seconds = int(float(data["format"]["duration"]))
+            except (ValueError, TypeError):
+                pass
 
         # Extract streams
         for stream in data.get("streams", []):
@@ -141,52 +130,35 @@ class FFProbeService:
             )
             streams.append(stream_info)
 
-        return ProbeResult(
-            duration_seconds=duration_seconds,
-            bit_rate=bit_rate,
-            streams=streams,
-            keyframes=None,  # Extracted separately for performance
-        )
+        return ProbeResult(duration_seconds=duration_seconds, streams=streams)
 
     async def analyze_from_telegram(
-        self, client, file_id: str, suffix: str = ".mkv", max_mb: int = 50
+        self, client, file_id: str, suffix: str = ".mkv"
     ) -> ProbeResult | None:
         """
-        Analyze a Telegram file by streaming only the first chunks.
+        Analyze a Telegram file from its first chunks only.
 
-        MKV/MP4 metadata is in the header, so we only need the first few MB.
-
-        Args:
-            client: Pyrogram client
-            file_id: Telegram file ID
-            suffix: File suffix for temp file
-            max_mb: Maximum MB to download (default 50MB for metadata)
-
-        Returns:
-            ProbeResult or None
+        An MKV keeps its tracks and duration in the first KBs: probe the first 4 MB, and
+        keep downloading up to 50 MB only when that wasn't enough (a header pushed back by
+        big attachments, say). A scan used to pull 50 MB for every new file.
         """
-        import os
-        import tempfile
-
         temp_path = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 temp_path = tmp.name
-
-            logger.debug(f"Streaming first {max_mb}MB for analysis: {file_id[:20]}...")
-
-            # Stream only first chunks (1 chunk = 1MB in Pyrogram)
-            bytes_written = 0
-            with open(temp_path, "wb") as f:
-                async for chunk in client.stream_media(file_id, limit=max_mb):
-                    f.write(chunk)
-                    bytes_written += len(chunk)
-                    if bytes_written % (10 * 1024 * 1024) == 0:
-                        logger.debug(f"Downloaded {bytes_written // (1024 * 1024)}MB")
-
-            logger.debug(f"Download complete: {bytes_written // (1024 * 1024)}MB")
-
-            result = await self.probe_file(temp_path)
+            result = None
+            downloaded = 0  # 1 MB chunks
+            for upto in (4, 50):
+                with open(temp_path, "ab") as f:
+                    async for chunk in client.stream_media(
+                        file_id, offset=downloaded, limit=upto - downloaded
+                    ):
+                        f.write(chunk)
+                downloaded = upto
+                result = await self.probe_file(temp_path)
+                if result and result.streams and result.duration_seconds:
+                    break
+                logger.debug(f"Probe needs more than {upto} MB of {file_id[:20]}...")
             return result
 
         except Exception as e:

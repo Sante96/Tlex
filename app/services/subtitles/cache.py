@@ -44,14 +44,19 @@ def finished_recently(media_id: int) -> bool:
     return time.monotonic() - _finished_at.get(media_id, float("-inf")) < RETRY_AFTER
 
 
-def extraction_task(media_id: int) -> asyncio.Task:
-    """The media's running subtitle extraction, started if there is none."""
+def extraction_task(media_id: int, full_read: bool = True) -> asyncio.Task:
+    """The media's running subtitle extraction, started if there is none.
+
+    full_read=False (background warm-ups) skips tracks that would need about the whole
+    file read; such a run doesn't start the RETRY_AFTER wait, so a request for one of
+    those tracks starts a full extraction straight away.
+    """
     if media_id not in _tasks:
-        _tasks[media_id] = asyncio.create_task(_extract(media_id))
+        _tasks[media_id] = asyncio.create_task(_extract(media_id, full_read))
     return _tasks[media_id]
 
 
-async def _extract(media_id: int) -> int:
+async def _extract(media_id: int, full_read: bool = True) -> int:
     from app.database import async_session_maker
 
     try:
@@ -70,23 +75,26 @@ async def _extract(media_id: int) -> int:
             reader = await get_virtual_reader(session, media_id)
             if not reader or not indexes:
                 return 0
-            return await cache_all_subtitle_tracks(reader, media_id, indexes)
+            return await cache_all_subtitle_tracks(reader, media_id, indexes, full_read)
     except Exception as e:
         logger.warning(f"Subtitle extraction failed for media {media_id}: {e}")
         return 0
     finally:
         _tasks.pop(media_id, None)
-        _finished_at[media_id] = time.monotonic()
+        if full_read:
+            _finished_at[media_id] = time.monotonic()
 
 
-async def cache_all_subtitle_tracks(reader, media_id: int, stream_indexes: list[int]) -> int:
+async def cache_all_subtitle_tracks(
+    reader, media_id: int, stream_indexes: list[int], full_read: bool = True
+) -> int:
     """Extract every text subtitle track in one pass and cache each as .ass and .srt.
 
     stream_indexes: the media's subtitle stream indexes in order (the MKV lists its
     subtitle tracks in the same order). Returns how many tracks were cached.
     """
     started = time.monotonic()
-    extracted = await extract_all_subtitles(reader)
+    extracted = await extract_all_subtitles(reader, full_read)
     if not extracted:
         return 0
 
@@ -158,7 +166,7 @@ async def pre_extract_subtitles(media_id: int, session: AsyncSession) -> int:
     if not indexes or any(subtitle_file(media_id, i, "ass").exists() for i in indexes):
         return 0
     # shield: our caller giving up mustn't cancel an extraction the player may be waiting on
-    return await asyncio.shield(extraction_task(media_id))
+    return await asyncio.shield(extraction_task(media_id, full_read=False))
 
 
 async def ensure_cache_populated(media_id: int, session: AsyncSession) -> None:

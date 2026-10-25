@@ -62,7 +62,7 @@ def subtitle_state(tmp_path, monkeypatch):
 
 
 def _blocked_extract(blocker: asyncio.Event, calls: list):
-    async def extract(media_id):
+    async def extract(media_id, full_read=True):
         calls.append(media_id)
         await blocker.wait()
         return 0
@@ -236,7 +236,7 @@ class TestExtract:
         ):
             assert await cache.extraction_task(1) == 2
 
-        cache_all.assert_awaited_once_with(reader, 1, [2, 6])
+        cache_all.assert_awaited_once_with(reader, 1, [2, 6], True)
         assert 1 not in cache._tasks
         assert cache.finished_recently(1)
 
@@ -271,10 +271,24 @@ class TestPreExtractSubtitles:
         start.assert_not_called()
 
     async def test_waits_for_the_shared_task(self, monkeypatch):
-        monkeypatch.setattr(cache, "_extract", AsyncMock(return_value=3))
+        extract = AsyncMock(return_value=3)
+        monkeypatch.setattr(cache, "_extract", extract)
 
         media = _make_media([_make_stream(2)])
         assert await cache.pre_extract_subtitles(1, _make_session(media)) == 3
+        extract.assert_awaited_once_with(1, False)  # background: no whole-file reads
+
+    async def test_background_run_does_not_hold_off_a_request(self):
+        # A warm-up that skipped a track must not make the player's request wait 60 s
+        with (
+            patch("app.database.async_session_maker", _session_maker(_make_media([_make_stream(2)]))),
+            patch.object(cache, "get_virtual_reader", AsyncMock(return_value=MagicMock())),
+            patch.object(cache, "cache_all_subtitle_tracks", AsyncMock(return_value=0)),
+        ):
+            await cache.extraction_task(1, full_read=False)
+            assert not cache.finished_recently(1)
+            await cache.extraction_task(1)
+            assert cache.finished_recently(1)
 
 
 # ---------------------------------------------------------------------------

@@ -671,6 +671,14 @@ class TestExtractAllSubtitles:
         assert result[1][1] is None
         assert sum(end - start for start, end in reader.read_range_calls) > 3 * 1024 * 1024
 
+    async def test_background_run_skips_tracks_needing_a_full_read(self):
+        reader = MockReader(_mkv(subtitle_cues=False))
+        result = await extract_all_subtitles(reader, full_read=False)
+
+        assert result is not None
+        assert [events for _, events in result] == [None, None]  # no cues: left for a request
+        assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
+
     async def test_header_read_failure_returns_none(self):
         class FailReader(MockReader):
             async def read_range(self, start, end):
