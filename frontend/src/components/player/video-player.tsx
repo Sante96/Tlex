@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
+import { DSButton } from "@/components/ds";
 import { useRouter } from "next/navigation";
 import { PlayerControls } from "./player-controls";
 import {
@@ -76,6 +78,7 @@ export function VideoPlayer({
   onEpisodeSelect,
 }: VideoPlayerProps) {
   const router = useRouter();
+  const t = useTranslations();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideControlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(
@@ -100,6 +103,7 @@ export function VideoPlayer({
   const [seekId, setSeekId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [episodePickerOpen, setEpisodePickerOpen] = useState(false);
+  const [streamError, setStreamError] = useState(false);
 
   // Pool status monitoring
   const { warning: poolWarning, poolStatus } = usePoolStatus({
@@ -124,7 +128,7 @@ export function VideoPlayer({
     defaultSubtitle(subtitleTracks, prefs),
   );
 
-  const { videoUrl, streamStartTime, localSeekOffset } = useVideoSync(
+  const { videoUrl, streamStartTime, localSeekOffset, applyStreamHeaders } = useVideoSync(
     mediaId,
     selectedAudio,
     seekTime,
@@ -132,7 +136,7 @@ export function VideoPlayer({
     seekId,
   );
 
-  useMediaSource(videoRef, videoUrl);
+  useMediaSource(videoRef, videoUrl, applyStreamHeaders);
 
   useVideoEvents({
     videoRef,
@@ -146,6 +150,7 @@ export function VideoPlayer({
     setIsSeeking,
     setCurrentTime,
     setDuration,
+    onError: () => setStreamError(true),
   });
 
   // Apply saved subtitle offset when video is ready
@@ -222,6 +227,7 @@ export function VideoPlayer({
   );
 
   const restartStreamAt = useCallback((time: number) => {
+    setStreamError(false);
     setIsSeeking(true);
     setIsLoading(true);
     setCurrentTime(time);
@@ -462,6 +468,15 @@ export function VideoPlayer({
           />
         </div>
       </motion.div>
+
+      {streamError && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/70 px-4 text-center">
+          <p className="text-white text-lg">{t("player.streamError")}</p>
+          <DSButton autoFocus onClick={() => restartStreamAt(currentTimeRef.current)}>
+            {t("common.retry")}
+          </DSButton>
+        </div>
+      )}
 
       <NextEpisodeOverlay
         nextEpisode={nextEpisode}

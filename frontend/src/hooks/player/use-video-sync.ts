@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { getStreamUrl, warmStream } from "@/lib/api";
 
 interface VideoSyncState {
   videoUrl: string | undefined;
   streamStartTime: number;
   localSeekOffset: number;
-  isWarmed: boolean;
+  /** Read the start time headers off the stream's response */
+  applyStreamHeaders: (headers: Headers) => void;
 }
 
 export function useVideoSync(
@@ -39,56 +40,25 @@ export function useVideoSync(
     [isWarmed, mediaId, selectedAudio, seekTime, seekId],
   );
 
-  // Fetch stream headers for subtitle sync and local seek calculation
-  useEffect(() => {
-    if (!videoUrl) return;
-    // Quick successive seeks race their HEADs: drop the answer of a superseded one
-    const controller = new AbortController();
-
-    const fetchStreamHeaders = async () => {
-      try {
-        const response = await fetch(videoUrl, {
-          method: "HEAD",
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        const startTime = response.headers.get("X-Stream-Start-Time");
-        const requestedTime = response.headers.get("X-Requested-Time");
-
-        if (startTime) {
-          const start = parseFloat(startTime);
-          setStreamStartTime(start);
-
-          // Calculate local seek offset (measured from start of the streamed chunk)
-          if (requestedTime) {
-            const requested = parseFloat(requestedTime);
-            // If requested > start, we need to seek forward in the player
-            // But we already set currentTime to seekTime in the player state?
-            // The issue is: video.currentTime starts at 0 for the NEW stream.
-            // But the stream actually represents time X to Y.
-            // If we request time T, and we get back a stream starting at T' (keyframe before T),
-            // then we need to seek to T - T' in the video element relative to 0?
-            // Wait, the logic in original file was:
-
-            // "Calculate local seek offset (target - start)"
-            // "setLocalSeekOffset(offset > 0 ? offset : 0);"
-
-            const offset = requested - start;
-            setLocalSeekOffset(offset > 0 ? offset : 0);
-          }
-        } else {
-          setStreamStartTime(seekTime);
-          setLocalSeekOffset(0);
-        }
-      } catch {
-        if (controller.signal.aborted) return;
+  // The stream starts at the keyframe before the requested time: X-Stream-Start-Time is
+  // where (subtitles and the clock count from it), and the requested time minus it is how
+  // far to play before showing the picture. A HEAD request used to fetch these on every
+  // seek: a second keyframe lookup, and when the GET won the race the player synced to
+  // the previous stream's offset.
+  const applyStreamHeaders = useCallback(
+    (headers: Headers) => {
+      const start = parseFloat(headers.get("X-Stream-Start-Time") ?? "");
+      const requested = parseFloat(headers.get("X-Requested-Time") ?? "");
+      if (Number.isFinite(start)) {
+        setStreamStartTime(start);
+        setLocalSeekOffset(Number.isFinite(requested) ? Math.max(0, requested - start) : 0);
+      } else {
         setStreamStartTime(seekTime);
         setLocalSeekOffset(0);
       }
-    };
-    fetchStreamHeaders();
-    return () => controller.abort();
-  }, [videoUrl, seekTime]);
+    },
+    [seekTime],
+  );
 
-  return { videoUrl, streamStartTime, localSeekOffset, isWarmed };
+  return { videoUrl, streamStartTime, localSeekOffset, applyStreamHeaders };
 }

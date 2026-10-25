@@ -14,6 +14,8 @@ interface VideoEventsProps {
   setIsSeeking: (seeking: boolean) => void;
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
+  /** The stream failed (a 5xx, the pool full, Telegram): there's no more data coming */
+  onError?: () => void;
 }
 
 export function useVideoEvents({
@@ -28,12 +30,17 @@ export function useVideoEvents({
   setIsSeeking,
   setCurrentTime,
   setDuration,
+  onError,
 }: VideoEventsProps) {
   const videoMovingRef = useRef(false);
   const isMutedRef = useRef(isMuted);
   const streamStartTimeRef = useRef(streamStartTime);
   const isSeekingRef = useRef(isSeeking);
   const localSeekOffsetRef = useRef(localSeekOffset);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Keep refs in sync with props (no effect re-runs)
   useEffect(() => {
@@ -154,6 +161,12 @@ export function useVideoEvents({
     };
 
     const onWaiting = () => setIsLoading(true);
+    // Without this the spinner turned forever after a failed stream
+    const onStreamError = () => {
+      setIsLoading(false);
+      setIsSeeking(false);
+      onErrorRef.current?.();
+    };
     const onEnded = () => setIsPlaying(false);
 
     // Initial setup
@@ -168,6 +181,7 @@ export function useVideoEvents({
     video.addEventListener("pause", onPause);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("waiting", onWaiting);
+    video.addEventListener("error", onStreamError);
     video.addEventListener("ended", onEnded);
 
     return () => {
@@ -183,6 +197,7 @@ export function useVideoEvents({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("error", onStreamError);
       video.removeEventListener("ended", onEnded);
     };
   }, [

@@ -414,7 +414,8 @@
     "disabledSubtitles": "Disattivati",
     "poolWarning": "Connessione lenta",
     "noClientsWarning": "Nessun client disponibile. Lo streaming potrebbe non avviarsi.",
-    "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento."
+    "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento.",
+    "streamError": "Impossibile riprodurre il video"
   },
   "errors": {
     "crashTitle": "Qualcosa è andato storto",

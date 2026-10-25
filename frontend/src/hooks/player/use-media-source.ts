@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // Download at most this far past the playhead: the rest of the browser's quota (~150 MB
 // of video in desktop Chrome) keeps played video for backward seeks. Past the quota the
@@ -53,9 +53,16 @@ function appended(sb: SourceBuffer) {
 }
 
 /** Feed the fragmented MP4 of `url` into `ms`. False: MSE can't play it. */
-async function feed(video: HTMLVideoElement, ms: MediaSource, url: string, signal: AbortSignal) {
+async function feed(
+  video: HTMLVideoElement,
+  ms: MediaSource,
+  url: string,
+  signal: AbortSignal,
+  onHeaders: (headers: Headers) => void,
+) {
   const response = await fetch(url, { signal });
   if (!response.ok || !response.body) throw new Error(`stream ${response.status}`);
+  onHeaders(response.headers);
   const reader = response.body.getReader();
   const ahead = () => video.buffered.end(video.buffered.length - 1) - video.currentTime;
   let sb: SourceBuffer | null = null;
@@ -109,13 +116,24 @@ async function feed(video: HTMLVideoElement, ms: MediaSource, url: string, signa
 export function useMediaSource(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   url: string | undefined,
+  /** The stream response's headers (where it starts) */
+  onHeaders: (headers: Headers) => void,
 ) {
+  const onHeadersRef = useRef(onHeaders);
+  useEffect(() => {
+    onHeadersRef.current = onHeaders;
+  }, [onHeaders]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) return;
+    const headers = (h: Headers) => onHeadersRef.current(h);
     const MS = mediaSourceClass();
     if (!MS) {
-      video.src = url; // iPhones before iOS 17.1
+      // iPhones before iOS 17.1: the element fetches the stream itself, so ask for the
+      // headers separately
+      video.src = url;
+      fetch(url, { method: "HEAD" }).then((r) => headers(r.headers), () => {});
       return;
     }
     // ManagedMediaSource opens only with AirPlay off (or an HLS source for AirPlay)
@@ -127,7 +145,7 @@ export function useMediaSource(
     ms.addEventListener(
       "sourceopen",
       () => {
-        feed(video, ms, url, controller.signal)
+        feed(video, ms, url, controller.signal, headers)
           .then((ok) => {
             if (!ok && !controller.signal.aborted) {
               controller.abort();
