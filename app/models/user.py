@@ -119,6 +119,9 @@ class WatchProgress(Base):
     """Track user's watch progress for Continue Watching feature."""
 
     __tablename__ = "watch_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "media_item_id", name="uq_watch_progress_user_media"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

@@ -19,6 +19,10 @@ from app.services.tmdb import tmdb_client
 _bg_extract_semaphore = asyncio.Semaphore(3)
 
 
+def _first(value):
+    return value[0] if isinstance(value, list) else value
+
+
 async def process_group(
     session: AsyncSession,
     group: MediaGroup,
@@ -40,10 +44,11 @@ async def process_group(
 
     guess = guessit(group.base_name)
     title = guess.get("title", group.base_name)
-    year = guess.get("year")
+    year = _first(guess.get("year"))
 
-    season = guess.get("season")
-    episode = guess.get("episode")
+    # Multi-episode / season-pack names ("S01E01E02") give lists; the columns are ints
+    season = _first(guess.get("season"))
+    episode = _first(guess.get("episode"))
 
     # Detect OVA/Special
     other_tags = guess.get("other", [])

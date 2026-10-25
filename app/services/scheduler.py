@@ -13,7 +13,29 @@ settings = get_settings()
 
 REDIS_KEY_INTERVAL = "tlex:scanner:interval_hours"
 REDIS_KEY_BACKUP_INTERVAL = "tlex:backup:interval_hours"
+REDIS_KEY_SCAN_LAST_RUN = "tlex:scanner:last_run"
+REDIS_KEY_BACKUP_LAST_RUN = "tlex:backup:last_run"
 DEFAULT_BACKUP_INTERVAL_HOURS = 6
+TICK_SECONDS = 60
+
+
+async def _last_run(r: redis.Redis, key: str) -> datetime | None:
+    """Last run time, kept in Redis so restarts don't reset the countdown."""
+    try:
+        value = await r.get(key)
+        return datetime.fromtimestamp(float(value)) if value else None
+    except Exception as e:
+        logger.warning(f"Failed to read {key} from Redis: {e}")
+        return None
+
+
+async def _mark_run(r: redis.Redis, key: str) -> datetime:
+    now = datetime.now()
+    try:
+        await r.set(key, str(now.timestamp()))
+    except Exception as e:
+        logger.warning(f"Failed to write {key} to Redis: {e}")
+    return now
 
 
 class AutoScanScheduler:
@@ -83,28 +105,21 @@ class AutoScanScheduler:
 
         while self._running:
             try:
-                # Get current interval (may have been updated)
+                # Re-read every tick: an interval set from the admin UI applies within
+                # a minute, and the last run survives restarts (Redis), so restarting
+                # more often than the interval no longer means "never scan".
                 interval_hours = await self.get_interval_hours()
-
                 if interval_hours <= 0:
-                    # Disabled - check again in 1 minute
                     self._next_scan = None
-                    await asyncio.sleep(60)
-                    continue
+                else:
+                    r = await self._get_redis()
+                    last = await _last_run(r, REDIS_KEY_SCAN_LAST_RUN) or self._last_scan
+                    self._next_scan = last + timedelta(hours=interval_hours) if last else datetime.now()
+                    if datetime.now() >= self._next_scan:
+                        self._last_scan = await _mark_run(r, REDIS_KEY_SCAN_LAST_RUN)
+                        await self._run_scan()
 
-                # Calculate next scan time
-                interval_seconds = interval_hours * 3600
-                self._next_scan = datetime.now() + timedelta(hours=interval_hours)
-
-                # Wait for the interval
-                logger.debug(f"Next auto-scan in {interval_hours} hours at {self._next_scan}")
-                await asyncio.sleep(interval_seconds)
-
-                if not self._running:
-                    break
-
-                # Run the scan
-                await self._run_scan()
+                await asyncio.sleep(TICK_SECONDS)
 
             except asyncio.CancelledError:
                 logger.info("Auto-scan scheduler cancelled")
@@ -134,7 +149,6 @@ class AutoScanScheduler:
             return
 
         logger.info("Starting auto-scan...")
-        self._last_scan = datetime.now()
 
         try:
             async with async_session_maker() as session:
@@ -211,24 +225,22 @@ class BackupSyncScheduler:
 
         while self._running:
             try:
+                # Same tick scheme as AutoScanScheduler
                 interval_hours = await self.get_interval_hours()
-                if interval_hours <= 0:
-                    await asyncio.sleep(60)
-                    continue
+                if interval_hours > 0:
+                    r = await self._get_redis()
+                    last = await _last_run(r, REDIS_KEY_BACKUP_LAST_RUN) or self._last_sync
+                    if last is None or datetime.now() >= last + timedelta(hours=interval_hours):
+                        from app.services.backup.service import backup_service
 
-                await asyncio.sleep(interval_hours * 3600)
+                        logger.info("[BACKUP] Running scheduled sync...")
+                        self._last_sync = await _mark_run(r, REDIS_KEY_BACKUP_LAST_RUN)
+                        result = await backup_service.sync_all()
+                        logger.info(
+                            f"[BACKUP] Scheduled sync done: {result.get('synced', 0)} new messages"
+                        )
 
-                if not self._running:
-                    break
-
-                from app.services.backup.service import backup_service
-
-                logger.info("[BACKUP] Running scheduled sync...")
-                self._last_sync = datetime.now()
-                result = await backup_service.sync_all()
-                logger.info(
-                    f"[BACKUP] Scheduled sync done: {result.get('synced', 0)} new messages"
-                )
+                await asyncio.sleep(TICK_SECONDS)
 
             except asyncio.CancelledError:
                 logger.info("Backup sync scheduler cancelled")

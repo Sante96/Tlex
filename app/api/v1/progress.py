@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
@@ -89,25 +90,23 @@ async def update_progress(
         raise HTTPException(status_code=404, detail="Media not found")
 
     # Get or create progress
-    result = await db.execute(
-        select(WatchProgress).where(
-            WatchProgress.user_id == current_user.id,
-            WatchProgress.media_item_id == media_id,
-        )
+    query = select(WatchProgress).where(
+        WatchProgress.user_id == current_user.id,
+        WatchProgress.media_item_id == media_id,
     )
-    progress = result.scalars().first()
+    progress = (await db.execute(query)).scalar_one_or_none()
 
     if not progress:
-        progress = WatchProgress(
-            user_id=current_user.id,
-            media_item_id=media_id,
-            position_seconds=data.position_seconds,
-            duration_seconds=data.duration_seconds,
-        )
-        db.add(progress)
-    else:
-        progress.position_seconds = data.position_seconds
-        progress.duration_seconds = data.duration_seconds
+        progress = WatchProgress(user_id=current_user.id, media_item_id=media_id)
+        try:
+            async with db.begin_nested():
+                db.add(progress)
+        except IntegrityError:
+            # A concurrent save (two tabs, pause + periodic save) inserted it first
+            progress = (await db.execute(query)).scalar_one()
+
+    progress.position_seconds = data.position_seconds
+    progress.duration_seconds = data.duration_seconds
 
     # Mark as completed if watched > 90%
     if data.duration_seconds > 0:

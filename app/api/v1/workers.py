@@ -226,9 +226,8 @@ async def verify_code(
             pass
         del _pending_auth[phone]
 
-        # Reload workers to pick up the new one
-        await worker_manager.shutdown()
-        await worker_manager.load_workers(db)
+        # Start only the new worker; a full reload would cut every active stream
+        await worker_manager.load_workers(db, worker_ids=[worker.id])
 
         logger.info(f"Added new worker: {phone} (premium={is_premium})")
         return {
@@ -264,10 +263,9 @@ async def delete_worker(
     await db.delete(worker)
     await db.commit()
 
-    # Reload workers
-    await worker_manager.shutdown()
-    async with db.begin():
-        await worker_manager.load_workers(db)
+    # Stop only this worker's clients (the old shutdown + reload cut every stream and
+    # then failed with 500: load_workers commits inside the db.begin() block)
+    await worker_manager.remove_worker(worker_id)
 
     logger.info(f"Deleted worker {worker_id} ({phone})")
     return {"status": "ok"}

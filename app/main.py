@@ -55,11 +55,11 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(populate_caches_background())
     logger.info("Background subtitle cache population started")
 
-    # Start auto-scan scheduler if enabled
+    # Start auto-scan scheduler (always on: it idles while the interval is 0, and the
+    # interval can be enabled later from the admin UI)
     from app.services.scheduler import auto_scan_scheduler, backup_sync_scheduler
-    if settings.scanner_auto_interval_hours > 0:
-        asyncio.create_task(auto_scan_scheduler.start())
-        logger.info(f"Auto-scan scheduler started (interval: {settings.scanner_auto_interval_hours}h)")
+    asyncio.create_task(auto_scan_scheduler.start())
+    logger.info("Auto-scan scheduler started")
 
     # Start backup sync scheduler (always on, interval managed via Redis)
     asyncio.create_task(backup_sync_scheduler.start())

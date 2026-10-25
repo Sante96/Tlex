@@ -5,6 +5,13 @@ from datetime import datetime
 
 from loguru import logger
 from pyrogram import Client
+from pyrogram.errors import (
+    ChannelBanned,
+    ChannelInvalid,
+    ChannelPrivate,
+    ChatForbidden,
+    PeerIdInvalid,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +42,9 @@ class BackupFailoverMixin:
                 await session.commit()
                 logger.info(f"[BACKUP] Main {backup.main_channel_id} recovered")
             return False
-        except Exception as e:
+        except (ChannelBanned, ChannelInvalid, ChannelPrivate, ChatForbidden, PeerIdInvalid) as e:
+            # Only "the channel is gone / we lost access" counts towards failover;
+            # timeouts and FloodWait would otherwise auto-promote a healthy channel.
             backup.failure_count += 1
             backup.last_failure_at = datetime.utcnow()
             await session.commit()
@@ -44,6 +53,9 @@ class BackupFailoverMixin:
                 f"(count={backup.failure_count}/{backup.max_failures})"
             )
             return backup.failure_count >= backup.max_failures
+        except Exception as e:
+            logger.warning(f"[BACKUP] Health check inconclusive for {backup.main_channel_id}: {e}")
+            return False
 
     async def promote_to_main(
         self,
@@ -69,9 +81,32 @@ class BackupFailoverMixin:
             select(MediaPart).where(MediaPart.channel_id == old_main)
         )
         parts = parts_result.scalars().all()
+        # Forwarded copies have their own message ids (and topics): moving channel_id
+        # alone pointed every part at the wrong message.
+        msg_map = dict(
+            (
+                await session.execute(
+                    select(BackupMessage.main_message_id, BackupMessage.backup_message_id).where(
+                        BackupMessage.backup_channel_db_id == backup.id
+                    )
+                )
+            ).all()
+        )
+        topic_map = backup.topic_map or {}
+        unsynced = 0
         for part in parts:
+            backup_msg_id = msg_map.get(part.message_id)
+            if not backup_msg_id:  # never forwarded (or stored as 0): nothing to point at
+                unsynced += 1
+                continue
             part.channel_id = new_main
-        logger.info(f"[BACKUP] Redirected {len(parts)} MediaPart records to new main")
+            part.message_id = backup_msg_id
+            if part.topic_id is not None:
+                part.topic_id = topic_map.get(str(part.topic_id), part.topic_id)
+        logger.info(
+            f"[BACKUP] Redirected {len(parts) - unsynced} MediaPart records to new main"
+            + (f", {unsynced} left on the old channel (not in the backup)" if unsynced else "")
+        )
 
         backup.is_active = False
         backup.is_promoted = True

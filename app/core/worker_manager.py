@@ -43,14 +43,20 @@ class WorkerManager:
         self._worker_loads: dict[int, int] = {}  # worker_id -> current_load
         self._lock = asyncio.Lock()
 
-    async def load_workers(self, session: AsyncSession) -> int:
+    async def load_workers(self, session: AsyncSession, worker_ids: list[int] | None = None) -> int:
         """
-        Load all active workers from database and initialize clients.
+        Load active workers from database and initialize clients.
+
+        Args:
+            worker_ids: Load only these (e.g. a newly added worker), leaving the
+                running clients and their streams alone. None loads all.
 
         Returns:
             Number of successfully loaded workers.
         """
         stmt = select(Worker).where(Worker.status != WorkerStatus.OFFLINE)
+        if worker_ids is not None:
+            stmt = stmt.where(Worker.id.in_(worker_ids))
         result = await session.execute(stmt)
         workers = result.scalars().all()
 
@@ -453,6 +459,20 @@ class WorkerManager:
             "clients_available": available,
             "pool_pressure": round(pressure, 2),
         }
+
+    async def remove_worker(self, worker_id: int) -> None:
+        """Stop one worker's clients; other workers' clients and streams keep running."""
+        clients = [c for wid, c in self._client_pool if wid == worker_id]
+        self._client_pool = [(wid, c) for wid, c in self._client_pool if wid != worker_id]
+        self._clients.pop(worker_id, None)
+        for client in clients:
+            # release_clients() on these later is a no-op once they're unknown here
+            self._client_in_use.pop(id(client), None)
+            try:
+                await client.stop()
+            except Exception as e:
+                logger.error(f"Error stopping client for worker {worker_id}: {e}")
+        logger.info(f"Removed worker {worker_id} ({len(clients)} clients)")
 
     async def shutdown(self) -> None:
         """Gracefully shutdown all worker clients."""

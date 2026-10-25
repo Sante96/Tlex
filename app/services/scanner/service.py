@@ -133,6 +133,9 @@ class ScannerService:
                 except Exception as e:
                     logger.error(f"Error processing {group.base_name}: {e}")
                     stats["errors"].append(str(e))
+                    # process_group commits per group: drop only this group's partial
+                    # work, otherwise every later group fails with PendingRollbackError
+                    await session.rollback()
 
         except Exception as e:
             logger.error(f"Error scanning topic {topic_id}: {e}")
