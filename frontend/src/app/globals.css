@@ -179,6 +179,143 @@ html[data-tv-tier]::view-transition-new(*) {
   }
 }
 
+/* The splash (components/splash-screen.tsx), 3.3 s: T, L and E rise along their slant
+   (0.345 across for 1 up) through the baseline; the X's blue arm lands on its stroke at
+   1.45 s, with a flash; the light then runs back from the X to the T, and it all fades
+   into the app. Each element's own style is its end state, the animations (fill-mode
+   both) bring it there: without them, the logo just shows */
+.splash {
+  background: radial-gradient(ellipse 70% 55% at 50% 50%, #1a1300, #09090b);
+  animation: splash-out 400ms ease-in 2900ms both;
+}
+.splash-rise {
+  animation: splash-rise 750ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.splash-x {
+  fill-opacity: 1;
+  animation:
+    splash-rise 750ms cubic-bezier(0.16, 1, 0.3, 1) 450ms both,
+    splash-x-on 150ms ease-out 1450ms both;
+}
+.splash-arm {
+  animation: splash-arm 450ms cubic-bezier(0.3, 0, 0.2, 1) 1000ms both;
+}
+.splash-bump {
+  animation: splash-bump 400ms ease-out 1450ms both;
+}
+.splash-bloom {
+  position: absolute;
+  left: 86%;
+  top: 41%;
+  width: 55%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  translate: -50% -50%;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 255 255 / 0.95),
+    rgb(0 136 204 / 0.55) 30%,
+    rgb(219 157 16 / 0.25) 60%,
+    transparent
+  );
+  /* Only adds light: blended normally, its blue muddied the orange stroke */
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: splash-bloom 700ms ease-out 1450ms both;
+}
+/* Wider than the word by 15% on each side (its viewBox too): the mask would otherwise
+   cut the glow off square at the word's box */
+.splash-lit {
+  position: absolute;
+  left: -15%;
+  top: -15%;
+  width: 130%;
+  height: 130%;
+  filter: drop-shadow(0 0 0.6rem rgb(255 255 255 / 0.3));
+  -webkit-mask-image: linear-gradient(to right, transparent 40%, #000 60%);
+  mask-image: linear-gradient(to right, transparent 40%, #000 60%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  animation: splash-sweep 700ms cubic-bezier(0.4, 0, 0.2, 1) 1550ms both;
+}
+.splash-glow {
+  position: absolute;
+  inset: -60% -25%;
+  background: radial-gradient(closest-side, rgb(229 160 13 / 0.16), transparent);
+  animation: splash-in 900ms ease-out 1450ms both;
+}
+.splash-exit {
+  animation: splash-exit 450ms cubic-bezier(0.4, 0, 1, 1) 2850ms both;
+}
+@keyframes splash-rise {
+  from {
+    transform: translate(-179px, 520px);
+  }
+}
+@keyframes splash-x-on {
+  from {
+    fill-opacity: 0.3;
+  }
+}
+@keyframes splash-arm {
+  from {
+    transform: translate(320px, -250px);
+    opacity: 0;
+  }
+  70% {
+    transform: translate(-12px, 9px);
+    opacity: 1;
+  }
+}
+@keyframes splash-bump {
+  40% {
+    scale: 1.025;
+  }
+}
+@keyframes splash-bloom {
+  from {
+    opacity: 0;
+    scale: 0.2;
+  }
+  15% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.8;
+  }
+}
+@keyframes splash-sweep {
+  from {
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+}
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes splash-exit {
+  to {
+    opacity: 0;
+    scale: 1.06;
+  }
+}
+@keyframes splash-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Only the fade out for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .splash * {
+    animation: none !important;
+  }
+}
+
 /* Modals (DSModal): the panel comes in and goes out by itself (an ancestor's fade would
    turn its glass blur off), the dimmed backdrop fades; the page behind doesn't scroll */
 html:has(dialog.ds-modal[open]) {

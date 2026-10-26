@@ -1,186 +1,70 @@
 "use client";
 
-import { useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useEffectEvent } from "react";
 
+// The wordmark of public/tlex-logo.svg, one path per letter: each moves on its own
+const T =
+  "M508.42,656.17c-11.34,0-14.83-5.66-10.46-17l35.97-88.94c5.23-11.77,13.29-17.66,24.2-17.66h410.71c12.2,0,15.7,5.89,10.46,17.66l-35.97,88.94c-4.36,11.34-12.43,17-24.2,17h-410.71ZM753.67,684.29c11.33,0,14.82,5.67,10.46,17l-115.1,284.49c-5.23,11.77-13.3,17.66-24.2,17.66h-102.68c-12.21,0-15.7-5.89-10.46-17.66l115.1-284.49c4.35-11.33,12.43-17,24.2-17h102.68Z";
+const L =
+  "M1201.66,879.83c11.77,0,15.47,5.67,11.12,17l-35.97,88.94c-5.23,11.77-13.52,17.66-24.85,17.66h-317.19c-11.77,0-15.04-5.89-9.81-17.66l175.93-435.56c5.23-11.77,13.29-17.66,24.2-17.66h103.33c11.77,0,15.04,5.89,9.81,17.66l-130.8,323.08c-1.31,4.36,0,6.54,3.92,6.54h190.31Z";
+const E =
+  "M1627.41,879.83c11.33,0,14.82,5.67,10.46,17l-35.97,88.94c-5.23,11.77-13.3,17.66-24.2,17.66h-360.35c-11.77,0-15.04-5.89-9.81-17.66l175.93-435.56c5.23-11.77,13.29-17.66,24.2-17.66h360.35c11.77,0,15.04,5.89,9.81,17.66l-35.97,88.94c-4.36,11.34-12.21,17-23.54,17h-234.79c-4.8,0-7.85,2.19-9.16,6.54l-85.67,210.59c-1.31,4.36,0,6.54,3.92,6.54h234.79ZM1476.33,732.68c5.23-11.77,13.29-17.66,24.2-17.66h164.81c11.77,0,15.04,5.89,9.81,17.66l-28.12,70.63c-5.23,11.77-13.3,17.66-24.2,17.66h-164.81c-11.77,0-15.04-5.89-9.81-17.66l28.12-70.63Z";
+// The X: the orange stroke, and the blue arm (Telegram's) that lands on it
+const X_STROKE =
+  "M2018.79,768.33l-54.58-223.99c-2.19-7.41-8.29-11.12-18.31-11.12h-134.07c-14.83,0-20.71,6.33-17.66,18.97l51.67,209.28c1.31,3.92.21,7.63-3.27,11.12l-223.01,211.9c-3.92,3.49-6.75,7.52-8.5,12.1-1.74,4.58,1.96,6.87,11.12,6.87h132.76c9.58,0,18.53-4.14,26.81-12.43l105.29-111.18,17,111.18c1.31,8.29,6.75,12.43,16.35,12.43h132.76c15.26,0,21.36-6.32,18.31-18.97l-52.67-216.15Z";
+const X_ARM =
+  "M2024.37,605.81l58.21-60.17c7.85-8.28,16.57-12.43,26.16-12.43h134.07c10.02,0,14.28,1.96,12.75,5.89-1.53,3.92-4.69,8.29-9.48,13.08l-185.08,171.35c-5.67,5.67-10.69,8.5-15.04,8.5-3.92,0-6.54-2.83-7.85-8.5l-22.89-92.21c-2.19-8.72.87-17.22,9.16-25.51Z";
+const LETTERS = [T, L, E];
+const VIEW_BOX = "485 505 1790 515";
+// The lit copy's, 15% wider on each side: its glow fits inside (globals.css, .splash-lit)
+const LIT_VIEW_BOX = `${485 - 0.15 * 1790} ${505 - 0.15 * 515} ${1.3 * 1790} ${1.3 * 515}`;
+
+/** Until the screen has faded out: the timeline is in globals.css ("The splash") */
+const DURATION_MS = 3300;
+
+/**
+ * The first screen of a session: T, L and E rise along their slant, the X's blue arm
+ * lands on its orange stroke, and from where they meet the light runs back across the
+ * word. It grows with the screen, from a phone to the TV.
+ */
 export function SplashScreen({ onComplete }: { onComplete: () => void }) {
+  const complete = useEffectEvent(onComplete);
   useEffect(() => {
-    const timer = setTimeout(onComplete, 2500);
+    const timer = setTimeout(complete, DURATION_MS);
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, []);
 
   return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
-        initial={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        {/* Animated background gradient */}
-        <motion.div
-          className="absolute inset-0 bg-zinc-950"
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-        />
-
-        {/* Radial glow pulses */}
-        <motion.div
-          className="absolute w-[600px] h-[600px] rounded-full"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(229,160,13,0.15) 0%, transparent 70%)",
-          }}
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{
-            scale: [0.5, 1.2, 1],
-            opacity: [0, 0.8, 0.4],
-          }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-        />
-
-        {/* Secondary glow ring */}
-        <motion.div
-          className="absolute w-[400px] h-[400px] rounded-full border border-plex-orange/20"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-        />
-
-        {/* Main content */}
-        <div className="relative flex flex-col items-center">
-          {/* Logo container */}
-          <motion.div
-            className="relative"
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 200,
-              damping: 20,
-              duration: 0.8,
-            }}
-          >
-            {/* Outer rotating ring */}
-            <motion.svg
-              viewBox="0 0 120 120"
-              className="absolute -inset-4 w-32 h-32"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            >
-              <circle
-                cx="60"
-                cy="60"
-                r="56"
-                fill="none"
-                stroke="#e5a00d"
-                strokeWidth="1"
-                strokeDasharray="8 12"
-                opacity="0.3"
-              />
-            </motion.svg>
-
-            {/* Main logo */}
-            <motion.svg
-              viewBox="0 0 120 120"
-              className="w-24 h-24"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-            >
-              {/* Circle */}
-              <motion.circle
-                cx="60"
-                cy="60"
-                r="54"
-                fill="none"
-                stroke="#e5a00d"
-                strokeWidth="4"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 1, delay: 0.2, ease: "easeInOut" }}
-              />
-              {/* Play triangle */}
-              <motion.path
-                d="M48 38 L48 82 L90 60 Z"
-                fill="#e5a00d"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.8, duration: 0.3, type: "spring" }}
-              />
-            </motion.svg>
-          </motion.div>
-
-          {/* Title */}
-          <motion.div
-            className="mt-8 flex flex-col items-center"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-          >
-            <motion.h1
-              className="text-5xl font-bold tracking-[0.3em] text-white"
-              initial={{ letterSpacing: "0.5em", opacity: 0 }}
-              animate={{ letterSpacing: "0.3em", opacity: 1 }}
-              transition={{ delay: 0.8, duration: 0.6 }}
-            >
-              TLEX
-            </motion.h1>
-            <motion.p
-              className="mt-2 text-sm text-zinc-500 tracking-[0.2em] uppercase"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.2, duration: 0.5 }}
-            >
-              Your Media Server
-            </motion.p>
-          </motion.div>
-
-          {/* Loading bar */}
-          <motion.div
-            className="mt-10 w-48 h-0.5 bg-zinc-800 rounded-full overflow-hidden"
-            initial={{ opacity: 0, scaleX: 0 }}
-            animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ delay: 1, duration: 0.3 }}
-          >
-            <motion.div
-              className="h-full bg-gradient-to-r from-plex-orange to-[#f5c842]"
-              initial={{ x: "-100%" }}
-              animate={{ x: "100%" }}
-              transition={{
-                delay: 1.2,
-                duration: 1,
-                ease: "easeInOut",
-              }}
-            />
-          </motion.div>
+    <div
+      role="img"
+      aria-label="TLEX"
+      className="splash fixed inset-0 z-50 flex items-center justify-center pb-[8vh]"
+    >
+      <div className="splash-exit relative w-[min(8rem_+_30vw,36rem)] aspect-1790/515">
+        <div className="splash-glow" />
+        <div className="splash-bump absolute inset-0">
+          {/* Unlit: the letters come up through the baseline */}
+          <svg viewBox={VIEW_BOX} className="absolute inset-0 size-full overflow-visible">
+            <clipPath id="splash-baseline">
+              <rect x="0" y="0" width="3000" height="1004" />
+            </clipPath>
+            <g clipPath="url(#splash-baseline)" fill="#fff" fillOpacity={0.3}>
+              {LETTERS.map((d, i) => (
+                <path key={i} d={d} className="splash-rise" style={{ animationDelay: `${150 + i * 100}ms` }} />
+              ))}
+              <path d={X_STROKE} fill="#db9d10" className="splash-x" />
+            </g>
+            <path d={X_ARM} fill="#08c" className="splash-arm" />
+          </svg>
+          {/* Lit: uncovered from the X to the T */}
+          <svg viewBox={LIT_VIEW_BOX} fill="#fff" className="splash-lit">
+            {LETTERS.map((d, i) => (
+              <path key={i} d={d} />
+            ))}
+          </svg>
+          <div className="splash-bloom" />
         </div>
-
-        {/* Particle effects */}
-        {[...Array(6)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 rounded-full bg-plex-orange"
-            initial={{
-              x: 0,
-              y: 0,
-              opacity: 0,
-              scale: 0,
-            }}
-            animate={{
-              x: Math.cos((i * 60 * Math.PI) / 180) * 150,
-              y: Math.sin((i * 60 * Math.PI) / 180) * 150,
-              opacity: [0, 1, 0],
-              scale: [0, 1.5, 0],
-            }}
-            transition={{
-              delay: 0.8 + i * 0.1,
-              duration: 1.2,
-              ease: "easeOut",
-            }}
-          />
-        ))}
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </div>
   );
 }
