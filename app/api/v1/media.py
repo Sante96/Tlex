@@ -5,15 +5,21 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pyrogram.types import Message
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload, undefer
 
-from app.api.deps import DBSession, get_admin_user, get_current_user, get_current_user_optional
+from app.api.deps import (
+    DBSession,
+    get_admin_user,
+    get_current_profile,
+    get_current_user,
+    get_current_user_optional,
+)
 from app.core.worker_manager import worker_manager
 from app.models.media import Franchise, MediaItem, MediaStream, MediaType
-from app.models.user import User
+from app.models.user import Profile, User, WatchProgress
 from app.schemas import (
     MediaItemDetailResponse,
     MediaItemResponse,
@@ -21,6 +27,7 @@ from app.schemas import (
     MediaPartResponse,
     MediaStreamResponse,
 )
+from app.services.credits import credits_start
 from app.services.ffprobe import ffprobe_service
 from app.services.overrides import (
     apply_media_override,
@@ -39,6 +46,27 @@ def _poster(item: MediaItem) -> str | None:
     if item.poster_path or item.media_type != MediaType.CONCERT or item.franchise is None:
         return item.poster_path
     return item.franchise.poster_path
+
+
+def _list_item(item: MediaItem, override) -> MediaItemResponse:
+    """A title in a list (its parts and franchise loaded), with the user's override."""
+    item_data = {
+        "id": item.id,
+        "tmdb_id": item.tmdb_id,
+        "title": item.title,
+        "overview": item.overview,
+        "poster_path": _poster(item),
+        "backdrop_path": item.backdrop_path,
+        "release_date": str(item.release_date) if item.release_date else None,
+        "media_type": item.media_type.value,
+        "duration_seconds": item.duration_seconds,
+        "season_number": item.season_number,
+        "episode_number": item.episode_number,
+        "total_size": item.total_size,
+        "parts_count": len(item.parts),
+    }
+    apply_media_override(item_data, override)
+    return MediaItemResponse(**item_data)
 
 
 @router.get("", response_model=MediaListResponse)
@@ -88,28 +116,8 @@ async def list_media(
             session, current_user, [item.id for item in items]
         )
 
-    response_items = []
-    for item in items:
-        item_data = {
-            "id": item.id,
-            "tmdb_id": item.tmdb_id,
-            "title": item.title,
-            "overview": item.overview,
-            "poster_path": _poster(item),
-            "backdrop_path": item.backdrop_path,
-            "release_date": str(item.release_date) if item.release_date else None,
-            "media_type": item.media_type.value,
-            "duration_seconds": item.duration_seconds,
-            "season_number": item.season_number,
-            "episode_number": item.episode_number,
-            "total_size": item.total_size,
-            "parts_count": len(item.parts),
-        }
-        apply_media_override(item_data, overrides_map.get(item.id))
-        response_items.append(MediaItemResponse(**item_data))
-
     return MediaListResponse(
-        items=response_items,
+        items=[_list_item(item, overrides_map.get(item.id)) for item in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -206,7 +214,78 @@ async def get_media(
         franchise_id=item.franchise_id,
         franchise_title=item.franchise.title if item.franchise else None,
         setlist=item.setlist,
+        credits_start=await credits_start(session, item),
+        credits_start_seconds=item.credits_start_seconds,
     )
+
+
+class CreditsUpdate(BaseModel):
+    seconds: int | None = Field(default=None, ge=0)
+
+
+@router.put("/{media_id}/credits")
+async def set_credits(
+    session: DBSession,
+    media_id: int,
+    body: CreditsUpdate,
+    _admin=Depends(get_admin_user),
+) -> dict:
+    """Where this title's credits start (Up next shows there); None clears it."""
+    item = await session.get(MediaItem, media_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Media not found")
+    item.credits_start_seconds = body.seconds
+    await session.commit()
+    return {"credits_start_seconds": body.seconds}
+
+
+@router.get("/{media_id}/recommendations", response_model=list[MediaItemResponse])
+async def get_recommendations(
+    session: DBSession,
+    media_id: int,
+    limit: int = Query(6, ge=1, le=20),
+    current_user: User = Depends(get_current_user),
+    profile: Profile = Depends(get_current_profile),
+) -> list[MediaItemResponse]:
+    """Films of the library for after this one: TMDB's recommendations first, in its order,
+    then the ones sharing most genres. Not the ones this profile has watched."""
+    item = await session.get(MediaItem, media_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Media not found")
+    watched = select(WatchProgress.media_item_id).where(
+        WatchProgress.profile_id == profile.id,
+        WatchProgress.completed == True,  # noqa: E712
+    )
+    films = (
+        (
+            await session.execute(
+                select(MediaItem)
+                .where(
+                    MediaItem.media_type == MediaType.MOVIE,
+                    MediaItem.id != media_id,
+                    MediaItem.id.not_in(watched),
+                )
+                .options(selectinload(MediaItem.parts), selectinload(MediaItem.franchise))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    ranked = await tmdb_client.get_movie_recommendations(item.tmdb_id) if item.tmdb_id else []
+    rank = {tmdb_id: i for i, tmdb_id in enumerate(ranked)}
+    genres = set(filter(None, (item.genres or "").split(",")))
+
+    def shared(film: MediaItem) -> int:
+        return len(genres & set((film.genres or "").split(",")))
+
+    picks = sorted(
+        (f for f in films if f.tmdb_id in rank or shared(f)),
+        key=lambda f: (0, rank[f.tmdb_id], 0, 0)
+        if f.tmdb_id in rank
+        else (1, 0, -shared(f), -(f.vote_average or 0)),
+    )[:limit]
+    overrides = await get_media_overrides(session, current_user, [f.id for f in picks])
+    return [_list_item(f, overrides.get(f.id)) for f in picks]
 
 
 class NextEpisodeResponse(BaseModel):

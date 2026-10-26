@@ -373,6 +373,11 @@
     "itemMany": "titles"
   },
   "player": {
+    "creditsHere": "Credits start here",
+    "creditsClear": "Clear the credits point",
+    "youMightLike": "You might like",
+    "nextIn": "Next in {seconds} s",
+    "watchCredits": "Watch the credits",
     "resumeFrom": "Resume from {time}",
     "startOver": "Start over",
     "play": "Play",

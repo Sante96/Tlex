@@ -109,6 +109,8 @@ SCHEMA_UPGRADES = (
     " REFERENCES archive_accounts(id)",
     # Titles taken out of Continue Watching
     "ALTER TABLE watch_progress ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE",
+    # Where the credits start (Up next)
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS credits_start_seconds INTEGER",
 )
 
 

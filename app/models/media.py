@@ -120,6 +120,9 @@ class MediaItem(Base):
         Enum(MediaType), default=MediaType.MOVIE, nullable=False
     )
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Where the credits start, set by hand in the player: Up next shows from there, and the
+    # title counts as watched (app/services/credits.py: when unset)
+    credits_start_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Video keyframe times for precise seeking (JSON array of seconds). Replaced the
     # keyframes_index column, whose lists also held subtitle cue times. Deferred: tens of

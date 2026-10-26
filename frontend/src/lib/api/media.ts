@@ -44,6 +44,11 @@ export interface MediaDetails extends MediaItem {
   franchise_id?: number | null;
   franchise_title?: string | null;
   setlist?: (string | null)[] | null;
+  /** Where Up next shows: set by hand, else found (a chapter, the series); null: 30 s
+   * before the end */
+  credits_start?: number | null;
+  /** The point set by hand (the player's admin menu) */
+  credits_start_seconds?: number | null;
 }
 
 /** A chapter of the file (seconds): a segment of the player's seekbar */
@@ -131,6 +136,20 @@ export interface NextEpisode {
   poster_path: string | null;
   backdrop_path: string | null;
   still_path: string | null;
+}
+
+/** Where the credits start, set by hand (admins): null clears it */
+export async function setCreditsStart(mediaId: number, seconds: number | null): Promise<void> {
+  await api.put(`/api/v1/media/${mediaId}/credits`, { seconds });
+}
+
+/** Films of the library for after this one: the player's Up next at a film's credits */
+export async function getRecommendations(mediaId: number): Promise<MediaItem[]> {
+  try {
+    return (await api.get<MediaItem[]>(`/api/v1/media/${mediaId}/recommendations`)).data;
+  } catch {
+    return [];
+  }
 }
 
 export async function getNextEpisode(

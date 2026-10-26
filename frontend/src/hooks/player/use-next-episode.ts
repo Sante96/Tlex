@@ -1,50 +1,68 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { getNextEpisode, type NextEpisode } from "@/lib/api";
+import { getNextEpisode, getRecommendations, type MediaItem, type NextEpisode } from "@/lib/api";
 
-const SHOW_OVERLAY_BEFORE_END = 30; // seconds before end to show overlay
+// Without a credits point (set by hand, a chapter, the series): this long before the end
+const SHOW_OVERLAY_BEFORE_END = 30;
 
 interface UseNextEpisodeOptions {
   mediaId: number;
   isEpisode: boolean;
+  /** A film: Up next offers films of the library */
+  isMovie: boolean;
   currentTime: number;
   duration: number;
+  /** Where the credits start (seconds) */
+  creditsStart?: number | null;
 }
 
 export function useNextEpisode({
   mediaId,
   isEpisode,
+  isMovie,
   currentTime,
   duration,
+  creditsStart,
 }: UseNextEpisodeOptions) {
   const [nextEpisode, setNextEpisode] = useState<NextEpisode | null>(null);
+  const [recommendations, setRecommendations] = useState<MediaItem[]>([]);
   const [cancelledAt, setCancelledAt] = useState<number | null>(null);
+  // TEMPORARY, while Up next is redone: ?endcard shows it from the start
+  const [preview] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(location.search).has("endcard"),
+  );
   const fetchedRef = useRef(false);
 
-  // Fetch next episode data once
+  // What comes next, once
   useEffect(() => {
-    if (!isEpisode || fetchedRef.current) return;
-    fetchedRef.current = true;
-    getNextEpisode(mediaId).then(setNextEpisode);
-  }, [mediaId, isEpisode]);
+    if (fetchedRef.current) return;
+    if (isEpisode) {
+      fetchedRef.current = true;
+      getNextEpisode(mediaId).then(setNextEpisode);
+    } else if (isMovie) {
+      fetchedRef.current = true;
+      getRecommendations(mediaId).then(setRecommendations);
+    }
+  }, [mediaId, isEpisode, isMovie]);
+
+  const hasNext = !!nextEpisode || recommendations.length > 0;
 
   // Derive overlay visibility from current playback state
   const showNextOverlay = useMemo(() => {
-    if (!nextEpisode || duration <= 0 || currentTime <= 0) return false;
-    const remaining = duration - currentTime;
-    // Show from 30s before end. Do NOT hide when remaining hits 0 — the video
-    // ending is not a reason to hide; the countdown timer should fire onPlay.
-    const nearEnd = remaining <= SHOW_OVERLAY_BEFORE_END;
-    if (!nearEnd) return false;
+    if (preview && hasNext && cancelledAt === null) return true;
+    if (!hasNext || duration <= 0 || currentTime <= 0) return false;
+    // From the credits on. Do NOT hide when the video ends: the countdown plays the next
+    const from = creditsStart ?? duration - SHOW_OVERLAY_BEFORE_END;
+    if (currentTime < from) return false;
     // If user cancelled, only re-show if they seeked back past the threshold
     if (cancelledAt !== null && currentTime >= cancelledAt) return false;
     return true;
-  }, [nextEpisode, duration, currentTime, cancelledAt]);
+  }, [hasNext, duration, currentTime, cancelledAt, preview, creditsStart]);
 
   const cancelNextOverlay = useCallback(() => {
     setCancelledAt(currentTime);
   }, [currentTime]);
 
-  return { nextEpisode, showNextOverlay, cancelNextOverlay };
+  return { nextEpisode, recommendations, showNextOverlay, cancelNextOverlay };
 }

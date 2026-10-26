@@ -401,6 +401,11 @@ class TMDBClient:
         )
         return _image_list(data.get("stills", [])) if data else []
 
+    async def get_movie_recommendations(self, tmdb_id: int) -> list[int]:
+        """TMDB's recommendations after a film, best first: their TMDB ids."""
+        data = await self._get(f"/movie/{tmdb_id}/recommendations", use_language=False)
+        return [r["id"] for r in (data or {}).get("results", [])]
+
     async def get_movie_images(self, tmdb_id: int) -> dict:
         """Get available poster and backdrop images for a movie."""
         data = await self._get(f"/movie/{tmdb_id}/images", use_language=False)

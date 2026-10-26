@@ -28,6 +28,8 @@ export {
   getMediaCast,
   getMediaTrailer,
   getNextEpisode,
+  getRecommendations,
+  setCreditsStart,
   updateMediaItem,
   getMediaTmdbImages,
   triggerScan,

@@ -11,7 +11,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
-import { PlayerSettingsDropdown } from "./player-settings";
+import { PlayerSettingsDropdown, type CreditsControl } from "./player-settings";
 import { VideoSeekbar } from "./video-seekbar";
 import { VolumeSlider } from "./volume-slider";
 import { ClientRing } from "./client-ring";
@@ -73,6 +73,8 @@ interface PlayerControlsProps {
   onSkip: (seconds: number) => void;
   onActivity?: () => void;
   onSettingsOpenChange?: (open: boolean) => void;
+  /** Admins: the credits point, in the settings menu */
+  credits?: CreditsControl;
   hasEpisodes?: boolean;
   episodePickerOpen?: boolean;
   onToggleEpisodes?: () => void;
@@ -113,6 +115,7 @@ export function PlayerControls({
   onSkip,
   onActivity,
   onSettingsOpenChange,
+  credits,
   isTV,
   hasEpisodes,
   episodePickerOpen,
@@ -323,6 +326,7 @@ export function PlayerControls({
               onSubtitleChange={onSubtitleChange}
               onSubtitleOffsetChange={onSubtitleOffsetChange}
               onOpenChange={onSettingsOpenChange}
+              credits={credits}
             />
 
             {onTogglePiP && (

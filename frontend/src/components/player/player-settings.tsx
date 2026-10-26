@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { Volume2, Subtitles, Clock } from "lucide-react";
+import { Volume2, Subtitles, Clock, Flag, FlagOff } from "lucide-react";
 import { AnimatedSettings } from "./animated-icons";
 import { cn } from "@/lib/utils";
 import type { MediaStream } from "@/lib/api";
@@ -14,6 +14,7 @@ import {
 } from "./settings-items";
 import { useIsTV } from "@/hooks/use-platform";
 import { useBackToClose } from "@/hooks/use-back-to-close";
+import { formatTime } from "@/lib/format";
 
 interface PlayerSettingsProps {
   audioTracks: MediaStream[];
@@ -25,6 +26,15 @@ interface PlayerSettingsProps {
   onSubtitleChange: (index: number | null) => void;
   onSubtitleOffsetChange: (offset: number) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Admins: where the credits start (Up next shows there), set at the current time */
+  credits?: CreditsControl;
+}
+
+export interface CreditsControl {
+  /** The point set by hand (seconds), null if none */
+  own: number | null;
+  setHere: () => void;
+  clear: () => void;
 }
 
 type MenuView = "main" | "audio" | "subtitle" | "sync";
@@ -44,6 +54,7 @@ export function PlayerSettingsDropdown({
   onSubtitleChange,
   onSubtitleOffsetChange,
   onOpenChange,
+  credits,
 }: PlayerSettingsProps) {
   const t = useTranslations();
   const isTV = useIsTV();
@@ -214,6 +225,22 @@ export function PlayerSettingsDropdown({
                     }
                     onClick={() => setView("sync")}
                     hasSubmenu
+                  />
+                )}
+
+                {credits && (
+                  <MenuItem
+                    icon={<Flag className="h-5 w-5" />}
+                    label={t("player.creditsHere")}
+                    value={credits.own !== null ? formatTime(credits.own) : undefined}
+                    onClick={credits.setHere}
+                  />
+                )}
+                {credits && credits.own !== null && (
+                  <MenuItem
+                    icon={<FlagOff className="h-5 w-5" />}
+                    label={t("player.creditsClear")}
+                    onClick={credits.clear}
                   />
                 )}
               </div>

@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Play, X } from "lucide-react";
-import { DSButton } from "@/components/ds/button";
-import { type NextEpisode } from "@/lib/api";
+import { Play } from "lucide-react";
+import { type MediaItem, type NextEpisode } from "@/lib/api";
 import { useProfile } from "@/contexts/profile-context";
-import {
-  getTmdbImageUrl,
-  formatDuration,
-  cleanEpisodeTitle,
-} from "@/lib/format";
+import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
+import { useIsLandscape } from "@/lib/breakpoints";
 
-const COUNTDOWN_SECONDS = 30;
+const COUNTDOWN_SECONDS = 15;
+
+// The two buttons' shared look
+const BUTTON =
+  "h-10 sm:h-11 tv-1080:h-14 px-4 sm:px-6 rounded-md whitespace-nowrap text-sm sm:text-base tv-1080:text-xl font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black";
+const CREDITS_BUTTON = "bg-black/40 text-white border border-white/60 hover:bg-white/15 backdrop-blur-sm";
 
 interface NextEpisodeOverlayProps {
   nextEpisode: NextEpisode | null;
+  /** After a film: films of the library (when there's no next episode) */
+  recommendations?: MediaItem[];
+  onPick?: (mediaId: number) => void;
   visible: boolean;
   isPlaying: boolean;
   isEnded: boolean;
@@ -25,298 +29,236 @@ interface NextEpisodeOverlayProps {
   onCancel: () => void;
 }
 
+/**
+ * Up next, over the credits, Netflix's way: its title and two buttons in the bottom right
+ * corner, over its picture (UpNextBackdrop, under the shrunken video). With autoplay on (the profile's Settings), the next
+ * episode's button fills over the countdown and plays it when full; paused, it waits.
+ * "Watch the credits" stays.
+ */
 export function NextEpisodeOverlay({
   nextEpisode,
+  recommendations = [],
+  onPick,
   visible,
+  ...card
+}: NextEpisodeOverlayProps) {
+  return (
+    <AnimatePresence>
+      {visible && nextEpisode ? (
+        <UpNextCard key="up-next" nextEpisode={nextEpisode} {...card} />
+      ) : visible && recommendations.length > 0 && onPick ? (
+        <RecommendationsCard
+          key="recommendations"
+          recommendations={recommendations}
+          onPick={onPick}
+          onCancel={card.onCancel}
+        />
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+/** Mounted when it shows: its countdown starts full */
+function UpNextCard({
+  nextEpisode,
   isPlaying,
   isEnded,
   onPlay,
   onCancel,
-}: NextEpisodeOverlayProps) {
+}: Omit<NextEpisodeOverlayProps, "visible" | "recommendations" | "onPick"> & {
+  nextEpisode: NextEpisode;
+}) {
   const t = useTranslations();
-  // The profile's Settings, on every device (it used to be a per-browser copy)
+  const landscape = useIsLandscape();
   const autoplay = useProfile().profile?.preferences?.autoplay_next !== false;
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onPlayRef = useRef(onPlay);
+  const runningRef = useRef(isPlaying || isEnded);
   useEffect(() => {
     onPlayRef.current = onPlay;
-  }, [onPlay]);
-  const isPlayingRef = useRef(isPlaying);
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-  const isEndedRef = useRef(isEnded);
-  useEffect(() => {
-    isEndedRef.current = isEnded;
-  }, [isEnded]);
+    // Held while paused, but not once the video has ended by itself
+    runningRef.current = isPlaying || isEnded;
+  }, [onPlay, isPlaying, isEnded]);
 
-  // Countdown timer — uses interval callback for all state updates
   useEffect(() => {
-    if (!visible || !nextEpisode) return;
     if (!autoplay) return;
-
     let remaining = COUNTDOWN_SECONDS;
-
-    // First tick immediately to show the initial countdown
-    const tick = () => {
-      // Hold countdown if user paused, but NOT if video has ended naturally
-      if (!isPlayingRef.current && !isEndedRef.current) return;
+    const timer = setInterval(() => {
+      if (!runningRef.current) return;
+      remaining -= 1;
       setCountdown(remaining);
       if (remaining <= 0) {
-        clearInterval(intervalRef.current!);
+        clearInterval(timer);
         onPlayRef.current();
-        return;
       }
-      remaining -= 1;
-    };
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autoplay]);
 
-    // Show initial value via first scheduled tick (0ms delay)
-    const initTimer = setTimeout(tick, 0);
-    intervalRef.current = setInterval(tick, 1000);
+  const filled = ((COUNTDOWN_SECONDS - countdown) / COUNTDOWN_SECONDS) * 100;
 
-    return () => {
-      clearTimeout(initTimer);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [visible, nextEpisode, autoplay]);
-
-  const handleCancel = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    onCancel();
-  }, [onCancel]);
-
-  if (!nextEpisode) return null;
-
-  // A 40vw thumbnail at most (and unoptimized: the browser gets this file as it is)
-  const thumbUrl = getTmdbImageUrl(nextEpisode.still_path, "w780");
-  const title = cleanEpisodeTitle(nextEpisode.title);
-  const duration = formatDuration(nextEpisode.duration_seconds);
-  const epLabel = `S${nextEpisode.season_number || 1} · E${nextEpisode.episode_number || 1}`;
-
-  // Countdown progress (1 = full, 0 = done)
-  const progress = countdown / COUNTDOWN_SECONDS;
-
-  const ringR = 28;
-  const ringCirc = 2 * Math.PI * ringR;
+  const title = `S${nextEpisode.season_number || 1} · E${nextEpisode.episode_number || 1} · ${cleanEpisodeTitle(nextEpisode.title)}`;
+  // Upright: its picture in the card, under the video that moved up (no backdrop)
+  const still = landscape
+    ? null
+    : getTmdbImageUrl(nextEpisode.still_path ?? nextEpisode.backdrop_path, "w780");
+  const buttons = (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <button
+        type="button"
+        onClick={onCancel}
+        className={`${BUTTON} ${landscape ? "" : "flex-1 px-2"} ${CREDITS_BUTTON}`}
+      >
+        {t("player.watchCredits")}
+      </button>
+      {/* Orange, filling darker over the countdown */}
+      <button
+        type="button"
+        autoFocus
+        onClick={onPlay}
+        className={`${BUTTON} ${landscape ? "" : "flex-1 px-2"} relative overflow-hidden bg-plex-orange text-black hover:bg-[#f0b429]`}
+      >
+        {autoplay && (
+          <span
+            aria-hidden
+            className="absolute inset-y-0 left-0 bg-[#b8860b]"
+            style={{ width: `${filled}%`, transition: "width 1s linear" }}
+          />
+        )}
+        <span className="relative flex items-center justify-center gap-2">
+          <Play className="h-4 w-4 tv-1080:h-6 tv-1080:w-6 fill-current" />
+          {t("player.nextEpisode")}
+        </span>
+      </button>
+    </div>
+  );
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16 }}
+      transition={{ duration: 0.3, delay: 0.2 }}
+      role="group"
+      aria-label={t("player.nextEpisode")}
+      className={
+        landscape
+          ? // Above the control bar, over the next episode's picture
+            "absolute z-30 right-3 sm:right-8 bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4 text-right"
+          : // Right under the video, moved up to 7% from the top (a 16:9 picture, full width)
+            "absolute z-30 inset-x-4 top-[calc(7%+56.25vw+2rem)] mx-auto max-w-md flex flex-col gap-3"
+      }
+    >
+      {still && (
+        <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900">
+          <Image src={still} alt="" fill sizes="28rem" className="object-cover" unoptimized />
+        </div>
+      )}
+      <div className={landscape ? "text-shadow" : ""}>
+        <p className="text-xs sm:text-sm tv-1080:text-lg text-white/75">{t("player.nextEpisode")}</p>
+        <p className="text-base sm:text-xl tv-1080:text-3xl font-bold text-white">{title}</p>
+      </div>
+      {buttons}
+    </motion.div>
+  );
+}
+
+/**
+ * Up next's picture over the whole player, under the video: there as the video shrinks
+ * into the corner (no black in between). Only sideways: upright, the video moves up and
+ * the card below holds the picture.
+ */
+export function UpNextBackdrop({ image, visible }: { image: string | null; visible: boolean }) {
+  return (
     <AnimatePresence>
-      {visible && (
-        <>
-          {/* ── Desktop: right panel ── */}
-          <motion.div
-            className="hidden md:flex absolute right-0 top-0 bottom-0 w-[38%] z-30 flex-col items-center justify-center gap-5 px-8"
-            style={{ backgroundColor: "#0a0a0a" }}
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <div className="absolute left-0 top-0 bottom-0 w-px bg-white/5" />
-            <button
-              onClick={handleCancel}
-              aria-label={t("common.cancel")}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-            >
-              <X className="h-4 w-4 text-white/60" />
-            </button>
-            <p className="text-[11px] font-medium tracking-widest uppercase text-zinc-500">
-              {t("player.nextEpisode")}
-            </p>
-            <button
-              onClick={onPlay}
-              aria-label={t("player.playNow")}
-              className="w-full rounded-xl overflow-hidden aspect-video relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
-            >
-              {thumbUrl ? (
-                <Image
-                  src={thumbUrl}
-                  alt={title}
-                  fill
-                  sizes="40vw"
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600 text-sm">
-                  {epLabel}
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Play className="h-6 w-6 text-white fill-white ml-0.5" />
-                </div>
-              </div>
-            </button>
-            <div className="w-full">
-              <p className="text-[13px] text-zinc-400">{epLabel}</p>
-              <h3 className="text-[16px] font-semibold text-white mt-0.5 line-clamp-2">
-                {title}
-              </h3>
-              {duration && (
-                <p className="text-[12px] text-zinc-500 mt-0.5">{duration}</p>
-              )}
-            </div>
-            <button
-              onClick={onPlay}
-              aria-label={t("player.playNow")}
-              className="relative flex items-center justify-center w-[72px] h-[72px] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded-full"
-            >
-              <svg
-                width="72"
-                height="72"
-                className="-rotate-90 absolute inset-0"
-              >
-                <circle
-                  cx="36"
-                  cy="36"
-                  r={ringR}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth="3"
-                />
-                <circle
-                  cx="36"
-                  cy="36"
-                  r={ringR}
-                  fill="none"
-                  stroke="#e5a00d"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray={ringCirc}
-                  strokeDashoffset={ringCirc * (1 - progress)}
-                  style={{ transition: "stroke-dashoffset 1s linear" }}
-                />
-              </svg>
-              <span className="text-[22px] font-bold text-white group-hover:scale-110 transition-transform">
-                {countdown}
-              </span>
-            </button>
-            <DSButton
-              variant="primary"
-              icon={<Play className="h-4 w-4 fill-black" />}
-              onClick={onPlay}
-              aria-label={t("player.playNow")}
-              className="w-full"
-            >
-              {t("player.playNow")}
-            </DSButton>
-          </motion.div>
-
-          {/* ── Mobile: bottom sheet ── */}
-          <motion.div
-            className="md:hidden absolute bottom-0 left-0 right-0 z-30 px-4 pb-8 pt-6"
-            style={{
-              background:
-                "linear-gradient(to top, rgba(10,10,10,0.98) 60%, transparent)",
-            }}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-          >
-            {/* Label row */}
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500">
-                {t("player.nextEpisode")}
-              </p>
-              <button
-                onClick={handleCancel}
-                aria-label={t("common.cancel")}
-                className="p-1.5 rounded-full bg-white/5"
-              >
-                <X className="h-3.5 w-3.5 text-white/50" />
-              </button>
-            </div>
-
-            {/* Content row */}
-            <div className="flex items-center gap-3">
-              {/* Thumbnail */}
-              <button
-                onClick={onPlay}
-                aria-label={t("player.playNow")}
-                className="shrink-0 w-32 rounded-lg overflow-hidden aspect-video relative"
-              >
-                {thumbUrl ? (
-                  <Image
-                    src={thumbUrl}
-                    alt={title}
-                    fill
-                    sizes="128px"
-                    className="object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs">
-                    {epLabel}
-                  </div>
-                )}
-              </button>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] text-zinc-400 mb-0.5">{epLabel}</p>
-                <h3 className="text-[15px] font-semibold text-white leading-tight line-clamp-2">
-                  {title}
-                </h3>
-                {duration && (
-                  <p className="text-[11px] text-zinc-500 mt-0.5">{duration}</p>
-                )}
-              </div>
-
-              {/* Countdown ring + play */}
-              <div className="flex flex-col items-center gap-2 shrink-0">
-                {autoplay && (
-                  <button
-                    onClick={onPlay}
-                    aria-label={t("player.playNow")}
-                    className="relative flex items-center justify-center w-11 h-11"
-                  >
-                    <svg
-                      width="44"
-                      height="44"
-                      className="-rotate-90 absolute inset-0"
-                    >
-                      <circle
-                        cx="22"
-                        cy="22"
-                        r={18}
-                        fill="none"
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="2.5"
-                      />
-                      <circle
-                        cx="22"
-                        cy="22"
-                        r={18}
-                        fill="none"
-                        stroke="#e5a00d"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeDasharray={2 * Math.PI * 18}
-                        strokeDashoffset={2 * Math.PI * 18 * (1 - progress)}
-                        style={{ transition: "stroke-dashoffset 1s linear" }}
-                      />
-                    </svg>
-                    <span className="text-[12px] font-bold text-white">
-                      {countdown}
-                    </span>
-                  </button>
-                )}
-                <button
-                  onClick={onPlay}
-                  aria-label={t("player.playNow")}
-                  className="h-9 px-3 rounded-lg bg-plex-orange text-black text-xs font-semibold flex items-center gap-1"
-                >
-                  <Play className="h-3 w-3 fill-black" />
-                  {t("media.play")}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </>
+      {visible && image && (
+        <motion.div
+          key="up-next-backdrop"
+          aria-hidden
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="absolute inset-0 pointer-events-none"
+        >
+          <Image src={image} alt="" fill sizes="100vw" className="object-cover" unoptimized />
+          {/* Dark low down and on the left: the title, the buttons and the controls read on it */}
+          <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/20 to-black/30" />
+          <div className="absolute inset-0 bg-linear-to-r from-black/60 via-transparent to-transparent" />
+        </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+/**
+ * After a film: films of the library (none plays by itself), and back to the credits.
+ * Sideways two or three cards beside the shrunken video; upright a row under it.
+ */
+function RecommendationsCard({
+  recommendations,
+  onPick,
+  onCancel,
+}: {
+  recommendations: MediaItem[];
+  onPick: (mediaId: number) => void;
+  onCancel: () => void;
+}) {
+  const t = useTranslations();
+  const landscape = useIsLandscape();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16 }}
+      transition={{ duration: 0.3, delay: 0.2 }}
+      role="group"
+      aria-label={t("player.youMightLike")}
+      className={
+        landscape
+          ? "absolute z-30 right-3 sm:right-8 bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4"
+          : "absolute z-30 inset-x-4 top-[calc(7%+56.25vw+2rem)] mx-auto max-w-md flex flex-col gap-3"
+      }
+    >
+      <p className="text-sm sm:text-base tv-1080:text-2xl font-semibold text-white text-shadow">
+        {t("player.youMightLike")}
+      </p>
+      <div
+        className={
+          landscape
+            ? // Two beside the video until lg, three from there
+              "flex gap-3 [&>*:nth-child(n+4)]:hidden max-lg:[&>*:nth-child(3)]:hidden"
+            : "flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4"
+        }
+      >
+        {recommendations.map((film, i) => {
+          const picture = getTmdbImageUrl(film.backdrop_path ?? film.poster_path, "w780");
+          return (
+            <button
+              key={film.id}
+              type="button"
+              autoFocus={i === 0}
+              onClick={() => onPick(film.id)}
+              className="group shrink-0 w-36 lg:w-40 xl:w-52 tv-1080:w-64 text-left focus-visible:outline-none"
+            >
+              <span className="relative block aspect-video rounded-lg overflow-hidden bg-zinc-900 ring-2 ring-white/10 group-hover:ring-white/50 group-focus-visible:ring-plex-orange transition-shadow">
+                {picture && (
+                  <Image src={picture} alt="" fill sizes="16rem" className="object-cover" unoptimized />
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                  <Play className="h-7 w-7 text-white fill-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </span>
+              <span className="mt-1.5 block text-sm tv-1080:text-lg font-medium text-white truncate text-shadow">
+                {film.title}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={onCancel} className={`${BUTTON} ${CREDITS_BUTTON}`}>
+        {t("player.watchCredits")}
+      </button>
+    </motion.div>
   );
 }

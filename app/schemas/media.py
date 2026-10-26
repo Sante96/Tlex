@@ -73,6 +73,10 @@ class MediaItemDetailResponse(MediaItemResponse):
     franchise_id: int | None = None
     franchise_title: str | None = None
     setlist: list[str | None] | None = None
+    # Where Up next shows: set by hand (credits_start_seconds), else found (app/services/
+    # credits.py); None: 30 s before the end
+    credits_start: int | None = None
+    credits_start_seconds: int | None = None
 
 
 class MediaListResponse(BaseModel):

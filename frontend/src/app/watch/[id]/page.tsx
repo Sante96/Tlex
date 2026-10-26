@@ -175,6 +175,9 @@ function Watch() {
         chapters={chapters}
         chapterWord={isConcert ? "song" : "chapter"}
         seriesId={isEpisode ? media.series_id : undefined}
+        isMovie={media.media_type === "MOVIE"}
+        creditsStart={media.credits_start}
+        creditsOwn={media.credits_start_seconds}
         currentSeason={media.season_number || 1}
         onEpisodeSelect={isEpisode ? handleEpisodeSelect : undefined}
       />

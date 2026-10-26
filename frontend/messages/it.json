@@ -373,6 +373,11 @@
     "itemMany": "titoli"
   },
   "player": {
+    "creditsHere": "I titoli di coda iniziano qui",
+    "creditsClear": "Togli il punto dei titoli di coda",
+    "youMightLike": "Potrebbe piacerti",
+    "nextIn": "Prossimo tra {seconds} s",
+    "watchCredits": "Guarda i titoli di coda",
     "resumeFrom": "Riprendi da {time}",
     "startOver": "Ricomincia dall'inizio",
     "play": "Play",

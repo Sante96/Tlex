@@ -34,3 +34,8 @@ export function useIsTablet(): boolean {
     `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${BREAKPOINTS.lg - 1}px)`,
   );
 }
+
+/** Wider than tall: a computer, a TV, a phone or tablet held sideways */
+export function useIsLandscape(): boolean {
+  return useMediaQuery("(orientation: landscape)");
+}

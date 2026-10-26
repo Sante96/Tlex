@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { saveWatchProgressOnExit, updateWatchProgress } from "@/lib/api";
 
 interface UseProgressSavingOptions {
@@ -24,6 +24,8 @@ export function useProgressSaving({
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const isPlayingRef = useRef(isPlaying);
+  // Moved on to the next title: every save from now on (the unmount's too) says finished
+  const finishedRef = useRef(false);
 
   // Keep refs in sync without triggering re-renders
   useEffect(() => {
@@ -41,6 +43,7 @@ export function useProgressSaving({
       const time = currentTimeRef.current;
       const dur = durationRef.current;
       if (
+        !finishedRef.current &&
         isPlayingRef.current &&
         time > 0 &&
         dur > 0 &&
@@ -60,8 +63,8 @@ export function useProgressSaving({
   // beforeunload, and an async axios call there may never be sent) + on unmount
   useEffect(() => {
     const current = () => {
-      const time = currentTimeRef.current;
       const dur = durationRef.current;
+      const time = finishedRef.current ? dur : currentTimeRef.current;
       return time > 0 && dur > 0
         ? { position: Math.floor(time), duration: Math.floor(dur) }
         : null;
@@ -86,4 +89,14 @@ export function useProgressSaving({
       if (p) updateWatchProgress(mediaId, p.position, p.duration).catch(() => {});
     };
   }, [mediaId]);
+
+  /** Next episode, a recommended film: this title counts as watched */
+  const markFinished = useCallback(() => {
+    const dur = Math.floor(durationRef.current);
+    if (dur <= 0 || finishedRef.current) return;
+    finishedRef.current = true;
+    updateWatchProgress(mediaId, dur, dur).catch(() => {});
+  }, [mediaId]);
+
+  return { markFinished };
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { VolumeX } from "lucide-react";
+import { motion } from "framer-motion";
 import { DSButton } from "@/components/ds";
 import { useRouter } from "next/navigation";
 import { PlayerControls } from "./player-controls";
@@ -11,7 +11,15 @@ import {
   SubtitleRenderer,
   type SubtitleRendererHandle,
 } from "./subtitle-renderer";
-import { releaseStream, type Chapter, type MediaStream, type Profile } from "@/lib/api";
+import {
+  releaseStream,
+  setCreditsStart,
+  type Chapter,
+  type MediaStream,
+  type Profile,
+} from "@/lib/api";
+import { getTmdbImageUrl } from "@/lib/format";
+import { useAuth } from "@/contexts/auth-context";
 
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
 import { usePoolStatus } from "@/hooks/player/use-pool-status";
@@ -23,10 +31,10 @@ import { useVideoHotkeys } from "@/hooks/player/use-video-hotkeys";
 import { useProgressSaving } from "@/hooks/player/use-progress-saving";
 import { PoolWarningOverlay } from "./pool-warning";
 import { EpisodePicker } from "./episode-picker";
-import { NextEpisodeOverlay } from "./next-episode-overlay";
+import { NextEpisodeOverlay, UpNextBackdrop } from "./next-episode-overlay";
 import { useNextEpisode } from "@/hooks/player/use-next-episode";
-import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV } from "@/hooks/use-platform";
+import { useIsLandscape } from "@/lib/breakpoints";
 import { useProfile } from "@/contexts/profile-context";
 import { useToast } from "@/components/ui/toast";
 
@@ -50,6 +58,52 @@ function defaultSubtitle(tracks: MediaStream[], prefs: Profile["preferences"]): 
     tracks[0];
   return track.stream_index;
 }
+
+/** The player's size and the picture's shape */
+interface FrameBox {
+  width: number;
+  height: number;
+  aspect: number;
+}
+
+/** Up next's buttons sit this far above the bottom (next-episode-overlay: bottom-28) */
+const UP_NEXT_BOTTOM = 112;
+
+/**
+ * Up next's frame: the picture itself (not the bars around it in the player's box, cut
+ * off) at 40% of the width, in the bottom left corner, level with the buttons.
+ */
+function upNextFrame({ width: W, height: H, aspect }: FrameBox) {
+  const w = Math.min(W, H * aspect);
+  const h = w / aspect;
+  const x0 = (W - w) / 2;
+  const y0 = (H - h) / 2;
+  const scale = (0.4 * W) / w;
+  const top = H - UP_NEXT_BOTTOM - h * scale;
+  return {
+    x: 0.04 * W - x0 * scale,
+    y: top - y0 * scale,
+    scale,
+    clipPath: `inset(${y0}px ${W - x0 - w}px ${H - y0 - h}px ${x0}px round ${12 / scale}px)`,
+  };
+}
+
+/** On an upright screen: the picture moves up near the top, full width; the next
+ * episode's card goes under it */
+function upNextTop({ width: W, height: H, aspect }: FrameBox) {
+  const w = Math.min(W, H * aspect);
+  const h = w / aspect;
+  const x0 = (W - w) / 2;
+  const y0 = (H - h) / 2;
+  return {
+    x: 0,
+    y: 0.07 * H - y0,
+    scale: 1,
+    clipPath: `inset(${y0}px ${W - x0 - w}px ${H - y0 - h}px ${x0}px round 0px)`,
+  };
+}
+
+const FULL_FRAME = { x: 0, y: 0, scale: 1, clipPath: "inset(0px 0px 0px 0px round 0px)" };
 
 function storedNumber(key: string, fallback: number): number {
   if (typeof window === "undefined") return fallback;
@@ -79,6 +133,11 @@ interface VideoPlayerProps {
   seriesId?: number | null;
   currentSeason?: number;
   onEpisodeSelect?: (mediaId: number) => void;
+  /** A film: Up next offers films of the library at its credits */
+  isMovie?: boolean;
+  /** Where the credits start (Up next shows there), and the point set by hand */
+  creditsStart?: number | null;
+  creditsOwn?: number | null;
 }
 
 export function VideoPlayer({
@@ -94,6 +153,9 @@ export function VideoPlayer({
   seriesId,
   currentSeason = 1,
   onEpisodeSelect,
+  isMovie = false,
+  creditsStart = null,
+  creditsOwn = null,
 }: VideoPlayerProps) {
   const router = useRouter();
   const t = useTranslations();
@@ -401,7 +463,7 @@ export function VideoPlayer({
   }, []);
 
   // Watch Progress Saving
-  useProgressSaving({ mediaId, currentTime, duration, isPlaying });
+  const { markFinished } = useProgressSaving({ mediaId, currentTime, duration, isPlaying });
 
   // Release the Telegram clients however the player goes away: back button, browser/OS
   // back, swipe, episode switch (the page remounts the player) or tab close (pagehide).
@@ -460,8 +522,31 @@ export function VideoPlayer({
     };
   }, [mediaId]);
 
-  const isMobile = useIsMobile();
   const isTV = useIsTV();
+  const landscape = useIsLandscape();
+
+  // Measured when the picture's shape is known and whenever the player resizes
+  const [frameBox, setFrameBox] = useState<FrameBox | null>(null);
+  useEffect(() => {
+    const box = containerRef.current;
+    const video = videoRef.current;
+    if (!box || !video) return;
+    const measure = () => {
+      if (!video.videoWidth) return;
+      setFrameBox({
+        width: box.clientWidth,
+        height: box.clientHeight,
+        aspect: video.videoWidth / video.videoHeight,
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    video.addEventListener("loadedmetadata", measure);
+    return () => {
+      observer.disconnect();
+      video.removeEventListener("loadedmetadata", measure);
+    };
+  }, []);
   const controlsVisible = showControls || !isPlaying || isLoading || isSeeking || settingsOpen;
 
   useVideoHotkeys({
@@ -485,19 +570,55 @@ export function VideoPlayer({
     }
   }, []);
 
-  // Next episode auto-play
-  const { nextEpisode, showNextOverlay, cancelNextOverlay } = useNextEpisode({
+  // Where the credits start; admins set it at the current time from the settings menu
+  const isAdmin = !!useAuth().user?.is_admin;
+  const [credits, setCredits] = useState({ start: creditsStart, own: creditsOwn });
+  const creditsControl = isAdmin
+    ? {
+        own: credits.own,
+        setHere: () => {
+          const at = Math.floor(currentTimeRef.current);
+          setCreditsStart(mediaId, at).then(() => setCredits({ start: at, own: at }));
+        },
+        // Back to the 30 s before the end until a reload finds a chapter or the series'
+        clear: () => {
+          setCreditsStart(mediaId, null).then(() => setCredits({ start: null, own: null }));
+        },
+      }
+    : undefined;
+
+  // Up next: the next episode, or after a film the library's recommendations
+  const { nextEpisode, recommendations, showNextOverlay, cancelNextOverlay } = useNextEpisode({
     mediaId,
     isEpisode: !!seriesId && !!onEpisodeSelect,
+    isMovie,
     currentTime,
     duration,
+    creditsStart: credits.start,
   });
 
+  // Up next on screen: the player's own controls step aside (its buttons are the controls),
+  // and a click on the small video goes back to the credits, full screen
+  const upNext = showNextOverlay && (!!nextEpisode || recommendations.length > 0);
+  const upNextImage = nextEpisode
+    ? getTmdbImageUrl(nextEpisode.still_path ?? nextEpisode.backdrop_path, "original")
+    : getTmdbImageUrl(recommendations[0]?.backdrop_path ?? null, "original");
+
+  // Moving on counts this one as watched
   const playNextEpisode = useCallback(() => {
     if (nextEpisode && onEpisodeSelect) {
+      markFinished();
       onEpisodeSelect(nextEpisode.id);
     }
-  }, [nextEpisode, onEpisodeSelect]);
+  }, [nextEpisode, onEpisodeSelect, markFinished]);
+
+  const playRecommendation = useCallback(
+    (id: number) => {
+      markFinished();
+      router.replace(`/watch/${id}`);
+    },
+    [markFinished, router],
+  );
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -573,23 +694,28 @@ export function VideoPlayer({
         </DSButton>
       )}
 
-      {/* Video + subtitles — shrinks left when next episode panel slides in */}
+      <UpNextBackdrop image={upNextImage} visible={upNext && landscape} />
+
+      {/* Video + subtitles. Up next shrinks them into the bottom left corner, over the next
+          episode's picture; on an upright screen they move up instead, over its card */}
       <motion.div
-        className="absolute top-0 left-0 bottom-0 flex items-center overflow-hidden"
+        className="absolute inset-0 flex items-center overflow-hidden"
+        style={{ transformOrigin: "0 0" }}
         initial={false}
-        animate={{
-          width: showNextOverlay && !isMobile ? "62%" : "100%",
-          borderRadius: showNextOverlay && !isMobile ? "8px" : "0px",
-        }}
-        transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+        animate={
+          upNext && frameBox
+            ? landscape
+              ? upNextFrame(frameBox)
+              : upNextTop(frameBox)
+            : FULL_FRAME
+        }
+        transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
       >
-        <div
-          className={`relative w-full overflow-hidden ${showNextOverlay && !isMobile ? "aspect-video" : "h-full"}`}
-        >
+        <div className="relative w-full h-full overflow-hidden">
           <video
             ref={videoRef}
             className="absolute inset-0 w-full h-full"
-            onClick={handleSurface}
+            onClick={upNext ? cancelNextOverlay : handleSurface}
             playsInline
             autoPlay
           />
@@ -622,6 +748,8 @@ export function VideoPlayer({
 
       <NextEpisodeOverlay
         nextEpisode={nextEpisode}
+        recommendations={recommendations}
+        onPick={playRecommendation}
         visible={showNextOverlay}
         isPlaying={isPlaying}
         isEnded={!isPlaying && duration > 0 && currentTime >= duration - 1}
@@ -630,7 +758,7 @@ export function VideoPlayer({
       />
 
       <PlayerControls
-        visible={controlsVisible}
+        visible={controlsVisible && !upNext}
         isPlaying={isPlaying}
         isLoading={isLoading || isSeeking}
         currentTime={currentTime}
@@ -666,6 +794,7 @@ export function VideoPlayer({
         onSkip={skip}
         onActivity={handleMouseMove}
         onSettingsOpenChange={setSettingsOpen}
+        credits={creditsControl}
         hasEpisodes={!!seriesId && !!onEpisodeSelect}
         episodePickerOpen={episodePickerOpen}
         onToggleEpisodes={() => setEpisodePickerOpen((v) => !v)}

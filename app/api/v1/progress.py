@@ -92,8 +92,13 @@ async def update_progress(
     profile: Profile = Depends(get_current_profile),
 ):
     """Update watch progress for a media item."""
-    # Verify media exists (the player saves every few seconds: just the id)
-    if await db.scalar(select(MediaItem.id).where(MediaItem.id == media_id)) is None:
+    # Verify media exists (the player saves every few seconds: just two columns)
+    media = (
+        await db.execute(
+            select(MediaItem.id, MediaItem.credits_start_seconds).where(MediaItem.id == media_id)
+        )
+    ).first()
+    if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
     # Get or create progress
@@ -118,10 +123,13 @@ async def update_progress(
     progress.duration_seconds = data.duration_seconds
     progress.hidden = False  # watched again: back in Continue Watching
 
-    # Mark as completed if watched > 90%
+    # Watched from its credits, set by hand; else from 90%
     if data.duration_seconds > 0:
         percent = (data.position_seconds / data.duration_seconds) * 100
-        progress.completed = percent >= 90
+        credits = media.credits_start_seconds
+        progress.completed = percent >= 90 or (
+            credits is not None and data.position_seconds >= credits
+        )
 
     await db.commit()  # expire_on_commit is off: the response reads what was just set
 
