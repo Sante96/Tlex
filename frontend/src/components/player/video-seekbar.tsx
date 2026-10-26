@@ -75,6 +75,10 @@ export function VideoSeekbar({
     if (!isDragging) return;
     setDragTime(null);
     onSeek(timeAt(e.clientX));
+    // The click focused the bar, and focus is the keyboard's (remote's) mode: the tooltip
+    // and the enlarged chapter followed the playhead instead of the mouse, and the
+    // arrows moved a pending seek instead of skipping, until the controls hid
+    e.currentTarget.blur();
   };
 
   const handleKeyDown = useCallback(
