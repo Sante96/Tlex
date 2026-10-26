@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Monitor,
   Info,
+  ListMusic,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,13 +21,22 @@ import {
   getSeriesTmdbImages,
   updateSeasonPoster,
   getSeasonTmdbImages,
+  updateFranchise,
+  getFranchiseTmdbImages,
+  type Chapter,
   type TMDBImage,
   type MediaUpdateBody,
 } from "@/lib/api";
-import { GeneralTab, ImagePickerTab, InfoTab } from "./edit-media-tabs";
+import {
+  GeneralTab,
+  ImagePickerTab,
+  InfoTab,
+  SetlistTab,
+  setlistLines,
+} from "./edit-media-tabs";
 import { useToast } from "@/components/ui/toast";
 
-export type EntityType = "media" | "series" | "season";
+export type EntityType = "media" | "series" | "season" | "concert" | "franchise";
 
 interface EditMediaModalProps {
   mediaId: number;
@@ -40,11 +50,14 @@ interface EditMediaModalProps {
   seriesTitle?: string;
   seasonNumber?: number | null;
   episodeNumber?: number | null;
+  /** A concert's chapters and their song titles (the Setlist tab) */
+  chapters?: Chapter[] | null;
+  setlist?: (string | null)[] | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type TabId = "general" | "poster" | "backdrop" | "info";
+type TabId = "general" | "poster" | "backdrop" | "info" | "setlist";
 
 interface Tab {
   id: TabId;
@@ -64,6 +77,8 @@ export function EditMediaModal({
   seriesTitle,
   seasonNumber,
   episodeNumber,
+  chapters,
+  setlist,
   onClose,
   onSaved,
 }: EditMediaModalProps) {
@@ -117,12 +132,27 @@ export function EditMediaModal({
     },
   ];
 
+  // A concert: its details, images and setlist; a franchise: like a series
+  const CONCERT_TABS: Tab[] = [
+    ...SERIES_TABS,
+    {
+      id: "setlist",
+      label: t("editMedia.setlist"),
+      icon: <ListMusic className="h-4 w-4" />,
+    },
+  ];
+  const isConcert = entityType === "concert";
+  const ownImages = isConcert || entityType === "franchise";
   const tabs =
     entityType === "season"
       ? SEASON_TABS
-      : entityType === "series"
+      : entityType === "series" || entityType === "franchise"
         ? SERIES_TABS
-        : MEDIA_TABS;
+        : isConcert
+          ? CONCERT_TABS
+          : MEDIA_TABS;
+  const initialSetlist = (setlist ?? []).map((s) => s ?? "").join("\n");
+  const [formSetlist, setFormSetlist] = useState(initialSetlist);
   const [activeTab, setActiveTab] = useState<TabId>(
     entityType === "season" ? "poster" : "general",
   );
@@ -156,13 +186,17 @@ export function EditMediaModal({
             ? await getSeasonTmdbImages(seriesId, seasonNumber)
             : entityType === "series"
               ? await getSeriesTmdbImages(mediaId)
-              : await getMediaTmdbImages(mediaId);
+              : entityType === "franchise"
+                ? await getFranchiseTmdbImages(mediaId)
+                : isConcert // never on TMDB: only own images
+                  ? { stills: [], posters: [], backdrops: [] }
+                  : await getMediaTmdbImages(mediaId);
         setTmdbImages(images);
       } catch {}
       setLoadingImages(false);
     };
     loadImages();
-  }, [mediaId, entityType, seriesId, seasonNumber]);
+  }, [mediaId, entityType, seriesId, seasonNumber, isConcert]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -176,6 +210,8 @@ export function EditMediaModal({
       if (formBackdropPath) body.backdrop_path = formBackdropPath;
       if (formReleaseDate !== (initialReleaseDate || ""))
         body.release_date = formReleaseDate;
+      if (isConcert && formSetlist !== initialSetlist)
+        body.setlist = setlistLines(formSetlist).map((line) => line || null);
 
       if (
         entityType === "season" &&
@@ -185,7 +221,14 @@ export function EditMediaModal({
       ) {
         await updateSeasonPoster(seriesId, seasonNumber, formPosterPath);
       } else if (Object.keys(body).length > 0) {
-        if (entityType === "series") {
+        if (entityType === "franchise") {
+          await updateFranchise(mediaId, {
+            title: body.title,
+            overview: body.overview,
+            poster_path: body.poster_path,
+            backdrop_path: body.backdrop_path,
+          });
+        } else if (entityType === "series") {
           await updateSeries(mediaId, {
             title: body.title,
             overview: body.overview,
@@ -286,6 +329,14 @@ export function EditMediaModal({
               onTitleChange={setFormTitle}
               onOverviewChange={setFormOverview}
               onReleaseDateChange={setFormReleaseDate}
+              showDate={entityType !== "franchise"}
+            />
+          )}
+          {activeTab === "setlist" && (
+            <SetlistTab
+              chapters={chapters ?? []}
+              value={formSetlist}
+              onChange={setFormSetlist}
             />
           )}
           {activeTab === "poster" && (
@@ -300,6 +351,7 @@ export function EditMediaModal({
               onSelect={setFormPosterPath}
               loading={loadingImages}
               aspect={tmdbImages.stills.length > 0 ? "still" : "poster"}
+              allowCustom={ownImages}
             />
           )}
           {activeTab === "backdrop" && (
@@ -310,6 +362,7 @@ export function EditMediaModal({
               onSelect={setFormBackdropPath}
               loading={loadingImages}
               aspect="backdrop"
+              allowCustom={ownImages}
             />
           )}
           {activeTab === "info" && <InfoTab mediaId={mediaId} />}

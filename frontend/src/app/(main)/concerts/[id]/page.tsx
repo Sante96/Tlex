@@ -3,13 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Pencil } from "lucide-react";
 import {
   HeroBanner,
+  ActionButton,
   EpisodeCard,
   DetailPageLayout,
+  EditMediaModal,
   HeroBannerSkeleton,
 } from "@/components/ds";
-import { getFranchise, type FranchiseDetails } from "@/lib/api";
+import {
+  getFranchise,
+  getMediaDetails,
+  type FranchiseDetails,
+  type MediaDetails,
+} from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import { formatDurationShort, getTmdbImageUrl, yearOf } from "@/lib/format";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
 import { useIsTV } from "@/hooks/use-platform";
@@ -25,6 +34,18 @@ export default function FranchisePage() {
   const [franchise, setFranchise] = useState<FranchiseDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const showSkeleton = useDelayed(loading);
+  const toast = useToast();
+  const [editingFranchise, setEditingFranchise] = useState(false);
+  // The concert's details: its chapters and setlist live there
+  const [editingConcert, setEditingConcert] = useState<MediaDetails | null>(null);
+
+  const editConcert = async (id: number) => {
+    try {
+      setEditingConcert(await getMediaDetails(id));
+    } catch {
+      toast(t("common.loadError"), "error");
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +99,17 @@ export default function FranchisePage() {
           </>
         }
       >
+        {!isTV && (
+          <div className="flex">
+            <ActionButton
+              variant="secondary"
+              icon={<Pencil className="h-4 w-4" />}
+              onClick={() => setEditingFranchise(true)}
+            >
+              {t("media.edit")}
+            </ActionButton>
+          </div>
+        )}
         {franchise.overview && <ExpandableOverview text={franchise.overview} />}
       </HeroBanner>
 
@@ -107,11 +139,42 @@ export default function FranchisePage() {
                 progress={!isWatched ? (c.watch_progress?.progress_percent ?? 0) : undefined}
                 isWatched={isWatched}
                 onClick={() => router.push(`/watch/${c.id}`)}
+                onEdit={!isTV ? () => editConcert(c.id) : undefined}
               />
             );
           })}
         </div>
       </div>
+
+      {editingFranchise && (
+        <EditMediaModal
+          mediaId={franchise.id}
+          title={franchise.title}
+          overview={franchise.overview}
+          posterPath={franchise.poster_path}
+          backdropPath={franchise.backdrop_path}
+          releaseDate={null}
+          entityType="franchise"
+          onClose={() => setEditingFranchise(false)}
+          onSaved={load}
+        />
+      )}
+      {editingConcert && (
+        <EditMediaModal
+          mediaId={editingConcert.id}
+          title={editingConcert.title}
+          overview={editingConcert.overview}
+          posterPath={editingConcert.poster_path}
+          backdropPath={editingConcert.backdrop_path}
+          releaseDate={editingConcert.release_date}
+          entityType="concert"
+          seriesTitle={franchise.title}
+          chapters={editingConcert.chapters}
+          setlist={editingConcert.setlist}
+          onClose={() => setEditingConcert(null)}
+          onSaved={load}
+        />
+      )}
     </DetailPageLayout>
   );
 }

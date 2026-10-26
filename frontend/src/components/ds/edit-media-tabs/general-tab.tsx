@@ -12,6 +12,8 @@ interface GeneralTabProps {
   onTitleChange: (v: string) => void;
   onOverviewChange: (v: string) => void;
   onReleaseDateChange: (v: string) => void;
+  /** A franchise (anime/game page) has no date */
+  showDate?: boolean;
 }
 
 export function GeneralTab({
@@ -21,6 +23,7 @@ export function GeneralTab({
   onTitleChange,
   onOverviewChange,
   onReleaseDateChange,
+  showDate = true,
 }: GeneralTabProps) {
   const t = useTranslations("editMedia");
   return (
@@ -32,13 +35,15 @@ export function GeneralTab({
           onChange={(e) => onTitleChange(e.target.value)}
         />
       </Field>
-      <Field label={t("releaseDate")}>
-        <DSDatePicker
-          value={releaseDate}
-          onChange={onReleaseDateChange}
-          className="w-48"
-        />
-      </Field>
+      {showDate && (
+        <Field label={t("releaseDate")}>
+          <DSDatePicker
+            value={releaseDate}
+            onChange={onReleaseDateChange}
+            className="w-48"
+          />
+        </Field>
+      )}
       <Field label={t("synopsis")}>
         <textarea
           value={overview}

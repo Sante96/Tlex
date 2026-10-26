@@ -346,7 +346,15 @@
     "subtitles": "Subtitles",
     "fieldTitle": "Title",
     "releaseDate": "Release date",
-    "synopsis": "Overview"
+    "synopsis": "Overview",
+    "setlist": "Setlist",
+    "setlistHint": "One title per line, in song order. You can paste a whole tracklist.",
+    "setlistMismatch": "{lines} lines for {songs} songs",
+    "noChapters": "This file has no chapters, so there is no setlist to write.",
+    "imageUrl": "Image link",
+    "useUrl": "Use link",
+    "upload": "Upload from PC",
+    "imageFailed": "Image not saved"
   },
   "watchlist": {
     "title": "My List",
@@ -377,7 +385,8 @@
     "highPressureWarning": "Client pool almost full. Streaming may be slower.",
     "streamError": "Couldn't play the video",
     "seekHint": "← → move · Enter confirm · Esc cancel",
-    "chapter": "Chapter {n}"
+    "chapter": "Chapter {n}",
+    "song": "Song {n}"
   },
   "errors": {
     "crashTitle": "Something went wrong",

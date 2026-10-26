@@ -276,6 +276,9 @@ export default function MediaDetailPage() {
           posterPath={media.poster_path}
           backdropPath={media.backdrop_path}
           releaseDate={media.release_date}
+          entityType={media.media_type === "CONCERT" ? "concert" : "media"}
+          chapters={media.chapters}
+          setlist={media.setlist}
           onClose={() => setEditing(false)}
           onSaved={async () => {
             const data = await getMediaDetails(mediaId);

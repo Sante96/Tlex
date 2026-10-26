@@ -346,7 +346,15 @@
     "noImages": "Nessuna immagine disponibile da TMDB",
     "noInfo": "Nessuna informazione tecnica disponibile",
     "selectImage": "Seleziona una {label} dalle immagini disponibili su TMDB",
-    "subtitles": "Sottotitoli"
+    "subtitles": "Sottotitoli",
+    "setlist": "Scaletta",
+    "setlistHint": "Un titolo per riga, nell'ordine dei brani. Puoi incollare una tracklist intera.",
+    "setlistMismatch": "{lines} righe per {songs} brani",
+    "noChapters": "Questo file non ha capitoli: non c'è una scaletta da scrivere.",
+    "imageUrl": "Link dell'immagine",
+    "useUrl": "Usa il link",
+    "upload": "Carica dal PC",
+    "imageFailed": "Immagine non salvata"
   },
   "watchlist": {
     "title": "La Mia Lista",
@@ -377,7 +385,8 @@
     "highPressureWarning": "Pool client quasi pieno. Lo streaming potrebbe essere più lento.",
     "streamError": "Impossibile riprodurre il video",
     "seekHint": "← → sposta · Enter conferma · Esc annulla",
-    "chapter": "Capitolo {n}"
+    "chapter": "Capitolo {n}",
+    "song": "Brano {n}"
   },
   "errors": {
     "crashTitle": "Qualcosa è andato storto",
