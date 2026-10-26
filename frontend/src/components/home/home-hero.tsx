@@ -48,6 +48,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
     () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const stripRef = useRef<HTMLDivElement>(null);
 
   const select = useCallback((index: number) => {
     setActive(index);
@@ -68,6 +69,20 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
 
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
+  // Moving on by itself: bring the active card into view, in the strip only (scrolling it
+  // into view would also scroll the page under someone reading further down)
+  useEffect(() => {
+    const strip = stripRef.current;
+    const card = strip?.children[active] as HTMLElement | undefined;
+    if (!strip || !card || !rotating) return;
+    const vertical = strip.scrollHeight > strip.clientHeight + 1;
+    strip.scrollTo(
+      vertical
+        ? { top: card.offsetTop - (strip.clientHeight - card.offsetHeight) / 2, behavior: "smooth" }
+        : { left: card.offsetLeft - (strip.clientWidth - card.offsetWidth) / 2, behavior: "smooth" },
+    );
+  }, [active, rotating]);
+
   const item = items[active] ?? items[0];
   const next = (active + 1) % items.length;
   const resuming = item.progressPercent !== undefined;
@@ -76,9 +91,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
   return (
     <section
       className="relative -mx-4 md:-mx-8 -mt-6 md:-mt-8"
-      // Pointing at it or having the focus in it (the TV remote) holds the rotation
-      onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
-      onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
+      // The focus in it (the TV remote) holds the rotation; the mouse only over the cards
       onFocus={() => setPaused(true)}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setPaused(false)}
     >
@@ -108,11 +121,16 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         {/* Dark on the left and low down, for the text and the strip */}
         <div className="absolute inset-0 bg-linear-to-r from-[#09090b]/90 via-[#09090b]/50 to-transparent" />
         <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
+        {/* From lg, under the column of cards on the right: their titles over the picture */}
+        {items.length > 1 && (
+          <div className="hidden lg:block absolute inset-y-0 right-0 w-[28rem] bg-linear-to-l from-[#09090b]/85 via-[#09090b]/45 to-transparent" />
+        )}
       </div>
 
       {/* A fixed height: the text grows upwards, so a longer title doesn't push the page
-          down every time the hero moves on */}
-      <div className="relative flex flex-col justify-end gap-6 h-120 md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
+          down every time the hero moves on. From lg the strip is a column on the right
+          and the text sits down in the bottom-left corner */}
+      <div className="relative flex flex-col lg:flex-row justify-end lg:justify-between lg:items-end gap-6 lg:gap-10 h-120 md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
         <div className="flex flex-col gap-2 md:gap-3 max-w-2xl text-shadow">
           {/* The text changes with the title; the buttons below stay put (and their glass
               blurred: a fading ancestor would turn the blur off) */}
@@ -123,7 +141,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
             <h1 className="text-2xl md:text-5xl font-bold text-white leading-tight line-clamp-2">{item.title}</h1>
             {item.subtitle && <p className="text-sm md:text-base text-white/80 truncate">{item.subtitle}</p>}
             {item.overview && (
-              <p className="hidden md:block text-sm text-white/70 line-clamp-2">{item.overview}</p>
+              <p className="hidden md:block text-sm text-white/70 line-clamp-2 lg:line-clamp-3">{item.overview}</p>
             )}
             {resuming && (
               <div className="flex items-center gap-3">
@@ -154,7 +172,17 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         </div>
 
         {items.length > 1 && (
-          <div className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
+          // relative: the cards' offsets are the strip's, for scrolling the active one in.
+          // A column of its own height at most: more cards scroll inside it
+          // Room above it (it used to touch the top bar); the bottom fades out over 64 px
+          // into the page, the padding letting the last card scroll clear of the fade.
+          // The mouse over the cards holds the rotation (not over the whole hero)
+          <div
+            ref={stripRef}
+            onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
+            onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
+            className="relative flex lg:flex-col gap-3 md:gap-4 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto scrollbar-hide py-1 lg:pt-6 lg:pb-16 -mx-1 px-1 lg:max-h-full lg:shrink-0 lg:mask-[linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-64px),transparent)]"
+          >
             {items.map((it, i) => (
               <StripCard
                 key={it.id}
@@ -198,7 +226,7 @@ function StripCard({
       onFocus={onShow}
       onPointerEnter={(e) => e.pointerType === "mouse" && onHoverStart()}
       onPointerLeave={onHoverEnd}
-      className="group shrink-0 w-44 md:w-56 outline-none"
+      className="group shrink-0 w-44 md:w-56 lg:w-48 outline-none"
     >
       <div
         className={cn(
@@ -212,7 +240,7 @@ function StripCard({
             src={item.stillUrl}
             alt=""
             fill
-            sizes="(min-width: 768px) 224px, 176px"
+            sizes="(min-width: 1024px) 192px, (min-width: 768px) 224px, 176px"
             className="object-cover"
           />
         )}
