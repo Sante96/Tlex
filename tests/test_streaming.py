@@ -583,6 +583,8 @@ class FakeSession:
         self.stopped = False
         self.is_connected = asyncio.Event()
         self.is_connected.set()
+        # Pyrogram's reader task: running (None) unless a test ends it
+        self.network_task: asyncio.Future | None = None
 
     async def send(self, query, wait_response=True, timeout=None):
         from pyrogram import raw
