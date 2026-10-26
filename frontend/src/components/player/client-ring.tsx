@@ -37,32 +37,37 @@ export function ClientRing({ inUse, total, downloading, className }: ClientRingP
   const gap = segments > 1 ? GAP : 0;
 
   return (
-    <svg
-      width={SIZE}
-      height={SIZE}
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
-      className={cn("shrink-0", className)}
+    <span
+      className={cn("relative block shrink-0", className)}
+      style={{ width: SIZE, height: SIZE }}
       aria-hidden
     >
-      {Array.from({ length: segments }, (_, i) => (
-        <path
-          key={i}
-          d={arc(i * step + gap / 2, (i + 1) * step - gap / 2)}
-          fill="none"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          className={cn(
-            "transition-colors duration-300",
-            i < inUse ? "stroke-plex-orange" : "stroke-white/20",
-          )}
-        />
-      ))}
-      {/* The spinner: a short arc turning in the middle */}
-      <g
-        className={cn(downloading ? "animate-spin opacity-100" : "opacity-0", "transition-opacity")}
-        // The ring's middle, in its own coordinates: Safari took "center" as the middle of
-        // the short arc, which then turned around itself, away from the ring's centre
-        style={{ transformBox: "view-box", transformOrigin: `${SIZE / 2}px ${SIZE / 2}px` }}
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="absolute inset-0">
+        {Array.from({ length: segments }, (_, i) => (
+          <path
+            key={i}
+            d={arc(i * step + gap / 2, (i + 1) * step - gap / 2)}
+            fill="none"
+            strokeWidth={STROKE}
+            strokeLinecap="round"
+            className={cn(
+              "transition-colors duration-300",
+              i < inUse ? "stroke-plex-orange" : "stroke-white/20",
+            )}
+          />
+        ))}
+      </svg>
+      {/* The spinner: a short arc turning in the middle. A whole svg of its own turns
+          about its box's centre in every browser; a group inside the ring's svg turned,
+          in Safari, about the arc's own middle, and drifted off the ring's centre */}
+      <svg
+        width={SIZE}
+        height={SIZE}
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        className={cn(
+          "absolute inset-0 transition-opacity",
+          downloading ? "animate-spin opacity-100" : "opacity-0",
+        )}
       >
         <path
           d={`M ${SIZE / 2} ${SIZE / 2 - 5} A 5 5 0 0 1 ${SIZE / 2 + 5} ${SIZE / 2}`}
@@ -71,7 +76,7 @@ export function ClientRing({ inUse, total, downloading, className }: ClientRingP
           strokeLinecap="round"
           className="stroke-white/80"
         />
-      </g>
-    </svg>
+      </svg>
+    </span>
   );
 }

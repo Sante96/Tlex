@@ -188,10 +188,22 @@ export function PlayerControls({
           </button>
 
           {/* Big play/pause button with integrated loader */}
-          <div className="relative">
+          <button
+            onClick={onTogglePlay}
+            aria-label={isPlaying ? t("player.pause") : t("player.play")}
+            className={cn(
+              "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+              shown,
+              isLoading
+                ? "bg-black/60"
+                : "bg-black/30 hover:bg-black/40 hover:scale-105",
+            )}
+          >
             {isLoading && (
-              <motion.div
-                className="absolute -inset-2 rounded-full aspect-square"
+              // Inside the button: it circles the button's own box. Around it, in a
+              // wrapper, Safari sized the wrapper otherwise, and the ring sat off-centre
+              <motion.span
+                className="absolute -inset-2 rounded-full pointer-events-none"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 style={{
@@ -200,27 +212,15 @@ export function PlayerControls({
                 }}
               />
             )}
-            <button
-              onClick={onTogglePlay}
-              aria-label={isPlaying ? t("player.pause") : t("player.play")}
+            <AnimatedPlayPause
+              isPlaying={isPlaying}
+              size={48}
               className={cn(
-                "relative p-5 rounded-full transition-all backdrop-blur-md shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-                shown,
-                isLoading
-                  ? "bg-black/60"
-                  : "bg-black/30 hover:bg-black/40 hover:scale-105",
+                "drop-shadow-lg",
+                isLoading ? "text-white/50" : "text-white",
               )}
-            >
-              <AnimatedPlayPause
-                isPlaying={isPlaying}
-                size={48}
-                className={cn(
-                  "drop-shadow-lg",
-                  isLoading ? "text-white/50" : "text-white",
-                )}
-              />
-            </button>
-          </div>
+            />
+          </button>
 
           {/* Skip forward */}
           <button
