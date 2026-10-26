@@ -596,6 +596,11 @@ class FakeSession:
     async def stop(self):
         self.stopped = True
 
+    async def restart(self):
+        self.restarts += 1
+
+    restarts = 0
+
 
 def encoded_file_id(reference: bytes) -> str:
     from pyrogram.file_id import FileId, FileType
@@ -666,6 +671,22 @@ class TestFetchChunk:
 
         assert await download.fetch_chunk(client, part, 1) == b"f"
         assert not session.stopped and client.media_sessions[4] is session
+
+    async def test_a_session_nobody_reads_is_restarted(self, setup):
+        # A connection dropped while Pyrogram was starting the session: its reader ended
+        # before the session counted as connected, so nothing restarts it, and every
+        # request fails on the closed transport (4 of 10 clients, for 20 minutes)
+        download, part, client, _ = setup
+        session = FakeSession(OSError("unable to perform operation on TCPTransport closed"))
+        session.network_task = asyncio.get_running_loop().create_future()
+        session.network_task.set_result(None)
+        client.media_sessions = {4: session}
+
+        with pytest.raises(download.SessionDown):
+            await download.fetch_chunk(client, part, 1)
+        await asyncio.gather(*download._restarts)  # the restart runs as its own task
+        assert session.restarts == 1
+        assert not download.connected(client)  # the reader moves on meanwhile
 
     async def test_dropped_connection_hands_the_chunk_back(self, setup):
         # A restart that wakes the request means the session is down for a while (a minute

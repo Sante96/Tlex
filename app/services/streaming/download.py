@@ -53,6 +53,27 @@ def connected(client: Client) -> bool:
     return all(s.is_connected.is_set() for s in client.media_sessions.values())
 
 
+_restarts: set[asyncio.Task] = set()
+
+
+def _restart_if_unread(session) -> bool:
+    """Restart a session whose reader is gone, and say so.
+
+    Pyrogram's reader restarts a dropped session, but only one that counts as connected:
+    a drop while the session is starting ends the reader, then the start marks it
+    connected, and every request fails on the closed transport for good.
+    """
+    task = getattr(session, "network_task", None)
+    if not (session.is_connected.is_set() and task is not None and task.done()):
+        return False
+    session.is_connected.clear()  # the next request waits for the restart
+    restart = asyncio.create_task(session.restart())
+    _restarts.add(restart)
+    restart.add_done_callback(_restarts.discard)
+    logger.warning("[STREAM] Media session without a reader: restarting it")
+    return True
+
+
 # Opening a media session (or following a CDN redirect) is left to Pyrogram's get_file,
 # one call per client at a time so concurrent fetches don't each open a session.
 _open_locks: dict[int, asyncio.Lock] = {}
@@ -176,7 +197,9 @@ async def fetch_chunk(client: Client, part: MediaPart, index: int) -> bytes:
             # stopping it from outside only left zombies reconnecting (measured: ~8x the
             # disconnects). Retrying here waited for it: up to a minute when its restarts
             # kept failing, while the stream's other client was fine.
-            if session is not None and not session.is_connected.is_set():
+            if session is not None and (
+                _restart_if_unread(session) or not session.is_connected.is_set()
+            ):
                 logger.debug(
                     f"[STREAM] Chunk {index} of part {part.id}: session reconnecting "
                     f"({type(e).__name__})"
