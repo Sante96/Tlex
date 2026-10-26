@@ -23,10 +23,10 @@ from app.services.subtitles.mkv_extractor import PGS_CODEC, extract_all_subtitle
 SUBTITLE_CACHE_DIR = Path("cache/subtitles")
 FONT_CACHE_DIR = Path("cache/fonts")
 
-# Max concurrent extractions during startup warmup.
-# Keep at 1: subtitle extraction reads large byte ranges from Telegram and
-# competes directly with active video streams on the same DC connections.
-MAX_CONCURRENT = 1
+# Background warm-ups (at startup, after a scan) extract one title at a time, together:
+# an extraction sends up to 16 requests at once, and the two warm-ups side by side (four
+# titles) got both accounts throttled and left viewers without a client.
+warm_up_slot = asyncio.Semaphore(1)
 
 # One extraction per media at a time, shared by player requests and the warm-up. A media
 # whose extraction ended without a track (failure, VobSub, PGS without cues) isn't retried for
@@ -222,11 +222,8 @@ async def populate_all_caches(session: AsyncSession) -> None:
 
     logger.info(f"Starting subtitle cache population for {len(media_needing_cache)} media items")
 
-    # Use semaphore to limit concurrency
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-
     async def extract_with_limit(media_id: int):
-        async with semaphore:
+        async with warm_up_slot:
             try:
                 # Create new session for this extraction
                 from app.database import async_session_maker

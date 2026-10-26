@@ -15,10 +15,6 @@ from app.services.scanner.models import MediaGroup, ScannedFile
 from app.services.scanner.movies import find_movie
 from app.services.tmdb import tmdb_client
 
-# Limit concurrent background subtitle/font extractions triggered by scanner
-# to avoid exhausting the DB connection pool during large initial scans.
-_bg_extract_semaphore = asyncio.Semaphore(3)
-
 
 def _first(value):
     return value[0] if isinstance(value, list) else value
@@ -243,12 +239,12 @@ async def analyze_streams(
             # Pre-extract fonts/subtitles in background if media has subtitles
             if has_subtitles:
                 from app.database import async_session_maker
-                from app.services.subtitles.cache import ensure_cache_populated
+                from app.services.subtitles.cache import ensure_cache_populated, warm_up_slot
 
                 media_id_capture = media_item.id
 
                 async def extract_in_background():
-                    async with _bg_extract_semaphore:
+                    async with warm_up_slot:
                         try:
                             # Wait a bit for commit to complete
                             await asyncio.sleep(2)
