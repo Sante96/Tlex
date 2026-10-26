@@ -113,11 +113,12 @@ export default function HomePage() {
         getMediaList({ media_type: "MOVIE", sort: "recent", limit: ROW }),
         getSeriesList({ sort: "recent", page_size: ROW }),
         getContinueWatching(10),
-        getMediaList({ media_type: "CONCERT", sort: "recent", limit: ROW }),
+        // A row of its own: a backend without concerts yet (422) mustn't blank the home
+        getMediaList({ media_type: "CONCERT", sort: "recent", limit: ROW }).catch(() => null),
       ]);
       setMedia(mediaData.items);
       setSeries(seriesData.items);
-      setConcerts(concertData.items);
+      setConcerts(concertData?.items ?? []);
       setContinueWatching(watching);
     } catch {
       setFailed(true); // not "your library is empty"
