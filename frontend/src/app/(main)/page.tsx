@@ -21,8 +21,9 @@ import { HomeHero, type HeroItem } from "@/components/home/home-hero";
 import { PosterCardSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { useDelayed } from "@/hooks/use-delayed";
 
-// Posters per home row
-const ROW = 7;
+// Posters per home row: the widest grid's columns (9). Each width shows only what fills
+// its rows (gridClass); the phone's row scrolls through all of them
+const ROW = 9;
 
 /** The hero's titles: what's being watched, else the newest title with a backdrop */
 function heroItems(
@@ -95,9 +96,11 @@ export default function HomePage() {
   const [failed, setFailed] = useState(false);
   const [scanning, setScanning] = useState(false);
 
+  // Columns, and the posters past the last full row hidden: 6 in two rows of 3, then one
+  // row of 5, 7 and 9 (on the TV 6, 7 and 8). With 7 posters for 9 columns, two stood empty
   const gridClass = isTV
-    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5"
-    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0";
+    ? "grid grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4 md:gap-5 max-xl:[&>:nth-child(n+7)]:hidden xl:max-2xl:[&>:nth-child(n+8)]:hidden 2xl:[&>:nth-child(n+9)]:hidden"
+    : "flex overflow-x-auto md:overflow-visible md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9 gap-3 md:gap-4 scrollbar-hide pb-3 md:pb-0 md:max-lg:[&>:nth-child(n+7)]:hidden lg:max-xl:[&>:nth-child(n+6)]:hidden xl:max-2xl:[&>:nth-child(n+8)]:hidden";
 
   const cardClass = isTV ? "" : "shrink-0 w-[130px] md:w-full";
 
