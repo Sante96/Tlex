@@ -62,10 +62,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Chapter backfill failed: {e}")
 
+    # A frame of the video for the concerts without an image (one at a time, after the
+    # chapters pass has had its turn)
+    async def backfill_concert_frames_background():
+        try:
+            await asyncio.sleep(60)
+            from app.services.concert_frames import backfill_concert_frames
+
+            await backfill_concert_frames()
+        except Exception as e:
+            logger.warning(f"Concert frames failed: {e}")
+
     # Kept: the loop holds only weak references to tasks, and shutdown cancels them
     background = [
         asyncio.create_task(populate_caches_background()),
         asyncio.create_task(backfill_chapters_background()),
+        asyncio.create_task(backfill_concert_frames_background()),
     ]
     logger.info("Background subtitle cache population started")
 

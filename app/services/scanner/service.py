@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
+from app.services.concert_frames import schedule_concert_frames
 from app.services.scanner.concerts import concert_franchise_name, process_concert_group
 from app.services.scanner.processor import process_group
 from app.services.scanner.telegram import TelegramScanner
@@ -63,6 +64,9 @@ class ScannerService:
         finally:
             self._is_scanning = False
 
+        # New concerts need a frame for their card (a no-op when none lack an image)
+        if stats["media_created"]:
+            schedule_concert_frames()
         return stats
 
     async def _scan_all_topics(
