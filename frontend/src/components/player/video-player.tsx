@@ -27,6 +27,7 @@ import { useNextEpisode } from "@/hooks/player/use-next-episode";
 import { useIsMobile } from "@/lib/breakpoints";
 import { useIsTV } from "@/hooks/use-platform";
 import { useProfile } from "@/contexts/profile-context";
+import { useToast } from "@/components/ui/toast";
 
 // A seek this close to the end of the buffered data still restarts the stream
 const BUFFER_MARGIN = 0.5;
@@ -54,6 +55,13 @@ function storedNumber(key: string, fallback: number): number {
   const value = parseFloat(localStorage.getItem(key) ?? "");
   return Number.isFinite(value) ? value : fallback;
 }
+
+// Safari's prefixed Fullscreen API (older iPadOS)
+type WebkitFullscreen<T> = T & {
+  webkitRequestFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+  webkitFullscreenElement?: Element | null;
+};
 
 interface VideoPlayerProps {
   mediaId: number;
@@ -88,6 +96,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const router = useRouter();
   const t = useTranslations();
+  const toast = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideControlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(
@@ -297,14 +306,21 @@ export function VideoPlayer({
   );
 
   const toggleFullscreen = useCallback(() => {
-    // iPhone Safari has no element fullscreen: requestFullscreen is undefined there
-    if (!containerRef.current || !document.fullscreenEnabled) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      containerRef.current.requestFullscreen().catch(() => {});
+    // Older iPadOS Safari has only the webkit-prefixed API
+    const el = containerRef.current as WebkitFullscreen<HTMLDivElement> | null;
+    const doc = document as WebkitFullscreen<Document>;
+    if (!el) return;
+    if (document.fullscreenElement ?? doc.webkitFullscreenElement) {
+      void (document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+      return;
     }
-  }, []);
+    // iPhone Safari gives element fullscreen to its own video player only: it refuses
+    // ours (silently: the button did nothing). What hides its bars is the home-screen app
+    const refused = () => toast(t("player.fullscreenHomeScreen"));
+    if (el.requestFullscreen) el.requestFullscreen().catch(refused);
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else refused();
+  }, [t, toast]);
 
   const handleBack = useCallback(() => {
     router.back(); // the unmount effect below releases the stream
@@ -353,11 +369,15 @@ export function VideoPlayer({
   // Fullscreen listener
   useEffect(() => {
     const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const doc = document as WebkitFullscreen<Document>;
+      setIsFullscreen(!!(document.fullscreenElement ?? doc.webkitFullscreenElement));
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () =>
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
   }, []);
 
   // Watch Progress Saving
@@ -546,7 +566,11 @@ export function VideoPlayer({
         onVolumeChange={handleVolumeChange}
         onToggleMute={toggleMute}
         onToggleFullscreen={toggleFullscreen}
-        canFullscreen={typeof document !== "undefined" && document.fullscreenEnabled}
+        // Opened from the home screen, iOS shows the app full screen already
+        canFullscreen={
+          typeof navigator !== "undefined" &&
+          !(navigator as Navigator & { standalone?: boolean }).standalone
+        }
         onSurfacePointerUp={handleSurface}
         onBack={handleBack}
         onAudioChange={handleAudioChange}
