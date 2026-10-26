@@ -60,7 +60,9 @@ export function ClientRing({ inUse, total, downloading, className }: ClientRingP
       {/* The spinner: a short arc turning in the middle */}
       <g
         className={cn(downloading ? "animate-spin opacity-100" : "opacity-0", "transition-opacity")}
-        style={{ transformOrigin: "center" }}
+        // The ring's middle, in its own coordinates: Safari took "center" as the middle of
+        // the short arc, which then turned around itself, away from the ring's centre
+        style={{ transformBox: "view-box", transformOrigin: `${SIZE / 2}px ${SIZE / 2}px` }}
       >
         <path
           d={`M ${SIZE / 2} ${SIZE / 2 - 5} A 5 5 0 0 1 ${SIZE / 2 + 5} ${SIZE / 2}`}

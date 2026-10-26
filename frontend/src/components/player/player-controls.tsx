@@ -63,7 +63,7 @@ interface PlayerControlsProps {
   /** False where the page can't go fullscreen (iPhone Safari): no button */
   canFullscreen?: boolean;
   /** A click or tap on the empty middle of the picture */
-  onSurfacePointerUp?: (e: React.PointerEvent) => void;
+  onSurfaceClick?: () => void;
   onTogglePiP?: () => void;
   onBack: () => void;
   isTV?: boolean;
@@ -104,7 +104,7 @@ export function PlayerControls({
   onToggleMute,
   onToggleFullscreen,
   canFullscreen = true,
-  onSurfacePointerUp,
+  onSurfaceClick,
   onTogglePiP,
   onBack,
   onAudioChange,
@@ -160,7 +160,7 @@ export function PlayerControls({
           picture: it took every click while the controls showed */}
       <div
         className="flex-1 flex items-center justify-center"
-        onPointerUp={(e) => e.target === e.currentTarget && onSurfacePointerUp?.(e)}
+        onClick={(e) => e.target === e.currentTarget && onSurfaceClick?.()}
       >
         <div className="flex items-center gap-8">
           {/* Skip backward */}

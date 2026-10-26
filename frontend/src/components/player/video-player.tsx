@@ -331,8 +331,8 @@ export function VideoPlayer({
     settingsOpenRef.current = settingsOpen;
   }, [settingsOpen]);
 
-  const handleMouseMove = useCallback(() => {
-    setShowControls(true);
+  // The controls hide 3 s after the last activity
+  const scheduleHide = useCallback(() => {
     if (hideControlsTimeout.current) {
       clearTimeout(hideControlsTimeout.current);
     }
@@ -345,16 +345,27 @@ export function VideoPlayer({
     }, 3000);
   }, []);
 
+  const handleMouseMove = useCallback(() => {
+    setShowControls(true);
+    scheduleHide();
+  }, [scheduleHide]);
+
+  // Only a mouse moving started the countdown: on a phone or a tablet the controls shown
+  // at start stayed until a tap on the picture. Playback starting starts it too
+  useEffect(() => {
+    if (isPlaying) scheduleHide();
+  }, [isPlaying, scheduleHide]);
+
   // A click on the picture: the mouse plays or pauses; a tap shows or hides the controls
-  // (it paused the video, and nothing could hide the controls)
-  const handleSurface = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.pointerType === "mouse") togglePlay();
-      else if (showControls) setShowControls(false);
-      else handleMouseMove();
-    },
-    [togglePlay, showControls, handleMouseMove],
-  );
+  // (it paused the video, and nothing could hide the controls). On the click, not on
+  // pointerup: controls shown at pointerup were under the finger when the tap's click
+  // came, and the play button took it (the tap that showed the controls paused the video)
+  const lastPointer = useRef("mouse");
+  const handleSurface = useCallback(() => {
+    if (lastPointer.current === "mouse") togglePlay();
+    else if (showControls) setShowControls(false);
+    else handleMouseMove();
+  }, [togglePlay, showControls, handleMouseMove]);
 
   const handleAudioChange = useCallback(
     (index: number) => {
@@ -464,6 +475,12 @@ export function VideoPlayer({
       className="relative w-full h-full bg-black"
       // Pointer, not mouse, events: a tap's emulated mousemove re-showed the controls
       onPointerMove={(e) => e.pointerType === "mouse" && handleMouseMove()}
+      // A touch anywhere, a button too, restarts the countdown (the tap on the picture
+      // itself shows or hides them: handleSurface)
+      onPointerDownCapture={(e) => {
+        lastPointer.current = e.pointerType;
+        if (e.pointerType !== "mouse") scheduleHide();
+      }}
       onMouseLeave={() => isPlaying && !settingsOpen && setShowControls(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -502,7 +519,7 @@ export function VideoPlayer({
           <video
             ref={videoRef}
             className="absolute inset-0 w-full h-full"
-            onPointerUp={handleSurface}
+            onClick={handleSurface}
             playsInline
             autoPlay
           />
@@ -571,7 +588,7 @@ export function VideoPlayer({
           typeof navigator !== "undefined" &&
           !(navigator as Navigator & { standalone?: boolean }).standalone
         }
-        onSurfacePointerUp={handleSurface}
+        onSurfaceClick={handleSurface}
         onBack={handleBack}
         onAudioChange={handleAudioChange}
         onSubtitleChange={setSelectedSubtitle}
