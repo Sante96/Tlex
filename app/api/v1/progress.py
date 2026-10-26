@@ -144,7 +144,7 @@ async def get_continue_watching(
     """
     # Get all incomplete progress items with media and series info
     result = await db.execute(
-        select(WatchProgress, MediaItem, Series, Franchise.title)
+        select(WatchProgress, MediaItem, Series, Franchise)
         .join(MediaItem, WatchProgress.media_item_id == MediaItem.id)
         .outerjoin(Series, MediaItem.series_id == Series.id)
         .outerjoin(Franchise, MediaItem.franchise_id == Franchise.id)
@@ -161,22 +161,24 @@ async def get_continue_watching(
     seen_series: dict[int, bool] = {}  # series_id -> already added
     items: list[ContinueWatchingItem] = []
 
-    for progress, media, series, franchise_title in rows:
+    for progress, media, series, franchise in rows:
         # Movies: always include individually
         if media.series_id is None:
             items.append(
                 ContinueWatchingItem(
                     id=media.id,
                     title=media.title,
-                    poster_path=media.poster_path,
-                    backdrop_path=media.backdrop_path,
+                    # A concert like an episode: the franchise's poster and backdrop
+                    # (the hero), its own picture (the frame) as the card
+                    poster_path=media.poster_path or (franchise and franchise.poster_path),
+                    backdrop_path=(franchise and franchise.backdrop_path) or media.backdrop_path,
                     media_type=media.media_type.value,
                     position_seconds=progress.position_seconds,
                     duration_seconds=progress.duration_seconds,
                     progress_percent=progress.progress_percent,
-                    still_path=media.backdrop_path,
+                    still_path=media.backdrop_path or media.poster_path,
                     overview=media.overview,
-                    franchise_title=franchise_title,
+                    franchise_title=franchise.title if franchise else None,
                 )
             )
         else:

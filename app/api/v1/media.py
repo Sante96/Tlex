@@ -33,6 +33,14 @@ from app.services.tmdb import tmdb_client
 router = APIRouter()
 
 
+def _poster(item: MediaItem) -> str | None:
+    """A concert without a poster of its own shows its franchise's: its frame is wide, a
+    poster tall (as an episode shows its series'). The franchise must be loaded."""
+    if item.poster_path or item.media_type != MediaType.CONCERT or item.franchise is None:
+        return item.poster_path
+    return item.franchise.poster_path
+
+
 @router.get("", response_model=MediaListResponse)
 async def list_media(
     session: DBSession,
@@ -47,7 +55,9 @@ async def list_media(
     offset = (page - 1) * page_size
 
     # Base query
-    query = select(MediaItem).options(selectinload(MediaItem.parts))
+    query = select(MediaItem).options(
+        selectinload(MediaItem.parts), selectinload(MediaItem.franchise)
+    )
     count_query = select(func.count()).select_from(MediaItem)
 
     if media_type:
@@ -85,7 +95,7 @@ async def list_media(
             "tmdb_id": item.tmdb_id,
             "title": item.title,
             "overview": item.overview,
-            "poster_path": item.poster_path,
+            "poster_path": _poster(item),
             "backdrop_path": item.backdrop_path,
             "release_date": str(item.release_date) if item.release_date else None,
             "media_type": item.media_type.value,
@@ -154,7 +164,7 @@ async def get_media(
         "tmdb_id": item.tmdb_id,
         "title": item.title,
         "overview": item.overview,
-        "poster_path": item.poster_path,
+        "poster_path": _poster(item),
         "backdrop_path": item.backdrop_path,
         "release_date": str(item.release_date) if item.release_date else None,
         "media_type": item.media_type.value,

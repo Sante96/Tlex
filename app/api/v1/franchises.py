@@ -25,10 +25,12 @@ class FranchiseUpdateBody(BaseModel):
 def _images(franchise: Franchise) -> tuple[str | None, str | None]:
     """Its own poster and backdrop, else its newest concert's (a frame of the video):
     a game TMDB doesn't know still gets a picture."""
-    newest = max((c for c in franchise.concerts if c.poster_path), key=lambda c: c.id, default=None)
+    pictured = (c for c in franchise.concerts if c.poster_path or c.backdrop_path)
+    newest = max(pictured, key=lambda c: c.id, default=None)
+    own = (newest.poster_path or newest.backdrop_path) if newest else None
     return (
-        franchise.poster_path or (newest.poster_path if newest else None),
-        franchise.backdrop_path or (newest.backdrop_path if newest else None),
+        franchise.poster_path or own,
+        franchise.backdrop_path or (newest.backdrop_path or own if newest else None),
     )
 
 

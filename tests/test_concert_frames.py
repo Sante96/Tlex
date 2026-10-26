@@ -57,8 +57,9 @@ async def test_frames_fill_only_concerts_without_image(test_session, mocker):
 
     grab.assert_awaited_once_with(bare.id, 2970.0)
     items = await _items(test_session)
-    assert LOCAL_JPG.match(items["Bare"].poster_path or "")
-    assert items["Bare"].backdrop_path == items["Bare"].poster_path
+    # A frame is wide: the backdrop (the card's picture); the poster comes from the franchise
+    assert LOCAL_JPG.match(items["Bare"].backdrop_path or "")
+    assert items["Bare"].poster_path is None
     assert items["Chosen"].poster_path == "local:mine.png"
     assert items["Film"].poster_path is None
 
@@ -70,7 +71,7 @@ async def test_failed_grab_leaves_concert_without_image(test_session, mocker):
 
     assert await concert_frames.backfill_concert_frames() == 0
 
-    assert (await _items(test_session))["Bare"].poster_path is None
+    assert (await _items(test_session))["Bare"].backdrop_path is None
 
 
 async def test_frames_run_once_at_a_time(test_session, mocker):
@@ -108,7 +109,7 @@ async def test_a_pass_asked_for_while_running_looks_again(test_session, mocker):
     mocker.patch.object(concert_frames, "grab_frame", side_effect=grab_and_meanwhile_scan)
 
     assert await concert_frames.backfill_concert_frames() == 2
-    assert LOCAL_JPG.match((await _items(test_session))["Late"].poster_path or "")
+    assert LOCAL_JPG.match((await _items(test_session))["Late"].backdrop_path or "")
 
 
 async def test_a_missing_backdrop_is_filled_and_a_chosen_poster_kept(test_session, mocker):
@@ -128,6 +129,21 @@ async def test_a_missing_backdrop_is_filled_and_a_chosen_poster_kept(test_sessio
     chosen = (await _items(test_session))["Chosen"]
     assert chosen.poster_path == "local:mine.png"
     assert LOCAL_JPG.match(chosen.backdrop_path or "")
+
+
+async def test_a_concert_with_its_backdrop_needs_no_frame(test_session, mocker):
+    test_session.add(
+        MediaItem(
+            title="Wide", media_type=MediaType.CONCERT, duration_seconds=60, backdrop_path="/b.jpg"
+        )
+    )
+    await test_session.commit()
+    grab = mocker.patch.object(concert_frames, "grab_frame", return_value=JPEG)
+
+    assert await concert_frames.backfill_concert_frames() == 0
+
+    grab.assert_not_called()
+    assert (await _items(test_session))["Wide"].poster_path is None
 
 
 async def test_unknown_duration_grabs_at_a_fixed_offset(test_session, mocker):

@@ -135,7 +135,8 @@ export default function FranchisePage() {
                     : undefined
                 }
                 overview={c.overview}
-                thumbnailUrl={getTmdbImageUrl(c.poster_path, "w500")}
+                // Wide: its own picture (the frame), as an episode shows its still
+                thumbnailUrl={getTmdbImageUrl(c.backdrop_path || c.poster_path, "w500")}
                 progress={!isWatched ? (c.watch_progress?.progress_percent ?? 0) : undefined}
                 isWatched={isWatched}
                 onClick={() => router.push(`/watch/${c.id}`)}

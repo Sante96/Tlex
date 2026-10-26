@@ -50,6 +50,24 @@ async def test_franchise_list_counts_and_falls_back_to_the_latest_concert_image(
     assert (genshin["poster_path"], genshin["concerts_count"]) == ("/g.jpg", 0)
 
 
+async def test_franchise_without_images_falls_back_to_a_concert_frame(
+    client: AsyncClient, auth_headers, test_session
+):
+    test_session.add(
+        MediaItem(
+            title="Live",
+            media_type=MediaType.CONCERT,
+            franchise=Franchise(key="genshin", title="Genshin Impact"),
+            backdrop_path="local:frame.jpg",
+        )
+    )
+    await test_session.commit()
+
+    item = (await client.get("/api/v1/franchises", headers=auth_headers)).json()["items"][0]
+
+    assert (item["poster_path"], item["backdrop_path"]) == ("local:frame.jpg", "local:frame.jpg")
+
+
 async def test_franchise_detail_lists_concerts_with_progress(
     client: AsyncClient, auth_headers, test_session
 ):

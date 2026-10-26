@@ -187,6 +187,68 @@ async def test_search_finds_concerts_by_franchise(client: AsyncClient, auth_head
     assert [i["title"] for i in body["items"]] == ["Ambience Synesthesia"]
 
 
+async def test_concert_without_poster_shows_its_franchise_poster(
+    client: AsyncClient, auth_headers, test_session
+):
+    concert = MediaItem(
+        title="Live",
+        media_type=MediaType.CONCERT,
+        franchise=Franchise(key="arknights", title="Arknights", poster_path="/f.jpg"),
+        backdrop_path="local:frame.jpg",
+    )
+    test_session.add(concert)
+    await test_session.commit()
+
+    detail = (await client.get(f"/api/v1/media/{concert.id}", headers=auth_headers)).json()
+    listed = (
+        await client.get("/api/v1/media", params={"media_type": "CONCERT"}, headers=auth_headers)
+    ).json()["items"][0]
+
+    assert (detail["poster_path"], detail["backdrop_path"]) == ("/f.jpg", "local:frame.jpg")
+    assert listed["poster_path"] == "/f.jpg"
+
+
+async def test_continue_watching_shows_a_concert_like_an_episode(
+    client: AsyncClient, auth_headers, test_session
+):
+    concert = MediaItem(
+        title="Live",
+        media_type=MediaType.CONCERT,
+        franchise=Franchise(
+            key="arknights", title="Arknights", poster_path="/f.jpg", backdrop_path="/fb.jpg"
+        ),
+        backdrop_path="local:frame.jpg",
+        duration_seconds=5940,
+    )
+    test_session.add(concert)
+    await test_session.commit()
+    user = (
+        await test_session.execute(select(User).where(User.email == "test@example.com"))
+    ).scalar_one()
+    profile = (
+        await test_session.execute(select(Profile).where(Profile.user_id == user.id))
+    ).scalar_one()
+    test_session.add(
+        WatchProgress(
+            user_id=user.id,
+            profile_id=profile.id,
+            media_item_id=concert.id,
+            position_seconds=600,
+            duration_seconds=5940,
+        )
+    )
+    await test_session.commit()
+
+    item = (await client.get("/api/v1/progress", headers=auth_headers)).json()[0]
+
+    # The hero: the franchise's backdrop; its card: the concert's own picture (the frame)
+    assert (item["backdrop_path"], item["still_path"], item["poster_path"]) == (
+        "/fb.jpg",
+        "local:frame.jpg",
+        "/f.jpg",
+    )
+
+
 async def test_continue_watching_names_the_franchise(
     client: AsyncClient, auth_headers, test_session
 ):

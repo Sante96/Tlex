@@ -9,7 +9,7 @@ import asyncio
 import subprocess
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from app.config import get_settings
 from app.core.security import INTERNAL_STREAM_TOKEN
@@ -103,13 +103,14 @@ async def grab_frame(media_id: int, at_seconds: float) -> bytes | None:
 
 
 async def _one_pass() -> int:
-    """A frame for every concert missing its poster or its backdrop."""
+    """A frame for every concert without a backdrop: a frame is wide, the card's
+    picture; the poster (tall) is the franchise's unless one is chosen."""
     async with async_session_maker() as session:
         rows = (
             await session.execute(
                 select(MediaItem.id, MediaItem.duration_seconds).where(
                     MediaItem.media_type == MediaType.CONCERT,
-                    or_(MediaItem.poster_path.is_(None), MediaItem.backdrop_path.is_(None)),
+                    MediaItem.backdrop_path.is_(None),
                 )
             )
         ).all()
@@ -127,10 +128,9 @@ async def _one_pass() -> int:
                 continue
             async with async_session_maker() as session:
                 item = await session.get(MediaItem, media_id)
-                # Only the empty ones: an image someone chose (meanwhile, too) wins
-                if item is not None and (item.poster_path is None or item.backdrop_path is None):
-                    item.poster_path = item.poster_path or path
-                    item.backdrop_path = item.backdrop_path or path
+                # An image someone chose meanwhile wins
+                if item is not None and item.backdrop_path is None:
+                    item.backdrop_path = path
                     await session.commit()
                     done += 1
         await asyncio.sleep(PAUSE_SECONDS)

@@ -27,9 +27,11 @@ interface ImagePickerTabProps {
 function CustomImageField({
   selected,
   onSelect,
+  aspect,
 }: {
   selected: string;
   onSelect: (path: string) => void;
+  aspect: ImagePickerTabProps["aspect"];
 }) {
   const t = useTranslations("editMedia");
   const toast = useToast();
@@ -88,7 +90,14 @@ function CustomImageField({
         />
       </div>
       {preview && (
-        <div className="relative h-28 aspect-video rounded-md overflow-hidden ring-2 ring-plex-orange">
+        // The tab's shape, at the size of the grid's pictures (a flex child stretched to
+        // the full width before: a poster or a backdrop squashed into a strip)
+        <div
+          className={cn(
+            "relative self-start rounded-md overflow-hidden ring-2 ring-plex-orange",
+            aspect === "poster" ? "w-28 aspect-2/3" : "w-56 aspect-video",
+          )}
+        >
           <Image src={preview} alt="" fill className="object-cover" />
         </div>
       )}
@@ -106,7 +115,9 @@ export function ImagePickerTab({
   allowCustom = false,
 }: ImagePickerTabProps) {
   const t = useTranslations("editMedia");
-  const custom = allowCustom && <CustomImageField selected={selected} onSelect={onSelect} />;
+  const custom = allowCustom && (
+    <CustomImageField selected={selected} onSelect={onSelect} aspect={aspect} />
+  );
   if (loading) {
     return (
       <div className="flex flex-col gap-4">
