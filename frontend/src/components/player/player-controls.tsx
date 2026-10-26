@@ -40,6 +40,7 @@ interface PlayerControlsProps {
   currentTime: number;
   duration: number;
   chapters?: Chapter[] | null;
+  chapterWord?: "chapter" | "song";
   volume: number;
   isMuted: boolean;
   isFullscreen: boolean;
@@ -81,6 +82,7 @@ export function PlayerControls({
   currentTime,
   duration,
   chapters,
+  chapterWord,
   volume,
   isMuted,
   isFullscreen,
@@ -252,6 +254,7 @@ export function PlayerControls({
           currentTime={currentTime}
           duration={duration}
           chapters={chapters}
+          chapterWord={chapterWord}
           onSeek={onSeek}
           onActivity={onActivity}
         />

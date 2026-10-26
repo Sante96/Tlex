@@ -14,6 +14,8 @@ interface VideoSeekbarProps {
   duration: number;
   /** Two or more: the bar is split into one segment per chapter, as on YouTube */
   chapters?: Chapter[] | null;
+  /** What a chapter is called on the bar: a concert's are songs ("Brano 12") */
+  chapterWord?: "chapter" | "song";
   onSeek: (time: number) => void;
   onActivity?: () => void; // Called on any interaction to keep controls visible
   className?: string;
@@ -23,6 +25,7 @@ export function VideoSeekbar({
   currentTime,
   duration,
   chapters,
+  chapterWord = "chapter",
   onSeek,
   onActivity,
   className,
@@ -161,7 +164,7 @@ export function VideoSeekbar({
           style={{ left: `${tooltipPosition}%`, transform: `translateX(-${tooltipPosition}%)` }}
         >
           {activeChapter >= 0 &&
-            `${spans[activeChapter].title ?? t("player.chapter", { n: activeChapter + 1 })} · `}
+            `${spans[activeChapter].title ?? t(`player.${chapterWord}`, { n: activeChapter + 1 })} · `}
           {formatTime(tooltipTime)}
         </div>
       )}

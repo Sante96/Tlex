@@ -110,6 +110,12 @@ function Watch() {
   }
 
   const isEpisode = media.media_type === "EPISODE";
+  const isConcert = media.media_type === "CONCERT";
+  // A concert's songs: the setlist's titles over the file's (lines past the last
+  // chapter have nothing to name)
+  const chapters = isConcert
+    ? media.chapters?.map((c, i) => ({ ...c, title: media.setlist?.[i] || c.title }))
+    : media.chapters;
 
   const episodeSubtitle = isEpisode
     ? `S${media.season_number || 1} · E${media.episode_number || 1}`
@@ -120,12 +126,13 @@ function Watch() {
       <VideoPlayer
         mediaId={mediaId}
         title={isEpisode ? cleanEpisodeTitle(media.title) : media.title}
-        subtitle={episodeSubtitle}
+        subtitle={isConcert ? (media.franchise_title ?? undefined) : episodeSubtitle}
         audioTracks={audioTracks}
         subtitleTracks={subtitleTracks}
         initialDuration={media.duration_seconds || undefined}
         initialPosition={initialPosition}
-        chapters={media.chapters}
+        chapters={chapters}
+        chapterWord={isConcert ? "song" : "chapter"}
         seriesId={isEpisode ? media.series_id : undefined}
         currentSeason={media.season_number || 1}
         onEpisodeSelect={isEpisode ? handleEpisodeSelect : undefined}

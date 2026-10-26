@@ -64,6 +64,8 @@ interface VideoPlayerProps {
   initialPosition?: number;
   /** Two or more: a segmented seekbar and Ctrl+←/→ to move between them */
   chapters?: Chapter[] | null;
+  /** A concert's chapters are songs */
+  chapterWord?: "chapter" | "song";
   seriesId?: number | null;
   currentSeason?: number;
   onEpisodeSelect?: (mediaId: number) => void;
@@ -78,6 +80,7 @@ export function VideoPlayer({
   initialDuration,
   initialPosition = 0,
   chapters,
+  chapterWord,
   seriesId,
   currentSeason = 1,
   onEpisodeSelect,
@@ -524,6 +527,7 @@ export function VideoPlayer({
         currentTime={currentTime}
         duration={duration}
         chapters={chapters}
+        chapterWord={chapterWord}
         volume={volume}
         isMuted={isMuted}
         isFullscreen={isFullscreen}
