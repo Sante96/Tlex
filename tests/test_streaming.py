@@ -939,6 +939,30 @@ class TestThrottledAccounts:
         assert calls[:2] == [(0, flaky), (0, steady)]
         sleep.assert_not_awaited()
 
+    async def test_all_connections_down_swaps_in_a_client_from_the_pool(self, mocker, env):
+        # Both clients of a stream stayed down for minutes ("no client reconnected" on
+        # every retry) while a fresh reader's clients read the same chunk in a second
+        download, reader, _, acquire, release, _ = env
+        down1, down2, fresh = MagicMock(name="down1"), MagicMock(name="down2"), MagicMock(name="fresh")
+        for client in (down1, down2):
+            client.media_sessions = {4: FakeSession()}
+            client.media_sessions[4].is_connected.clear()
+        reader._clients = [down1, down2]
+        acquire.return_value = fresh
+        calls = []
+
+        async def fetch(client, part, index):
+            calls.append((index, client))
+            if client is not fresh:
+                raise download.SessionDown
+            return chunk_bytes(part, index)
+
+        mocker.patch("app.services.streaming.reader.fetch_chunk", new=fetch)
+
+        assert await self._read_all(reader) == file_bytes(reader._parts)
+        assert fresh in reader._clients
+        release.assert_called_once()  # the down client that failed went back to the pool
+
     async def test_all_throttled_swaps_in_a_client_of_another_account(self, mocker, env):
         download, reader, throttled, acquire, release, sleep = env
         standard, standard2, premium = MagicMock(name="s1"), MagicMock(name="s2"), MagicMock(name="p")

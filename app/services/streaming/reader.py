@@ -180,27 +180,53 @@ class VirtualStreamReader:
             f"[STREAM] Scale-down: now {len(self._clients)} clients (pool pressure {pressure:.0%})"
         )
 
+    async def _from_pool(self, usable) -> Client | None:
+        """A free client of the pool (another account's first) that passes usable, with
+        its file ids; None (given back) if there's none."""
+        client = await worker_manager.try_acquire_one(spread_from=self._clients)
+        if client is None:
+            return None
+        if not usable(client):
+            worker_manager.release_clients([client])
+            return None
+        try:
+            await ensure_file_ids_for_client(self._parts, client)
+        except Exception as e:
+            logger.warning(f"[STREAM] Swap failed, releasing client: {e}")
+            worker_manager.release_clients([client])
+            return None
+        return client
+
     async def _swap_throttled(self) -> bool:
         """Every client of this stream is on an account Telegram is slowing down: trade one
         for a free client of another account, if the pool has one."""
         async with self._swap_lock:
             if any(not worker_manager.is_throttled(c) for c in self._clients):
                 return True  # a concurrent fetch already swapped
-            client = await worker_manager.try_acquire_one(spread_from=self._clients)
-            if client is None or worker_manager.is_throttled(client):
-                if client is not None:
-                    worker_manager.release_clients([client])
-                return False
-            try:
-                await ensure_file_ids_for_client(self._parts, client)
-            except Exception as e:
-                logger.warning(f"[STREAM] Swap failed, releasing client: {e}")
-                worker_manager.release_clients([client])
+            client = await self._from_pool(lambda c: not worker_manager.is_throttled(c))
+            if client is None:
                 return False
             if len(self._clients) >= MAX_CLIENTS_PER_STREAM:
                 worker_manager.release_clients([self._clients.pop(0)])
             self._clients.append(client)
             logger.info("[STREAM] Throttled account: moved the stream to a client of another one")
+            return True
+
+    async def _swap_down(self, failed: Client) -> bool:
+        """Every connection of this stream is down: trade the client that failed for a
+        connected one of the pool. Measured: a stream's two clients stayed down for minutes
+        (every retry "no client reconnected") while a fresh reader read the chunk at once."""
+        async with self._swap_lock:
+            if any(connected(c) for c in self._clients):
+                return True  # one came back, or a concurrent fetch already swapped
+            client = await self._from_pool(connected)
+            if client is None:
+                return False
+            if failed in self._clients:
+                self._clients.remove(failed)
+                worker_manager.release_clients([failed])
+            self._clients.append(client)
+            logger.info("[STREAM] Connections down: moved the stream to another client")
             return True
 
     async def _fetch(self, part: MediaPart, index: int) -> bytes:
@@ -221,13 +247,16 @@ class VirtualStreamReader:
             try:
                 return await fetch_chunk(client, part, index)
             except SessionDown:
-                # Next try on a connected client; with none, fetch_chunk waits for this one
-                # to come back, so a stream whose connections all stay down still ends
+                # Next try on a connected client; with none, one from the pool, else
+                # fetch_chunk waits for this one to come back: a stream whose connections all
+                # stay down still ends
                 reconnecting += 1
                 if reconnecting >= MAX_ATTEMPTS:
                     raise RuntimeError(
                         f"Failed to fetch chunk {index} of part {part.id}: no client reconnected"
                     ) from None
+                if not any(connected(c) for c in self._clients):
+                    await self._swap_down(client)
             except Throttled as e:
                 if any(not worker_manager.is_throttled(c) for c in self._clients):
                     continue

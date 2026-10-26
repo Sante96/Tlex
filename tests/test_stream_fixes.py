@@ -532,6 +532,7 @@ class TestReaderManager:
 
     async def test_idle_only_release_keeps_reader_in_use(self, mocker, test_session, media_with_parts):
         media, _ = media_with_parts
+        mocker.patch.object(manager_module, "RELEASE_GRACE", 0)
         release = mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
         assert reader is not None
@@ -539,13 +540,35 @@ class TestReaderManager:
         reader._active_streams = 1  # e.g. ffmpeg's next range request
 
         await release_reader(media.id, only_if_idle=True)
+        await asyncio.gather(*manager_module._pending_releases)
         assert not reader._force_released
         release.assert_not_called()
 
         reader._active_streams = 0
         await release_reader(media.id, only_if_idle=True)
+        await asyncio.gather(*manager_module._pending_releases)
         assert reader._force_released
         release.assert_called_once()
+
+    async def test_a_disconnect_leaves_the_reader_to_the_next_range_request(
+        self, mocker, test_session, media_with_parts
+    ):
+        # ffmpeg drops its probe of the file's end and opens its main request at the same
+        # instant: the main one had taken the reader but read nothing yet, and the probe's
+        # disconnect released the reader under it ("reader was force-released")
+        media, _ = media_with_parts
+        mocker.patch.object(manager_module, "RELEASE_GRACE", 0.05)
+        release = mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
+        reader = await get_virtual_reader(test_session, media.id, persistent=True)
+        assert reader is not None
+        reader._clients = [MagicMock()]
+
+        await release_reader(media.id, only_if_idle=True)  # the probe's disconnect
+        reader._active_streams = 1  # the main request starts reading meanwhile
+        await asyncio.gather(*manager_module._pending_releases)
+
+        assert not reader._force_released
+        release.assert_not_called()
 
     async def test_each_viewer_has_its_own_reader(self, mocker, test_session, media_with_parts):
         # Two devices on the same title shared one reader (two clients for both, half the

@@ -1,5 +1,6 @@
 """Reader lifecycle management (cache, factory, release, cleanup)."""
 
+import asyncio
 import time
 
 from loguru import logger
@@ -19,6 +20,11 @@ settings = get_settings()
 # shared a reader, half the speed each, and one closing its player cut the other
 _reader_cache: dict[tuple[int, str], tuple[VirtualStreamReader, float]] = {}
 _READER_TTL = 60  # Seconds of inactivity before releasing
+# A disconnected request's reader is released this much later, if idle then: ffmpeg drops a
+# range request and opens the next one at the same instant, and the next one counts as
+# reading only once its body starts (released under it: "reader was force-released")
+RELEASE_GRACE = 2.0
+_pending_releases: set[asyncio.Task] = set()
 
 
 def reader_clients(media_id: int, viewer: str = "") -> int:
@@ -85,16 +91,23 @@ async def get_virtual_reader(
 async def release_reader(media_id: int, *, viewer: str = "", only_if_idle: bool = False) -> None:
     """Explicitly release a cached reader and its clients.
 
-    Force-releases immediately regardless of active streams, unless only_if_idle:
-    then a reader still serving other requests (ffmpeg's next range request,
-    another viewer) is left to them and to cleanup_stale_readers.
+    Force-releases immediately regardless of active streams, unless only_if_idle (a
+    request ended by a disconnect): then RELEASE_GRACE later, if nothing reads through it
+    and nothing took it up since; a reader still serving other requests (ffmpeg's next
+    range request, another viewer) is left to them and to cleanup_stale_readers.
     Called when user navigates away — stream is no longer needed.
 
     NOTE: This function has no internal await points and is therefore safe to
     call from within a CancelledError handler or a finally block.
     """
-    entry = _reader_cache.get((media_id, viewer))
-    if entry and only_if_idle and entry[0]._active_streams > 0:
+    if only_if_idle:
+        entry = _reader_cache.get((media_id, viewer))
+        if entry is not None:
+            task = asyncio.create_task(
+                _release_if_still_idle(media_id, viewer, entry[0], time.time())
+            )
+            _pending_releases.add(task)
+            task.add_done_callback(_pending_releases.discard)
         return
     entry = _reader_cache.pop((media_id, viewer), None)
     if entry:
@@ -111,6 +124,18 @@ async def release_reader(media_id: int, *, viewer: str = "", only_if_idle: bool 
                 f"[READER] Force-released {count} client(s) for media {media_id}"
                 f"{f' ({active} stream(s) were active)' if active else ''}"
             )
+
+
+async def _release_if_still_idle(
+    media_id: int, viewer: str, reader: VirtualStreamReader, since: float
+) -> None:
+    await asyncio.sleep(RELEASE_GRACE)
+    entry = _reader_cache.get((media_id, viewer))
+    if entry is None or entry[0] is not reader:
+        return
+    if reader._active_streams > 0 or entry[1] > since:
+        return
+    await release_reader(media_id, viewer=viewer)
 
 
 async def cleanup_stale_readers() -> None:
