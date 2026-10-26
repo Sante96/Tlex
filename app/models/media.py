@@ -25,6 +25,7 @@ class MediaType(str, enum.Enum):
 
     MOVIE = "MOVIE"
     EPISODE = "EPISODE"
+    CONCERT = "CONCERT"
 
 
 class CodecType(str, enum.Enum):
@@ -79,6 +80,30 @@ class Series(Base):
         return len(self.episodes)
 
 
+class Franchise(Base):
+    """The anime or game a "Concerti · <name>" topic holds the concerts of.
+
+    Its own table, not a Series: the anime may also be in the library as a series, with
+    the same TMDB id (Series.tmdb_id is unique), and concerts must stay out of Series.
+    """
+
+    __tablename__ = "franchises"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # The topic's name, normalized: how scans find it again, whatever the title becomes
+    key: Mapped[str] = mapped_column(String(500), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poster_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    backdrop_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    concerts: Mapped[list["MediaItem"]] = relationship("MediaItem", back_populates="franchise")
+
+    def __repr__(self) -> str:
+        return f"<Franchise(id={self.id}, title={self.title})>"
+
+
 class MediaItem(Base):
     """The movie or episode entity."""
 
@@ -111,6 +136,15 @@ class MediaItem(Base):
         JSON(none_as_null=True), nullable=True, deferred=True
     )
 
+    # For concerts: their anime/game, and the song titles of the chapters (one per chapter,
+    # None for an untitled one). Its own column: "Analizza" rewrites chapters, not this
+    franchise_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("franchises.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    setlist: Mapped[list | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True, deferred=True
+    )
+
     # For episodes - link to series
     series_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("series.id", ondelete="CASCADE"), nullable=True, index=True
@@ -120,6 +154,7 @@ class MediaItem(Base):
 
     # Relationships
     series: Mapped["Series | None"] = relationship("Series", back_populates="episodes")
+    franchise: Mapped["Franchise | None"] = relationship("Franchise", back_populates="concerts")
     parts: Mapped[list["MediaPart"]] = relationship(
         "MediaPart", back_populates="media_item", cascade="all, delete-orphan"
     )
