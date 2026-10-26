@@ -34,6 +34,7 @@ from app.services.overrides import (
     apply_media_override,
     get_media_override,
     get_media_overrides,
+    get_series_override,
     upsert_media_override,
 )
 from app.services.tmdb import tmdb_client
@@ -193,6 +194,12 @@ async def get_media(
         "content_rating": content_rating,
     }
     apply_media_override(detail_data, override)
+    # An episode holds a copy of its series' backdrop: the user's own for the series
+    # comes first, unless they chose one for this episode
+    if current_user and item.series_id and not (override and override.backdrop_path):
+        series_override = await get_series_override(session, current_user, item.series_id)
+        if series_override and series_override.backdrop_path:
+            detail_data["backdrop_path"] = series_override.backdrop_path
 
     return MediaItemDetailResponse(
         **detail_data,
@@ -333,6 +340,7 @@ class NextEpisodeResponse(BaseModel):
 async def get_next_episode(
     session: DBSession,
     media_id: int,
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Get the next episode after the given media item."""
     # Load current item
@@ -370,8 +378,14 @@ async def get_next_episode(
     if not next_ep:
         return None
 
-    # Episode thumbnail: scanner stores TMDB still in poster_path (same as series endpoint)
-    still_path = next_ep.poster_path
+    # Episode thumbnail: scanner stores TMDB still in poster_path (same as series endpoint);
+    # the user's own, if they chose one
+    own = (
+        (await get_media_overrides(session, current_user, [next_ep.id])).get(next_ep.id)
+        if current_user
+        else None
+    )
+    still_path = (own and own.poster_path) or next_ep.poster_path
 
     return NextEpisodeResponse(
         id=next_ep.id,

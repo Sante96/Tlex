@@ -6,8 +6,9 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_profile, get_db
-from app.models import Franchise, MediaItem, Profile, Series, WatchProgress
+from app.api.deps import get_current_profile, get_current_user, get_db
+from app.models import Franchise, MediaItem, Profile, Series, User, WatchProgress
+from app.services.overrides import get_media_overrides, get_series_overrides
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -146,6 +147,7 @@ async def update_progress(
 async def get_continue_watching(
     db: AsyncSession = Depends(get_db),
     profile: Profile = Depends(get_current_profile),
+    current_user: User = Depends(get_current_user),
     limit: int = 10,
 ):
     """Get list of media items to continue watching.
@@ -169,12 +171,20 @@ async def get_continue_watching(
         .order_by(WatchProgress.updated_at.desc())
     )
     rows = result.all()
+    # The user's own pictures (a title's Edit): the cards showed TMDB's all the same
+    own_media = await get_media_overrides(db, current_user, [m.id for _, m, _, _ in rows])
+    own_series = await get_series_overrides(
+        db, current_user, list({m.series_id for _, m, _, _ in rows if m.series_id})
+    )
 
     # Group episodes by series, keep first incomplete per series
     seen_series: dict[int, bool] = {}  # series_id -> already added
     items: list[ContinueWatchingItem] = []
 
     for progress, media, series, franchise in rows:
+        mine = own_media.get(media.id)
+        my_poster = mine.poster_path if mine else None
+        my_backdrop = mine.backdrop_path if mine else None
         # Movies: always include individually
         if media.series_id is None:
             items.append(
@@ -183,13 +193,17 @@ async def get_continue_watching(
                     title=media.title,
                     # A concert like an episode: the franchise's poster and backdrop
                     # (the hero), its own picture (the frame) as the card
-                    poster_path=media.poster_path or (franchise and franchise.poster_path),
-                    backdrop_path=(franchise and franchise.backdrop_path) or media.backdrop_path,
+                    poster_path=my_poster
+                    or media.poster_path
+                    or (franchise and franchise.poster_path),
+                    backdrop_path=my_backdrop
+                    or (franchise and franchise.backdrop_path)
+                    or media.backdrop_path,
                     media_type=media.media_type.value,
                     position_seconds=progress.position_seconds,
                     duration_seconds=progress.duration_seconds,
                     progress_percent=progress.progress_percent,
-                    still_path=media.backdrop_path or media.poster_path,
+                    still_path=my_backdrop or media.backdrop_path or my_poster or media.poster_path,
                     overview=media.overview,
                     franchise_title=franchise.title if franchise else None,
                 )
@@ -198,22 +212,29 @@ async def get_continue_watching(
             # Episodes: only one per series (first incomplete by S:E order)
             if media.series_id not in seen_series:
                 seen_series[media.series_id] = True
+                theirs = own_series.get(media.series_id)
+                series_poster = (theirs and theirs.poster_path) or (
+                    series.poster_path if series else None
+                )
+                series_backdrop = (theirs and theirs.backdrop_path) or (
+                    series.backdrop_path if series else None
+                )
                 items.append(
                     ContinueWatchingItem(
                         id=media.id,
                         title=media.title,
-                        poster_path=series.poster_path if series else media.poster_path,
-                        backdrop_path=series.backdrop_path if series else media.backdrop_path,
+                        poster_path=series_poster or media.poster_path,
+                        backdrop_path=series_backdrop or media.backdrop_path,
                         media_type=media.media_type.value,
                         position_seconds=progress.position_seconds,
                         duration_seconds=progress.duration_seconds,
                         progress_percent=progress.progress_percent,
                         # An episode's poster_path is its TMDB still
-                        still_path=media.poster_path or (series.backdrop_path if series else None),
+                        still_path=my_poster or media.poster_path or series_backdrop,
                         overview=media.overview or (series.overview if series else None),
                         series_id=media.series_id,
                         series_title=series.title if series else None,
-                        series_poster_path=series.poster_path if series else None,
+                        series_poster_path=series_poster,
                         season_number=media.season_number,
                         episode_number=media.episode_number,
                     )

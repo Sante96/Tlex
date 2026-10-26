@@ -22,6 +22,7 @@ from app.models.user import Profile, User, WatchProgress
 from app.services.anime import anime, apply_details
 from app.services.overrides import (
     apply_series_override,
+    get_media_overrides,
     get_series_override,
     get_series_overrides,
     upsert_series_override,
@@ -157,6 +158,18 @@ async def get_series(
     progress_result = await session.execute(progress_query)
     for wp in progress_result.scalars().all():
         watch_progress_map[wp.media_item_id] = wp
+    # The user's own stills (an episode's Edit): the list showed TMDB's all the same
+    own_stills = (
+        {
+            media_id: o.poster_path
+            for media_id, o in (
+                await get_media_overrides(session, current_user, episode_ids)
+            ).items()
+            if o.poster_path
+        }
+        if current_user
+        else {}
+    )
 
     # Group episodes by season
     seasons_data = {}
@@ -175,7 +188,7 @@ async def get_series(
             "episode_number": ep.episode_number,
             "title": ep.title,
             "overview": ep.overview,
-            "still_path": ep.poster_path,  # Episode thumbnail
+            "still_path": own_stills.get(ep.id) or ep.poster_path,  # Episode thumbnail
             "release_date": str(ep.release_date) if ep.release_date else None,
             "duration_seconds": ep.duration_seconds,
             "watch_progress": None,
@@ -417,6 +430,7 @@ async def refresh_series_metadata(
     seasons_needed: set[int] = {ep.season_number for ep in episodes if ep.season_number is not None}
     tmdb_episodes: dict[tuple[int, int], str | None] = {}  # (season, ep) -> title
     tmdb_overviews: dict[tuple[int, int], str | None] = {}
+    tmdb_stills: dict[tuple[int, int], str | None] = {}
 
     for season_num in seasons_needed:
         tmdb_season_eps = await tmdb_client.get_season_episodes(
@@ -426,9 +440,14 @@ async def refresh_series_metadata(
             key = (season_num, ep_info.episode_number)
             tmdb_episodes[key] = ep_info.name
             tmdb_overviews[key] = ep_info.overview
+            tmdb_stills[key] = ep_info.still_path
 
     updated_eps = 0
     for ep in episodes:
+        # The series' entry, and its backdrop: matched to another show, the episodes kept
+        # the old one's
+        ep.tmdb_id = tmdb_result.tmdb_id
+        ep.backdrop_path = tmdb_result.backdrop_path
         if ep.season_number is None or ep.episode_number is None:
             continue
         key = (ep.season_number, ep.episode_number)
@@ -437,6 +456,9 @@ async def refresh_series_metadata(
                 ep.title = title
             if overview := tmdb_overviews[key]:
                 ep.overview = overview
+            # An episode's still is stored as its poster (as the scan does)
+            if still := tmdb_stills[key]:
+                ep.poster_path = still
             updated_eps += 1
 
     await session.commit()
