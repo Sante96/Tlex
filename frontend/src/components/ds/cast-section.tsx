@@ -52,6 +52,11 @@ function PeopleRow({
 
   if (!members.length) return null;
 
+  // The row fades out on each side with more people past it
+  const fade = `linear-gradient(to right, ${canScrollLeft ? "transparent, black 48px" : "black, black"}, ${
+    canScrollRight ? "black calc(100% - 48px), transparent" : "black"
+  })`;
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -87,7 +92,7 @@ function PeopleRow({
       <div
         ref={scrollRef}
         className="flex gap-4 md:gap-5 overflow-x-auto scrollbar-hide py-2 px-1"
-        style={{ scrollbarWidth: "none" }}
+        style={{ scrollbarWidth: "none", maskImage: fade, WebkitMaskImage: fade }}
       >
         {members.map((member) => (
           <Link
