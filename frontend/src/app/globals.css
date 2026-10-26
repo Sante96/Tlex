@@ -188,6 +188,12 @@ html {
   /* the scrollbar's room stays when a modal hides it: the page doesn't shift sideways */
   scrollbar-gutter: stable;
 }
+/* No rubber band past the page's ends: iOS dragged the whole page down with it, the
+   sticky top bar too, which came off the top of the screen */
+html,
+body {
+  overscroll-behavior-y: none;
+}
 .ds-modal-panel {
   animation: modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
