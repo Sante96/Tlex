@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +53,12 @@ class Series(Base):
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
     vote_average: Mapped[float | None] = mapped_column(nullable=True)  # TMDB rating 0-10
     content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)  # e.g. "TV-MA"
+    # Anime (Japanese animation: its own section): TMDB's Animation genre and Japanese as
+    # the original language (app/services/anime.py), unless an admin set it by hand.
+    # original_language None: not looked up on TMDB yet (classify_library does it once)
+    original_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    is_anime: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    anime_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     season_posters: Mapped[dict | None] = mapped_column(
         JSON, nullable=True
     )  # {season_num: poster_path}
@@ -131,6 +138,12 @@ class MediaItem(Base):
     content_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vote_average: Mapped[float | None] = mapped_column(nullable=True)
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma-separated
+    # Films: anime (Japanese animation: its own section): TMDB's Animation genre and Japanese as
+    # the original language (app/services/anime.py), unless an admin set it by hand.
+    # original_language None: not looked up on TMDB yet (classify_library does it once)
+    original_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    is_anime: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    anime_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Chapters from the file ([{"start", "end", "title"}], the seekbar's segments). NULL:
     # never probed (app/services/chapters.py fills those in); [] : the file has none.

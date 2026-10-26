@@ -19,6 +19,7 @@ from app.api.deps import (
 )
 from app.models.media import MediaItem, Series
 from app.models.user import Profile, User, WatchProgress
+from app.services.anime import anime, apply_details
 from app.services.overrides import (
     apply_series_override,
     get_series_override,
@@ -46,15 +47,19 @@ async def list_series(
     page_size: int = Query(20, ge=1, le=200),
     search: str | None = None,
     sort: Literal["title", "recent"] = "title",
+    anime_only: bool | None = Query(None, alias="anime"),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> dict:
-    """List all TV series with pagination, by title or by their newest episode."""
+    """List all TV series with pagination, by title or by their newest episode; anime=false
+    leaves the anime out (the Series section), true keeps only them."""
     offset = (page - 1) * page_size
 
     # Count total
     count_query = select(func.count()).select_from(Series)
     if search:
         count_query = count_query.where(Series.title.ilike(f"%{search}%"))
+    if anime_only is not None:
+        count_query = count_query.where(anime(Series) == anime_only)
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -68,6 +73,8 @@ async def list_series(
     query = select(Series).offset(offset).limit(page_size).order_by(order)
     if search:
         query = query.where(Series.title.ilike(f"%{search}%"))
+    if anime_only is not None:
+        query = query.where(anime(Series) == anime_only)
     result = await session.execute(query)
     series_list = result.scalars().all()
 
@@ -244,6 +251,8 @@ async def get_series(
         "seasons": sorted(seasons_data.values(), key=lambda s: s["season_number"]),
         "seasons_count": len(seasons_data),
         "episodes_count": series.episodes_count,
+        "is_anime": series.anime_override if series.anime_override is not None else series.is_anime,
+        "anime_override": series.anime_override,
     }
     apply_series_override(detail_data, series_override)
 
@@ -280,6 +289,26 @@ async def get_series_trailer(session: DBSession, series_id: int) -> dict:
 
     key = await tmdb_client.get_trailer(series.tmdb_id, "tv")
     return {"key": key}
+
+
+class AnimeUpdate(BaseModel):
+    anime: bool | None = None
+
+
+@router.put("/{series_id}/anime")
+async def set_series_anime(
+    session: DBSession,
+    series_id: int,
+    body: AnimeUpdate,
+    _admin=Depends(get_admin_user),
+) -> dict:
+    """Anime or not, whatever TMDB says; None goes back to TMDB's."""
+    series = await session.get(Series, series_id)
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    series.anime_override = body.anime
+    await session.commit()
+    return {"anime_override": body.anime}
 
 
 @router.patch("/{series_id}")
@@ -377,9 +406,7 @@ async def refresh_series_metadata(
     # Fetch and update extended metadata (genres, rating, content_rating)
     tv_details = await tmdb_client.get_tv_details(tmdb_result.tmdb_id, language=lang)
     if tv_details:
-        series.genres = ",".join(tv_details.genres) if tv_details.genres else None
-        series.vote_average = tv_details.vote_average
-        series.content_rating = tv_details.content_rating
+        apply_details(series, tv_details)
 
     # Refresh episode titles and overviews from TMDB
     ep_query = select(MediaItem).where(MediaItem.series_id == series.id)

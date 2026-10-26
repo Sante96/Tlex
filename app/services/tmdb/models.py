@@ -41,6 +41,8 @@ class MovieDetails:
     genres: list[str]
     vote_average: float | None
     content_rating: str | None  # e.g. "PG-13", "R", "VM18"
+    original_language: str | None = None
+    anime: bool = False  # Japanese animation (app/services/anime.py)
 
 
 @dataclass
@@ -68,3 +70,5 @@ class TVDetails:
     genres: list[str]
     vote_average: float | None  # Rating 0-10
     content_rating: str | None  # e.g. "TV-MA", "VM18"
+    original_language: str | None = None
+    anime: bool = False  # Japanese animation (app/services/anime.py)

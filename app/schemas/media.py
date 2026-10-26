@@ -77,6 +77,9 @@ class MediaItemDetailResponse(MediaItemResponse):
     # credits.py); None: 30 s before the end
     credits_start: int | None = None
     credits_start_seconds: int | None = None
+    # Anime (its own section): TMDB's, or the admin's choice (anime_override)
+    is_anime: bool = False
+    anime_override: bool | None = None
 
 
 class MediaListResponse(BaseModel):

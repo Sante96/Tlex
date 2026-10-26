@@ -73,8 +73,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Concert frames failed: {e}")
 
+    # Series and films from before the Anime section: their language from TMDB, once
+    async def classify_library_background():
+        try:
+            await asyncio.sleep(20)
+            from app.services.anime import classify_library
+
+            async with async_session_maker() as session:
+                await classify_library(session)
+        except Exception as e:
+            logger.warning(f"Anime classification failed: {e}")
+
     # Kept: the loop holds only weak references to tasks, and shutdown cancels them
     background = [
+        asyncio.create_task(classify_library_background()),
         asyncio.create_task(populate_caches_background()),
         asyncio.create_task(backfill_chapters_background()),
         asyncio.create_task(backfill_concert_frames_background()),

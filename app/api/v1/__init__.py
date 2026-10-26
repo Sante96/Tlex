@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user, get_stream_user
 from app.api.v1 import (
+    anime,
     auth,
     backup,
     device_auth,
@@ -31,6 +32,7 @@ router.include_router(scanner.router, prefix="/scanner", tags=["scanner"])
 _user_auth = [Depends(get_current_user)]
 router.include_router(media.router, prefix="/media", tags=["media"], dependencies=_user_auth)
 router.include_router(series.router, prefix="/series", tags=["series"], dependencies=_user_auth)
+router.include_router(anime.router, prefix="/anime", tags=["anime"], dependencies=_user_auth)
 router.include_router(seasons.router, prefix="/series", tags=["seasons"], dependencies=_user_auth)
 router.include_router(
     franchises.router, prefix="/franchises", tags=["concerts"], dependencies=_user_auth

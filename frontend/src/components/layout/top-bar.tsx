@@ -6,7 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LogOut, UserCircle, Users, Search, X } from "lucide-react";
+import { LogOut, UserCircle, Users, Search, X, Settings } from "lucide-react";
 import {
   DSAvatar,
   DSDropdownMenu,
@@ -288,6 +288,12 @@ export function TopBar() {
                     icon: <Users className="h-4 w-4" />,
                     label: t("topbar.switchProfile"),
                     onClick: handleSwitchProfile,
+                  },
+                  // The phone's bottom bar has no Settings item: here they are
+                  {
+                    icon: <Settings className="h-4 w-4" />,
+                    label: t("nav.settings"),
+                    onClick: () => router.push("/settings"),
                   },
                   { label: "", separator: true },
                   {

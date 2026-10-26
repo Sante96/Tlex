@@ -49,6 +49,9 @@ export interface MediaDetails extends MediaItem {
   credits_start?: number | null;
   /** The point set by hand (the player's admin menu) */
   credits_start_seconds?: number | null;
+  /** In the Anime section (TMDB's, or the admin's choice: anime_override) */
+  is_anime?: boolean;
+  anime_override?: boolean | null;
 }
 
 /** A chapter of the file (seconds): a segment of the player's seekbar */
@@ -88,6 +91,8 @@ export async function getMediaList({
   search?: string;
   /** "recent": newest first (the home rows); default by title */
   sort?: "title" | "recent";
+  /** false: no anime (the Movies section); true: only them */
+  anime?: boolean;
 } = {}) {
   // The backend paginates with page/page_size: skip/limit used to be ignored (max 20 items)
   const response = await api.get<{
@@ -136,6 +141,11 @@ export interface NextEpisode {
   poster_path: string | null;
   backdrop_path: string | null;
   still_path: string | null;
+}
+
+/** Anime or not, whatever TMDB says (admins); null goes back to TMDB's */
+export async function setMediaAnime(mediaId: number, anime: boolean | null): Promise<void> {
+  await api.put(`/api/v1/media/${mediaId}/anime`, { anime });
 }
 
 /** Where the credits start, set by hand (admins): null clears it */

@@ -30,6 +30,7 @@ export {
   getNextEpisode,
   getRecommendations,
   setCreditsStart,
+  setMediaAnime,
   updateMediaItem,
   getMediaTmdbImages,
   triggerScan,
@@ -62,6 +63,7 @@ export {
   getSeriesTmdbImages,
   updateSeasonPoster,
   getSeasonTmdbImages,
+  setSeriesAnime,
 } from "./series";
 export type {
   SeriesItem,
@@ -163,3 +165,7 @@ export type {
   FranchiseUpdateBody,
 } from "./franchises";
 export { uploadImage, imageFromUrl } from "./images";
+
+// Anime
+export { getAnimeList } from "./anime";
+export type { AnimeItem } from "./anime";

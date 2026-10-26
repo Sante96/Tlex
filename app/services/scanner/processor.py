@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.media import CodecType, MediaItem, MediaPart, MediaStream, MediaType, Series
+from app.services.anime import apply_details
 from app.services.ffprobe import ffprobe_service
 from app.services.scanner.models import MediaGroup, ScannedFile
 from app.services.scanner.movies import find_movie
@@ -137,12 +138,9 @@ async def process_group(
                         if tmdb_result.release_date
                         else None
                     ),
-                    genres=",".join(tv_details.genres)
-                    if tv_details and tv_details.genres
-                    else None,
-                    vote_average=tv_details.vote_average if tv_details else None,
-                    content_rating=tv_details.content_rating if tv_details else None,
                 )
+                if tv_details:
+                    apply_details(series_obj, tv_details)
                 session.add(series_obj)
                 await session.flush()
                 logger.debug(f"Created series: {series_obj.title}")
@@ -186,6 +184,12 @@ async def process_group(
         season_number=season,
         episode_number=episode,
     )
+
+    # A film's genres, rating and language (anime goes to its own section)
+    if media_type == MediaType.MOVIE and tmdb_result:
+        movie_details = await tmdb_client.get_movie_full_details(tmdb_result.tmdb_id)
+        if movie_details:
+            apply_details(media_item, movie_details)
 
     session.add(media_item)
     await session.flush()

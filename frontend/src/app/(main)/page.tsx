@@ -13,6 +13,8 @@ import {
   hideFromContinueWatching,
   triggerScan,
   getSeriesList,
+  getAnimeList,
+  type AnimeItem,
   type MediaItem,
   type ContinueWatchingItem,
   type SeriesItem,
@@ -32,6 +34,7 @@ function heroItems(
   movies: MediaItem[],
   series: SeriesItem[],
   concerts: MediaItem[],
+  anime: AnimeItem[],
   t: ReturnType<typeof useTranslations>,
 ): HeroItem[] {
   const current = watching.filter((w) => w.backdrop_path);
@@ -53,9 +56,20 @@ function heroItems(
       remainingSeconds: w.duration_seconds - w.position_seconds,
     }));
   }
-  // Films, concerts and series together: a series added after the films was never shown.
-  // Ids order them, a series by its newest episode's
+  // Films, concerts, series and anime together: a series added after the films was never
+  // shown. Ids order them, a series by its newest episode's
   const newest = [
+    ...anime.map((a) => ({
+      added: a.added,
+      backdrop: a.backdrop_path,
+      item: {
+        id: a.id,
+        title: a.title,
+        overview: null as string | null,
+        playHref: a.kind === "series" ? `/series/${a.id}` : `/watch/${a.id}`,
+        detailsHref: a.kind === "series" ? `/series/${a.id}` : `/media/${a.id}`,
+      },
+    })),
     ...[...movies, ...concerts].map((m) => ({
       added: m.id,
       backdrop: m.backdrop_path,
@@ -89,6 +103,7 @@ export default function HomePage() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [concerts, setConcerts] = useState<MediaItem[]>([]);
+  const [anime, setAnime] = useState<AnimeItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<
     ContinueWatchingItem[]
   >([]);
@@ -116,13 +131,16 @@ export default function HomePage() {
     setLoading(true);
     setFailed(false);
     try {
-      const [mediaData, seriesData, watching, concertData] = await Promise.all([
-        getMediaList({ media_type: "MOVIE", sort: "recent", limit: ROW }),
-        getSeriesList({ sort: "recent", page_size: ROW }),
+      // The anime have their own row: not in the films' and the series'
+      const [mediaData, seriesData, watching, concertData, animeData] = await Promise.all([
+        getMediaList({ media_type: "MOVIE", sort: "recent", limit: ROW, anime: false }),
+        getSeriesList({ sort: "recent", page_size: ROW, anime: false }),
         getContinueWatching(10),
         // A row of its own: a backend without concerts yet (422) mustn't blank the home
         getMediaList({ media_type: "CONCERT", sort: "recent", limit: ROW }).catch(() => null),
+        getAnimeList({ sort: "recent", page_size: ROW }).catch(() => null),
       ]);
+      setAnime(animeData?.items ?? []);
       setMedia(mediaData.items);
       setSeries(seriesData.items);
       setConcerts(concertData?.items ?? []);
@@ -175,7 +193,7 @@ export default function HomePage() {
     );
   }
 
-  if (media.length === 0 && series.length === 0 && concerts.length === 0) {
+  if (media.length === 0 && series.length === 0 && concerts.length === 0 && anime.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <h1 className="text-2xl font-bold text-[#fafafa] mb-4">
@@ -206,7 +224,7 @@ export default function HomePage() {
     );
   }
 
-  const hero = heroItems(continueWatching, media, series, concerts, t);
+  const hero = heroItems(continueWatching, media, series, concerts, anime, t);
 
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
@@ -270,6 +288,31 @@ export default function HomePage() {
                   s.seasons_count === 1
                     ? `1 ${t("home.season")}`
                     : `${s.seasons_count} ${t("home.seasons")}`
+                }
+                className={cardClass}
+              />
+            ))}
+          </StaggerGrid>
+        </section>
+      )}
+
+      {/* Anime: series and films */}
+      {anime.length > 0 && (
+        <section>
+          <SectionHeader title={t("home.recentAnime")} href="/anime" />
+          <StaggerGrid className={gridClass}>
+            {anime.map((a) => (
+              <PosterCard
+                key={`${a.kind}-${a.id}`}
+                href={a.kind === "series" ? `/series/${a.id}` : `/media/${a.id}`}
+                imageUrl={getTmdbImageUrl(a.poster_path, "w300")}
+                title={a.title}
+                subtitle={
+                  a.kind === "movie"
+                    ? [t("media.movieLabel"), a.date ? yearOf(a.date) : null].filter(Boolean).join(" · ")
+                    : a.seasons_count === 1
+                      ? `1 ${t("home.season")}`
+                      : `${a.seasons_count ?? 0} ${t("home.seasons")}`
                 }
                 className={cardClass}
               />

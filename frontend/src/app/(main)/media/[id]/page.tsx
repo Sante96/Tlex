@@ -32,6 +32,7 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   checkWatchlistStatus,
+  setMediaAnime,
   type MediaDetails,
   type CastMember,
 } from "@/lib/api";
@@ -280,6 +281,17 @@ export default function MediaDetailPage() {
           entityType={media.media_type === "CONCERT" ? "concert" : "media"}
           chapters={media.chapters}
           setlist={media.setlist}
+          anime={
+            user?.is_admin && media.media_type === "MOVIE"
+              ? {
+                  value: !!media.is_anime,
+                  onChange: async (value) => {
+                    await setMediaAnime(media.id, value);
+                    setMedia(await getMediaDetails(mediaId));
+                  },
+                }
+              : undefined
+          }
           onClose={() => setEditing(false)}
           onSaved={async () => {
             const data = await getMediaDetails(mediaId);

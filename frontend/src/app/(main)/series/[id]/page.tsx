@@ -32,6 +32,7 @@ import {
   addSeriesToWatchlist,
   removeSeriesFromWatchlist,
   checkSeriesWatchlistStatus,
+  setSeriesAnime,
   type SeriesDetails,
   type CastMember,
 } from "@/lib/api";
@@ -334,6 +335,17 @@ export default function SeriesDetailPage() {
           backdropPath={series.backdrop_path}
           releaseDate={series.first_air_date}
           entityType="series"
+          anime={
+            user?.is_admin
+              ? {
+                  value: !!series.is_anime,
+                  onChange: async (value) => {
+                    await setSeriesAnime(series.id, value);
+                    setSeries(await getSeriesDetails(seriesId));
+                  },
+                }
+              : undefined
+          }
           onClose={() => setEditing(false)}
           onSaved={async () => {
             const data = await getSeriesDetails(seriesId);

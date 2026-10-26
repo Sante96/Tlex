@@ -35,6 +35,7 @@ import {
   setlistLines,
 } from "./edit-media-tabs";
 import { useToast } from "@/components/ui/toast";
+import { Switch } from "@/components/ui/switch";
 
 export type EntityType = "media" | "series" | "season" | "concert" | "franchise";
 
@@ -53,6 +54,8 @@ interface EditMediaModalProps {
   /** A concert's chapters and their song titles (the Setlist tab) */
   chapters?: Chapter[] | null;
   setlist?: (string | null)[] | null;
+  /** Admins: whether it's in the Anime section (saved at once, for the whole library) */
+  anime?: { value: boolean; onChange: (anime: boolean) => Promise<void> };
   onClose: () => void;
   onSaved: () => void;
 }
@@ -79,6 +82,7 @@ export function EditMediaModal({
   episodeNumber,
   chapters,
   setlist,
+  anime,
   onClose,
   onSaved,
 }: EditMediaModalProps) {
@@ -333,7 +337,28 @@ export function EditMediaModal({
               onOverviewChange={setFormOverview}
               onReleaseDateChange={setFormReleaseDate}
               showDate={entityType !== "franchise"}
-            />
+            >
+              {anime && (
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <label htmlFor="edit-anime" className="text-sm font-medium text-white">
+                      {t("editMedia.anime")}
+                    </label>
+                    <p className="text-xs text-[#71717a]">{t("editMedia.animeHint")}</p>
+                  </div>
+                  <Switch
+                    id="edit-anime"
+                    checked={anime.value}
+                    onCheckedChange={(checked) =>
+                      anime.onChange(checked).then(
+                        () => toast(t("settings.saved"), "success"),
+                        () => toast(t("common.actionFailed"), "error"),
+                      )
+                    }
+                  />
+                </div>
+              )}
+            </GeneralTab>
           )}
           {activeTab === "setlist" && (
             <SetlistTab

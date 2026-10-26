@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Home, Heart, Film, Tv, Music, Settings, Menu, Loader2 } from "lucide-react";
+import { Home, Heart, Film, Tv, Music, Settings, Menu, Loader2, Origami } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSNavItem, DSIconButton } from "@/components/ds";
 import { NAV_FADE, NAV_MOTION } from "@/components/ds/nav-item";
@@ -41,6 +41,7 @@ const navRoutes = [
 const libraryRoutes = [
   { key: "nav.movies", href: "/movies", icon: Film },
   { key: "nav.series", href: "/series", icon: Tv },
+  { key: "nav.anime", href: "/anime", icon: Origami },
   { key: "nav.concerts", href: "/concerts", icon: Music },
 ];
 

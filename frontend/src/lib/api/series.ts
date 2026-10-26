@@ -43,6 +43,14 @@ export interface SeasonInfo {
 
 export interface SeriesDetails extends SeriesItem {
   seasons: SeasonInfo[];
+  /** In the Anime section (TMDB's, or the admin's choice: anime_override) */
+  is_anime?: boolean;
+  anime_override?: boolean | null;
+}
+
+/** Anime or not, whatever TMDB says (admins); null goes back to TMDB's */
+export async function setSeriesAnime(seriesId: number, anime: boolean | null): Promise<void> {
+  await api.put(`/api/v1/series/${seriesId}/anime`, { anime });
 }
 
 export async function getSeriesList(params?: {
@@ -51,6 +59,8 @@ export async function getSeriesList(params?: {
   search?: string;
   /** "recent": by newest episode first (the home rows); default by title */
   sort?: "title" | "recent";
+  /** false: no anime (the Series section); true: only them */
+  anime?: boolean;
 }) {
   const response = await api.get<{
     items: SeriesItem[];

@@ -27,6 +27,7 @@ from app.schemas import (
     MediaPartResponse,
     MediaStreamResponse,
 )
+from app.services.anime import anime, apply_details
 from app.services.credits import credits_start
 from app.services.ffprobe import ffprobe_service
 from app.services.overrides import (
@@ -77,9 +78,11 @@ async def list_media(
     media_type: MediaType | None = None,
     search: str | None = None,
     sort: Literal["title", "recent"] = "title",
+    anime_only: bool | None = Query(None, alias="anime"),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> MediaListResponse:
-    """List all media items with pagination, by title or newest first."""
+    """List all media items with pagination, by title or newest first; anime=false leaves the
+    anime out (the Films section), true keeps only them."""
     offset = (page - 1) * page_size
 
     # Base query
@@ -91,6 +94,9 @@ async def list_media(
     if media_type:
         query = query.where(MediaItem.media_type == media_type)
         count_query = count_query.where(MediaItem.media_type == media_type)
+    if anime_only is not None:
+        query = query.where(anime(MediaItem) == anime_only)
+        count_query = count_query.where(anime(MediaItem) == anime_only)
     if search:
         # A concert is also found by its anime/game ("arknights" finds its lives)
         matches = or_(MediaItem.title.ilike(f"%{search}%"), Franchise.title.ilike(f"%{search}%"))
@@ -216,7 +222,29 @@ async def get_media(
         setlist=item.setlist,
         credits_start=await credits_start(session, item),
         credits_start_seconds=item.credits_start_seconds,
+        is_anime=item.anime_override if item.anime_override is not None else item.is_anime,
+        anime_override=item.anime_override,
     )
+
+
+class AnimeUpdate(BaseModel):
+    anime: bool | None = None
+
+
+@router.put("/{media_id}/anime")
+async def set_media_anime(
+    session: DBSession,
+    media_id: int,
+    body: AnimeUpdate,
+    _admin=Depends(get_admin_user),
+) -> dict:
+    """Anime or not, whatever TMDB says; None goes back to TMDB's."""
+    item = await session.get(MediaItem, media_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Media not found")
+    item.anime_override = body.anime
+    await session.commit()
+    return {"anime_override": body.anime}
 
 
 class CreditsUpdate(BaseModel):
@@ -505,9 +533,7 @@ async def refresh_metadata(
             item.overview = movie_details.overview
             item.poster_path = movie_details.poster_path
             item.backdrop_path = movie_details.backdrop_path
-            item.vote_average = movie_details.vote_average
-            item.genres = ",".join(movie_details.genres) if movie_details.genres else None
-            item.content_rating = movie_details.content_rating
+            apply_details(item, movie_details)
             if movie_details.release_date:
                 try:
                     item.release_date = date.fromisoformat(movie_details.release_date)

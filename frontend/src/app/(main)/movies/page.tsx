@@ -7,7 +7,8 @@ import { getMediaList, type MediaItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
 const loadMovies = (page: number, size: number) =>
-  getMediaList({ media_type: "MOVIE", skip: (page - 1) * size, limit: size });
+  // Not the anime: they have their own section
+  getMediaList({ media_type: "MOVIE", anime: false, skip: (page - 1) * size, limit: size });
 
 export default function MoviesPage() {
   const t = useTranslations();

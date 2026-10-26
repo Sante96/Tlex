@@ -6,7 +6,9 @@ import { LibraryPage } from "@/components/layout/library-page";
 import { getSeriesList, type SeriesItem } from "@/lib/api";
 import { getTmdbImageUrl } from "@/lib/format";
 
-const loadSeries = (page: number, size: number) => getSeriesList({ page, page_size: size });
+// Not the anime: they have their own section
+const loadSeries = (page: number, size: number) =>
+  getSeriesList({ page, page_size: size, anime: false });
 
 export default function SeriesPage() {
   const t = useTranslations();

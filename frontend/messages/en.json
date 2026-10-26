@@ -27,6 +27,7 @@
     "search": "Search"
   },
   "nav": {
+    "anime": "Anime",
     "home": "Home",
     "watchlist": "Watchlist",
     "movies": "Movies",
@@ -140,6 +141,7 @@
     "assignWorker": "No worker: assign one"
   },
   "home": {
+    "recentAnime": "Latest anime",
     "welcome": "Welcome to TLEX",
     "emptyLibrary": "Your library is empty. Scan your Telegram channels to get started.",
     "scan": "Scan Channels",
@@ -324,6 +326,8 @@
     "noEpisodes": "No episodes available",
     "editSeason": "Edit Season",
     "seasonNotFound": "Season not found",
+    "animeEmpty": "No anime found. Start a scan to import content.",
+    "movieLabel": "Movie",
     "moviesEmpty": "No movies found. Start a scan to import content.",
     "seriesEmpty": "No TV shows found. Start a scan to import content.",
     "concertsEmpty": "No concerts yet. Create a \"Concerti · name\" topic in the group and run a scan."
@@ -344,6 +348,8 @@
     "noFilmography": "No filmography available."
   },
   "editMedia": {
+    "anime": "Anime",
+    "animeHint": "In the Anime section instead of Movies and TV Shows (TMDB usually tells)",
     "general": "General",
     "poster": "Poster",
     "backdrop": "Backdrop",

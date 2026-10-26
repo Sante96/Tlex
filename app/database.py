@@ -111,6 +111,13 @@ SCHEMA_UPGRADES = (
     "ALTER TABLE watch_progress ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE",
     # Where the credits start (Up next)
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS credits_start_seconds INTEGER",
+    # Anime: Japanese animation, its own section
+    "ALTER TABLE series ADD COLUMN IF NOT EXISTS original_language VARCHAR(10)",
+    "ALTER TABLE series ADD COLUMN IF NOT EXISTS is_anime BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE series ADD COLUMN IF NOT EXISTS anime_override BOOLEAN",
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_language VARCHAR(10)",
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_anime BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS anime_override BOOLEAN",
 )
 
 

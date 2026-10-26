@@ -24,7 +24,8 @@ export function GeneralTab({
   onOverviewChange,
   onReleaseDateChange,
   showDate = true,
-}: GeneralTabProps) {
+  children,
+}: GeneralTabProps & { children?: React.ReactNode }) {
   const t = useTranslations("editMedia");
   return (
     <div className="flex flex-col gap-5">
@@ -52,6 +53,7 @@ export function GeneralTab({
           className="w-full px-3 py-2.5 rounded-lg bg-[#18181b] border border-[#3f3f46] text-sm text-[#fafafa] placeholder:text-[#52525b] outline-none focus:border-plex-orange focus:border-2 transition-colors resize-none"
         />
       </Field>
+      {children}
     </div>
   );
 }

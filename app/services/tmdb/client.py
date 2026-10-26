@@ -29,6 +29,17 @@ SEASON_PATTERNS = [
 ]
 
 
+# TMDB's Animation genre (its id: the names are translated)
+ANIMATION_GENRE = 16
+
+
+def is_anime(data: dict) -> bool:
+    """Japanese animation: the Animation genre and Japanese as the original language
+    (Rick and Morty is Animation too, in English: a series)."""
+    animated = any(g.get("id") == ANIMATION_GENRE for g in data.get("genres", []))
+    return animated and data.get("original_language") == "ja"
+
+
 def clean_tv_title(title: str) -> str:
     """Remove season indicators from TV show title for TMDB search."""
     cleaned = title.strip()
@@ -159,6 +170,8 @@ class TMDBClient:
             genres=genres,
             vote_average=r.get("vote_average"),
             content_rating=content_rating,
+            original_language=r.get("original_language"),
+            anime=is_anime(r),
         )
 
     async def get_person(self, person_id: int, language: str | None = None) -> dict | None:
@@ -308,6 +321,8 @@ class TMDBClient:
             genres=genres,
             vote_average=data.get("vote_average"),
             content_rating=content_rating,
+            original_language=data.get("original_language"),
+            anime=is_anime(data),
         )
 
     async def get_tv_credits(self, tmdb_id: int) -> list[CastMember]:

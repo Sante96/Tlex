@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Heart, Film, Tv, Music, Settings } from "lucide-react";
+import { Home, Heart, Film, Tv, Music, Origami } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+// Settings live in the avatar's menu (top bar): a seventh item was too narrow
 const navRoutes = [
   { key: "nav.home", href: "/", icon: Home },
   { key: "nav.movies", href: "/movies", icon: Film },
   { key: "nav.series", href: "/series", icon: Tv },
+  { key: "nav.anime", href: "/anime", icon: Origami },
   { key: "nav.concerts", href: "/concerts", icon: Music },
   { key: "nav.watchlist", href: "/watchlist", icon: Heart },
-  { key: "nav.settings", href: "/settings", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string) {
