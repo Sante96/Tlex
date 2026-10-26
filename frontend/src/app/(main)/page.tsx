@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context";
 import {
   getMediaList,
   getContinueWatching,
+  hideFromContinueWatching,
   triggerScan,
   getSeriesList,
   type MediaItem,
@@ -133,6 +134,13 @@ export default function HomePage() {
     }
   };
 
+  // Gone from the strip at once; the server keeps the place (the player asks whether to
+  // resume). If it fails, the list comes back as the server has it
+  const removeFromContinueWatching = (item: HeroItem) => {
+    setContinueWatching((list) => list.filter((w) => w.id !== item.id));
+    hideFromContinueWatching(item.id).catch(() => getContinueWatching(10).then(setContinueWatching));
+  };
+
   const handleScan = async () => {
     try {
       setScanning(true);
@@ -203,7 +211,7 @@ export default function HomePage() {
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>
       {/* Continue Watching lives in the hero: the title on top, the others in its strip */}
-      {hero.length > 0 && <HomeHero items={hero} />}
+      {hero.length > 0 && <HomeHero items={hero} onRemove={removeFromContinueWatching} />}
 
       {/* Film */}
       {media.length > 0 && (

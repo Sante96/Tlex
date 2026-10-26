@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,8 @@ class ProgressResponse(BaseModel):
     duration_seconds: int
     progress_percent: float
     completed: bool
+    # Taken out of Continue Watching: the player asks whether to resume
+    hidden: bool = False
 
 
 class ContinueWatchingItem(BaseModel):
@@ -78,6 +80,7 @@ async def get_progress(
         duration_seconds=progress.duration_seconds,
         progress_percent=progress.progress_percent,
         completed=progress.completed,
+        hidden=progress.hidden,
     )
 
 
@@ -113,6 +116,7 @@ async def update_progress(
 
     progress.position_seconds = data.position_seconds
     progress.duration_seconds = data.duration_seconds
+    progress.hidden = False  # watched again: back in Continue Watching
 
     # Mark as completed if watched > 90%
     if data.duration_seconds > 0:
@@ -151,6 +155,7 @@ async def get_continue_watching(
         .where(
             WatchProgress.profile_id == profile.id,
             WatchProgress.completed == False,  # noqa: E712
+            WatchProgress.hidden == False,  # noqa: E712
             WatchProgress.position_seconds > 0,
         )
         .order_by(WatchProgress.updated_at.desc())
@@ -210,6 +215,39 @@ async def get_continue_watching(
             break
 
     return items
+
+
+@router.post("/{media_id}/hide")
+async def hide_progress(
+    media_id: int,
+    db: AsyncSession = Depends(get_db),
+    profile: Profile = Depends(get_current_profile),
+):
+    """Take a title out of Continue Watching, keeping its place. An episode takes its whole
+    series out: else the series' next started episode would take its card."""
+    media = (
+        await db.execute(select(MediaItem.id, MediaItem.series_id).where(MediaItem.id == media_id))
+    ).first()
+    if media is None:
+        raise HTTPException(status_code=404, detail="Media not found")
+    titles = (
+        select(MediaItem.id).where(MediaItem.series_id == media.series_id)
+        if media.series_id is not None
+        else [media_id]
+    )
+    # Unfinished ones only: a finished episode stays watched
+    await db.execute(
+        update(WatchProgress)
+        .where(
+            WatchProgress.profile_id == profile.id,
+            WatchProgress.completed == False,  # noqa: E712
+            WatchProgress.media_item_id.in_(titles),
+        )
+        .values(hidden=True)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    return {"status": "ok"}
 
 
 @router.delete("/{media_id}")

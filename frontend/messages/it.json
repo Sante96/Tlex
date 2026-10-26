@@ -156,7 +156,8 @@
     "details": "Dettagli",
     "timeLeft": "Mancano {time}",
     "recentlyAdded": "Aggiunto di recente",
-    "recentConcerts": "Ultimi concerti"
+    "recentConcerts": "Ultimi concerti",
+    "removeFromContinue": "Rimuovi da Continua a guardare"
   },
   "settings": {
     "audio": {
@@ -372,6 +373,8 @@
     "itemMany": "titoli"
   },
   "player": {
+    "resumeFrom": "Riprendi da {time}",
+    "startOver": "Ricomincia dall'inizio",
     "play": "Play",
     "pause": "Pausa",
     "fullscreen": "Schermo intero",

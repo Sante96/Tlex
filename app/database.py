@@ -107,6 +107,8 @@ SCHEMA_UPGRADES = (
     # Archive groups (create_all has made archive_accounts before these run)
     "ALTER TABLE backup_channels ADD COLUMN IF NOT EXISTS archive_account_id INTEGER"
     " REFERENCES archive_accounts(id)",
+    # Titles taken out of Continue Watching
+    "ALTER TABLE watch_progress ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE",
 )
 
 

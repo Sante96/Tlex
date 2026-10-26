@@ -156,7 +156,8 @@
     "details": "Details",
     "timeLeft": "{time} left",
     "recentlyAdded": "Recently added",
-    "recentConcerts": "Latest concerts"
+    "recentConcerts": "Latest concerts",
+    "removeFromContinue": "Remove from Continue Watching"
   },
   "settings": {
     "audio": {
@@ -372,6 +373,8 @@
     "itemMany": "titles"
   },
   "player": {
+    "resumeFrom": "Resume from {time}",
+    "startOver": "Start over",
     "play": "Play",
     "pause": "Pause",
     "fullscreen": "Fullscreen",

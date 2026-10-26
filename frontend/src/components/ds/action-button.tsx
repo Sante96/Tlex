@@ -7,6 +7,8 @@ interface ActionButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
+  /** Focused on mount: the choice the TV remote starts on */
+  autoFocus?: boolean;
 }
 
 export function ActionButton({
@@ -15,11 +17,13 @@ export function ActionButton({
   children,
   onClick,
   className,
+  autoFocus,
 }: ActionButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      autoFocus={autoFocus}
       className={cn(
         "inline-flex items-center gap-2 h-11 rounded-[10px] text-[15px] transition-all duration-150",
         variant === "primary"

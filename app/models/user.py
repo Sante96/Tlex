@@ -3,7 +3,17 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -139,6 +149,11 @@ class WatchProgress(Base):
     position_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Taken out of Continue Watching by hand: the place is kept (the player asks whether to
+    # resume), and watching it again brings it back
+    hidden: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

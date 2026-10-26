@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Info, Play } from "lucide-react";
-import { ActionButton } from "@/components/ds";
+import { Info, Play, X } from "lucide-react";
+import { ActionButton, DSIconButton } from "@/components/ds";
 import { FadeImage } from "@/components/ui/fade-image";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format";
@@ -37,12 +37,20 @@ const HOVER_SELECT_MS = 200;
  * others at the bottom. Hovering or focusing a card shows it, clicking it plays it; the
  * hero moves on by itself every 8 s while nobody is pointing at it.
  */
-export function HomeHero({ items }: { items: HeroItem[] }) {
+export function HomeHero({
+  items,
+  onRemove,
+}: {
+  items: HeroItem[];
+  /** Out of Continue Watching: the titles being watched get a button on their card */
+  onRemove?: (item: HeroItem) => void;
+}) {
   const t = useTranslations();
   const router = useRouter();
   const [active, setActive] = useState(0);
-  // Backdrops mounted so far: the active one and the next stay loaded, for the crossfade
-  const [seen, setSeen] = useState<Set<number>>(() => new Set([0]));
+  // Backdrops mounted so far, by title (a removed card shifts the others' places): the
+  // active one and the next stay loaded, for the crossfade
+  const [seen, setSeen] = useState<Set<number>>(() => new Set(items[0] ? [items[0].id] : []));
   const [paused, setPaused] = useState(false);
   const [reducedMotion] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -50,10 +58,25 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const stripRef = useRef<HTMLDivElement>(null);
 
-  const select = useCallback((index: number) => {
-    setActive(index);
-    setSeen((s) => (s.has(index) ? s : new Set(s).add(index)));
-  }, []);
+  const select = useCallback(
+    (index: number) => {
+      const id = items[index]?.id;
+      setActive(index);
+      setSeen((s) => (id === undefined || s.has(id) ? s : new Set(s).add(id)));
+    },
+    [items],
+  );
+
+  // The removed card's title goes and the next one shows (the first after the last); the
+  // remote's focus moves on to the card that takes its place
+  const remove = (index: number, card: HTMLElement) => {
+    const nextFocus = (card.nextElementSibling ?? card.previousElementSibling)?.querySelector("a");
+    const shown = index === active ? (items[index + 1] ?? items[0]) : items[active];
+    setActive(Math.max(0, items.filter((_, i) => i !== index).indexOf(shown)));
+    setSeen((s) => new Set(s).add(shown.id));
+    onRemove?.(items[index]);
+    if (card.contains(document.activeElement)) requestAnimationFrame(() => nextFocus?.focus());
+  };
 
   const rotating = items.length > 1 && !paused && !reducedMotion;
   useEffect(() => {
@@ -84,6 +107,8 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
   }, [active, rotating]);
 
   const item = items[active] ?? items[0];
+  // A single title being watched gets its card too: it holds the remove button
+  const strip = items.length > 1 || (!!onRemove && item.progressPercent !== undefined);
   const next = (active + 1) % items.length;
   const resuming = item.progressPercent !== undefined;
   const left = item.remainingSeconds ? formatDuration(item.remainingSeconds) : null;
@@ -99,7 +124,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
           background is a warm gradient, and the hero ended on a hard black edge) */}
       <div className="absolute inset-0 overflow-hidden mask-[linear-gradient(to_bottom,black_55%,transparent)]">
         {items.map((it, i) =>
-          seen.has(i) || i === next ? (
+          seen.has(it.id) || i === next ? (
             <div
               key={it.id}
               className={cn(
@@ -122,7 +147,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         <div className="absolute inset-0 bg-linear-to-r from-[#09090b]/90 via-[#09090b]/50 to-transparent" />
         <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
         {/* From lg, under the cards on the right: their titles over the picture */}
-        {items.length > 1 && (
+        {strip && (
           <div className="hidden lg:block absolute inset-y-0 right-0 w-[28rem] bg-linear-to-l from-[#09090b]/85 via-[#09090b]/45 to-transparent" />
         )}
       </div>
@@ -171,7 +196,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
           </div>
         </div>
 
-        {items.length > 1 && (
+        {strip && (
           // relative: the cards' offsets are the strip's, for scrolling the active one in.
           // A row: more cards than fit scroll sideways, fading out at both edges (each
           // padding as wide as its fade, so the first and last cards clear it). Under lg
@@ -195,6 +220,9 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
                   hoverTimer.current = setTimeout(() => select(i), HOVER_SELECT_MS);
                 }}
                 onHoverEnd={() => clearTimeout(hoverTimer.current)}
+                onRemove={
+                  onRemove && it.progressPercent !== undefined ? (card) => remove(i, card) : undefined
+                }
               />
             ))}
           </div>
@@ -211,6 +239,7 @@ function StripCard({
   onShow,
   onHoverStart,
   onHoverEnd,
+  onRemove,
 }: {
   item: HeroItem;
   active: boolean;
@@ -219,48 +248,64 @@ function StripCard({
   onShow: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
+  /** Gets the card's element, for the focus to move on */
+  onRemove?: (card: HTMLElement) => void;
 }) {
+  const t = useTranslations();
   return (
-    <Link
-      href={item.playHref}
-      onFocus={onShow}
-      onPointerEnter={(e) => e.pointerType === "mouse" && onHoverStart()}
-      onPointerLeave={onHoverEnd}
-      className="group shrink-0 w-44 md:w-56 lg:w-48 outline-none"
-    >
-      <div
-        className={cn(
-          "relative aspect-video rounded-lg overflow-hidden bg-[#27272a] ring-2 transition-[box-shadow,transform] duration-200",
-          active ? "ring-plex-orange" : "ring-white/10 group-hover:ring-white/40",
-          "group-focus-visible:ring-plex-orange group-focus-visible:scale-105",
-        )}
+    // The button beside the link, not in it (no button inside a link): over the picture's
+    // corner, shown on hover with a mouse, always on touch screens and the TV
+    <div className="group/card relative shrink-0 w-44 md:w-56 lg:w-48">
+      <Link
+        href={item.playHref}
+        onFocus={onShow}
+        onPointerEnter={(e) => e.pointerType === "mouse" && onHoverStart()}
+        onPointerLeave={onHoverEnd}
+        className="group block outline-none"
       >
-        {item.stillUrl && (
-          <FadeImage
-            src={item.stillUrl}
-            alt=""
-            fill
-            sizes="(min-width: 1024px) 192px, (min-width: 768px) 224px, 176px"
-            className="object-cover"
-          />
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
-          <Play className="h-8 w-8 text-white fill-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div
+          className={cn(
+            "relative aspect-video rounded-lg overflow-hidden bg-[#27272a] ring-2 transition-[box-shadow,transform] duration-200",
+            active ? "ring-plex-orange" : "ring-white/10 group-hover:ring-white/40",
+            "group-focus-visible:ring-plex-orange group-focus-visible:scale-105",
+          )}
+        >
+          {item.stillUrl && (
+            <FadeImage
+              src={item.stillUrl}
+              alt=""
+              fill
+              sizes="(min-width: 1024px) 192px, (min-width: 768px) 224px, 176px"
+              className="object-cover"
+            />
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+            <Play className="h-8 w-8 text-white fill-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          {timing && (
+            <div className="absolute top-0 left-0 h-0.5 bg-white/80 animate-[hero-timer_8s_linear_forwards]" />
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
+            <div
+              className="h-full bg-plex-orange"
+              style={{ width: `${Math.min(100, item.progressPercent ?? 0)}%` }}
+            />
+          </div>
         </div>
-        {timing && (
-          <div className="absolute top-0 left-0 h-0.5 bg-white/80 animate-[hero-timer_8s_linear_forwards]" />
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
-          <div
-            className="h-full bg-plex-orange"
-            style={{ width: `${Math.min(100, item.progressPercent ?? 0)}%` }}
-          />
-        </div>
-      </div>
-      <p className={cn("mt-2 text-sm font-medium truncate", active ? "text-white" : "text-white/70")}>
-        {item.title}
-      </p>
-      {item.subtitle && <p className="text-xs text-white/50 truncate">{item.subtitle}</p>}
-    </Link>
+        <p className={cn("mt-2 text-sm font-medium truncate", active ? "text-white" : "text-white/70")}>
+          {item.title}
+        </p>
+        {item.subtitle && <p className="text-xs text-white/50 truncate">{item.subtitle}</p>}
+      </Link>
+      {onRemove && (
+        <DSIconButton
+          icon={<X className="h-4 w-4" />}
+          aria-label={t("home.removeFromContinue")}
+          title={t("home.removeFromContinue")}
+          onClick={(e) => onRemove(e.currentTarget.parentElement!)}
+          className="absolute top-1.5 right-1.5 z-10 h-7 w-7 rounded-full bg-black/60 text-white hover:bg-black/80 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/card:opacity-100 focus-visible:opacity-100"
+        />
+      )}
+    </div>
   );
 }

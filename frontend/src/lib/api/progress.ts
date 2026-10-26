@@ -6,6 +6,8 @@ export interface WatchProgress {
   duration_seconds: number;
   progress_percent: number;
   completed: boolean;
+  /** Taken out of Continue Watching: the player asks whether to resume */
+  hidden: boolean;
 }
 
 export interface ContinueWatchingItem {
@@ -88,4 +90,9 @@ export async function getContinueWatching(
   } catch {
     return [];
   }
+}
+
+/** Out of Continue Watching, keeping the place (an episode takes its whole series out) */
+export async function hideFromContinueWatching(mediaId: number): Promise<void> {
+  await api.post(`/api/v1/progress/${mediaId}/hide`);
 }

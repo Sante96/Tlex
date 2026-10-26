@@ -4,15 +4,15 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { isAxiosError } from "axios";
-import { ArrowLeft } from "lucide-react";
-import { DSButton } from "@/components/ds";
+import { ArrowLeft, Play, RotateCcw } from "lucide-react";
+import { ActionButton, DSButton, DSIconButton } from "@/components/ds";
 import { VideoPlayer } from "@/components/player";
 import {
   getMediaDetails,
   getWatchProgress,
   type MediaDetails,
 } from "@/lib/api";
-import { cleanEpisodeTitle } from "@/lib/format";
+import { cleanEpisodeTitle, formatTime, getTmdbImageUrl } from "@/lib/format";
 import { useProfile } from "@/contexts/profile-context";
 import { AuthGuard } from "@/components/auth-guard";
 
@@ -36,6 +36,8 @@ function Watch() {
 
   const [media, setMedia] = useState<MediaDetails | null>(null);
   const [initialPosition, setInitialPosition] = useState(0);
+  // Taken out of Continue Watching: where it was, until the viewer picks resume or start over
+  const [askFrom, setAskFrom] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,8 @@ function Watch() {
         ]);
         setMedia(data);
         if (progress && !progress.completed && progress.position_seconds > 0) {
-          setInitialPosition(progress.position_seconds);
+          if (progress.hidden) setAskFrom(progress.position_seconds);
+          else setInitialPosition(progress.position_seconds);
         }
       } catch (e) {
         setError(
@@ -111,6 +114,7 @@ function Watch() {
 
   const isEpisode = media.media_type === "EPISODE";
   const isConcert = media.media_type === "CONCERT";
+  const title = isEpisode ? cleanEpisodeTitle(media.title) : media.title;
   // A concert's songs: the setlist's titles over the file's (lines past the last
   // chapter have nothing to name)
   const chapters = isConcert
@@ -120,13 +124,50 @@ function Watch() {
   const episodeSubtitle = isEpisode
     ? `S${media.season_number || 1} · E${media.episode_number || 1}`
     : undefined;
+  const subtitle = isConcert ? (media.franchise_title ?? undefined) : episodeSubtitle;
+
+  if (askFrom !== null) {
+    const backdrop = getTmdbImageUrl(media.backdrop_path, "w1280");
+    const start = (position: number) => {
+      setInitialPosition(position);
+      setAskFrom(null);
+    };
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center px-6">
+        {backdrop && (
+          // eslint-disable-next-line @next/next/no-img-element -- a dimmed backdrop, any size
+          <img src={backdrop} alt="" className="absolute inset-0 size-full object-cover opacity-25" />
+        )}
+        <DSIconButton
+          icon={<ArrowLeft className="h-5 w-5" />}
+          aria-label={t("common.back")}
+          onClick={() => router.back()}
+          className="absolute top-4 left-4 h-10 w-10 text-white"
+        />
+        <div className="relative flex flex-col items-center gap-6 text-center text-shadow">
+          <div className="flex flex-col gap-1">
+            {subtitle && <p className="text-sm text-white/70">{subtitle}</p>}
+            <h1 className="text-2xl md:text-4xl font-bold text-white">{title}</h1>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <ActionButton autoFocus icon={<Play className="h-5 w-5 fill-current" />} onClick={() => start(askFrom)}>
+              {t("player.resumeFrom", { time: formatTime(askFrom) })}
+            </ActionButton>
+            <ActionButton variant="secondary" icon={<RotateCcw className="h-5 w-5" />} onClick={() => start(0)}>
+              {t("player.startOver")}
+            </ActionButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black">
       <VideoPlayer
         mediaId={mediaId}
-        title={isEpisode ? cleanEpisodeTitle(media.title) : media.title}
-        subtitle={isConcert ? (media.franchise_title ?? undefined) : episodeSubtitle}
+        title={title}
+        subtitle={subtitle}
         audioTracks={audioTracks}
         subtitleTracks={subtitleTracks}
         initialDuration={media.duration_seconds || undefined}
