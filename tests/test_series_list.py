@@ -79,3 +79,7 @@ async def test_recent_sort_puts_newest_first(
 
     assert [m["title"] for m in movies.json()["items"]] == ["B Film", "A Film"]
     assert [s["title"] for s in series.json()["items"]] == ["Z Old", "A New"]
+    # The home's hero compares films and series by these ids: both series got an episode
+    # after the films
+    newest_film = movies.json()["items"][0]["id"]
+    assert all(s["latest_media_id"] > newest_film for s in series.json()["items"])

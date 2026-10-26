@@ -29,6 +29,7 @@ function heroItems(
   watching: ContinueWatchingItem[],
   movies: MediaItem[],
   series: SeriesItem[],
+  concerts: MediaItem[],
   t: ReturnType<typeof useTranslations>,
 ): HeroItem[] {
   const current = watching.filter((w) => w.backdrop_path);
@@ -50,31 +51,33 @@ function heroItems(
       remainingSeconds: w.duration_seconds - w.position_seconds,
     }));
   }
-  const movie = movies.find((m) => m.backdrop_path);
-  if (movie) {
-    return [{
-      id: movie.id,
-      label: t("home.recentlyAdded"),
-      title: movie.title,
-      overview: movie.overview,
-      backdropUrl: getTmdbImageUrl(movie.backdrop_path, "original")!,
-      playHref: `/watch/${movie.id}`,
-      detailsHref: `/media/${movie.id}`,
-    }];
-  }
-  const show = series.find((s) => s.backdrop_path);
-  if (show) {
-    return [{
-      id: show.id,
-      label: t("home.recentlyAdded"),
-      title: show.title,
-      overview: show.overview,
-      backdropUrl: getTmdbImageUrl(show.backdrop_path, "original")!,
-      playHref: `/series/${show.id}`,
-      detailsHref: `/series/${show.id}`,
-    }];
-  }
-  return [];
+  // Films, concerts and series together: a series added after the films was never shown.
+  // Ids order them, a series by its newest episode's
+  const newest = [
+    ...[...movies, ...concerts].map((m) => ({
+      added: m.id,
+      backdrop: m.backdrop_path,
+      item: { ...m, playHref: `/watch/${m.id}`, detailsHref: `/media/${m.id}` },
+    })),
+    ...series.map((s) => ({
+      added: s.latest_media_id ?? 0,
+      backdrop: s.backdrop_path,
+      item: { ...s, playHref: `/series/${s.id}`, detailsHref: `/series/${s.id}` },
+    })),
+  ]
+    .filter((c) => c.backdrop)
+    .sort((a, b) => b.added - a.added)[0];
+  if (!newest) return [];
+  const { item } = newest;
+  return [{
+    id: item.id,
+    label: t("home.recentlyAdded"),
+    title: item.title,
+    overview: item.overview,
+    backdropUrl: getTmdbImageUrl(newest.backdrop, "original")!,
+    playHref: item.playHref,
+    detailsHref: item.detailsHref,
+  }];
 }
 
 export default function HomePage() {
@@ -192,7 +195,7 @@ export default function HomePage() {
     );
   }
 
-  const hero = heroItems(continueWatching, media, series, t);
+  const hero = heroItems(continueWatching, media, series, concerts, t);
 
   return (
     <div className={`flex flex-col gap-8 ${isTV ? "px-8 py-8" : "px-4 md:px-8 py-6 md:py-8"}`}>

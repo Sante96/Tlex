@@ -78,12 +78,15 @@ async def list_series(
             MediaItem.series_id,
             func.count(func.distinct(func.nullif(MediaItem.season_number, 0))),
             func.count(MediaItem.id),
+            func.max(MediaItem.id),
         )
         .where(MediaItem.series_id.in_([s.id for s in series_list]))
         .group_by(MediaItem.series_id)
     )
+    # And the newest episode's id: the home compares it with films' ids, newest first
     counts = {
-        series_id: (seasons, episodes) for series_id, seasons, episodes in counts_result.all()
+        series_id: (seasons, episodes, latest)
+        for series_id, seasons, episodes, latest in counts_result.all()
     }
 
     # Fetch per-user overrides
@@ -106,8 +109,9 @@ async def list_series(
             "genres": s.genres.split(",") if s.genres else [],
             "vote_average": s.vote_average,
             "content_rating": s.content_rating,
-            "seasons_count": counts.get(s.id, (0, 0))[0],
-            "episodes_count": counts.get(s.id, (0, 0))[1],
+            "seasons_count": counts.get(s.id, (0, 0, None))[0],
+            "episodes_count": counts.get(s.id, (0, 0, None))[1],
+            "latest_media_id": counts.get(s.id, (0, 0, None))[2],
         }
         apply_series_override(item_data, overrides_map.get(s.id))
         items.append(item_data)

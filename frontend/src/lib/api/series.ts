@@ -14,6 +14,8 @@ export interface SeriesItem {
   content_rating: string | null;
   seasons_count: number;
   episodes_count: number;
+  /** Its newest episode's id: comparable with films' ids, for what was added last */
+  latest_media_id: number | null;
 }
 
 export interface EpisodeWatchProgress {
