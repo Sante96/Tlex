@@ -53,6 +53,9 @@ MAX_BLOCK = 1024 * 1024
 MERGE_GAP = 4096  # windows closer than this are fetched in one request
 MAX_MERGED = 64 * 1024
 CONCURRENT_READS = 16
+# A background warm-up: at 16 Telegram slowed both accounts down (FLOOD_WAIT, and the free
+# account's FLOOD_PREMIUM_WAIT) within seconds
+BACKGROUND_READS = 2
 
 
 @dataclass
@@ -153,6 +156,7 @@ async def extract_cued_blocks(
     segment_data_start: int,
     timecode_scale: int,
     block_window: int = BLOCK_WINDOW,
+    concurrent_reads: int = CONCURRENT_READS,
 ) -> dict[int, list[SubtitleEvent]]:
     """Read only the indexed subtitle blocks: a small window per block, nearby ones merged.
 
@@ -182,7 +186,7 @@ async def extract_cued_blocks(
             windows.append([start, end])
         placed.append((len(windows) - 1, base, track, cue))
 
-    semaphore = asyncio.Semaphore(CONCURRENT_READS)
+    semaphore = asyncio.Semaphore(concurrent_reads)
 
     async def fetch(start: int, end: int) -> bytes:
         async with semaphore:

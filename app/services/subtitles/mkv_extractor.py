@@ -14,6 +14,8 @@ from loguru import logger
 
 from app.services.mkv_cues import extract_timecode_scale
 from app.services.subtitles.cluster_reader import (
+    BACKGROUND_READS,
+    CONCURRENT_READS,
     extract_cued_blocks,
     extract_via_cues,
     extract_via_scan,
@@ -65,13 +67,16 @@ async def extract_all_subtitles(
 
             cues = await read_cues(reader, header, segment_data_start)
             indexed = parse_subtitle_cues(cues, text | pgs) if cues else {}
+            reads = CONCURRENT_READS if full_read else BACKGROUND_READS
             cued = {n: c for n, c in indexed.items() if c and n in text}
             if cued:
-                events = await extract_cued_blocks(reader, cued, segment_data_start, timecode_scale)
+                events = await extract_cued_blocks(
+                    reader, cued, segment_data_start, timecode_scale, concurrent_reads=reads
+                )
             cued = {n: c for n, c in indexed.items() if c and n in pgs}
             if cued:
                 events |= await extract_cued_blocks(
-                    reader, cued, segment_data_start, timecode_scale, PGS_BLOCK_WINDOW
+                    reader, cued, segment_data_start, timecode_scale, PGS_BLOCK_WINDOW, reads
                 )
 
             rest = text - events.keys()

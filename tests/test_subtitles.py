@@ -695,6 +695,25 @@ class TestExtractAllSubtitles:
         assert [events for _, events in result] == [None, None]  # no cues: left for a request
         assert reader.read_range_calls == [(0, 1024 * 1024)]  # the header, nothing else
 
+    async def test_a_background_run_reads_two_blocks_at_a_time(self):
+        # 16 requests at once for a warm-up got the accounts throttled by Telegram: what
+        # nobody waits for goes slowly, a request for a track still goes fast
+        class CountingReader(MockReader):
+            now = most = 0
+
+            async def read_window(self, start, end):
+                self.now += 1
+                self.most = max(self.most, self.now)
+                await asyncio.sleep(0)
+                self.now -= 1
+                return await super().read_window(start, end)
+
+        for full_read, most in ((True, len(LINES)), (False, 2)):
+            reader = CountingReader(_mkv())
+            result = await extract_all_subtitles(reader, full_read)
+            assert result is not None and _lines(result[0][1]) == LINES
+            assert reader.most == most
+
     async def test_pgs_blocks_read_through_their_cues(self):
         reader = MockReader(_mkv(pgs_blocks=True))
         result = await extract_all_subtitles(reader)
