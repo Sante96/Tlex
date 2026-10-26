@@ -173,15 +173,15 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
 
         {items.length > 1 && (
           // relative: the cards' offsets are the strip's, for scrolling the active one in.
-          // A column of its own height at most: more cards scroll inside it
-          // From lg a row at the bottom right, beside the text: more cards than fit scroll
-          // sideways, fading out at both edges (the padding lets the first and last ones
-          // clear the fades). The mouse over the cards holds the rotation (not over the whole hero)
+          // A row: more cards than fit scroll sideways, fading out at both edges (each
+          // padding as wide as its fade, so the first and last cards clear it). Under lg
+          // it runs to the screen's edges; from lg it sits at the bottom right, beside the
+          // text. The mouse over the cards holds the rotation (not over the whole hero)
           <div
             ref={stripRef}
             onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
             onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
-            className="relative flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1 lg:pl-6 lg:pr-12 lg:min-w-0 lg:max-w-[45%] lg:mask-[linear-gradient(to_right,transparent,black_24px,black_calc(100%-48px),transparent)]"
+            className="relative flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide py-1 -mx-4 pl-4 pr-8 md:-mx-8 md:pl-8 md:pr-12 lg:-mx-1 lg:pl-6 lg:pr-12 lg:min-w-0 lg:max-w-[45%] mask-[linear-gradient(to_right,transparent,black_16px,black_calc(100%-32px),transparent)] md:mask-[linear-gradient(to_right,transparent,black_32px,black_calc(100%-48px),transparent)] lg:mask-[linear-gradient(to_right,transparent,black_24px,black_calc(100%-48px),transparent)]"
           >
             {items.map((it, i) => (
               <StripCard
