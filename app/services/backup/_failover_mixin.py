@@ -20,6 +20,11 @@ from app.models.backup import BackupChannel, BackupMessage
 from app.services.backup._create_mixin import BackupCreateMixin
 
 
+def backup_topic_id(entry: dict | int) -> int:
+    """A topic_map value: {"backup_id": id, "name": name}, or the bare id of older rows."""
+    return entry["backup_id"] if isinstance(entry, dict) else entry
+
+
 class BackupFailoverMixin(BackupCreateMixin):
     async def check_health(
         self,
@@ -99,8 +104,8 @@ class BackupFailoverMixin(BackupCreateMixin):
                 continue
             part.channel_id = new_main
             part.message_id = backup_msg_id
-            if part.topic_id is not None:
-                part.topic_id = topic_map.get(str(part.topic_id), part.topic_id)
+            if part.topic_id is not None and str(part.topic_id) in topic_map:
+                part.topic_id = backup_topic_id(topic_map[str(part.topic_id)])
         logger.info(
             f"[BACKUP] Redirected {len(parts) - unsynced} MediaPart records to new main"
             + (f", {unsynced} left on the old channel (not in the backup)" if unsynced else "")

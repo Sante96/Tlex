@@ -4,6 +4,7 @@ watch-progress races, worker removal and backup promotion."""
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy import select
 
 from app.core.worker_manager import WorkerManager
@@ -145,11 +146,15 @@ async def test_remove_worker_leaves_other_workers_running():
 # ---------------------------------------------------------------------------
 
 
-async def test_promote_remaps_message_and_topic_ids(test_session, mocker):
+@pytest.mark.parametrize(
+    "topic_map",
+    [{"7": {"backup_id": 70, "name": "Film"}}, {"7": 70}],  # as stored today; older rows
+)
+async def test_promote_remaps_message_and_topic_ids(test_session, mocker, topic_map):
     from app.models.backup import BackupChannel, BackupMessage
     from app.models.media import MediaItem, MediaPart, MediaType
 
-    backup = BackupChannel(main_channel_id=-100, backup_channel_id=-200, title="B", topic_map={"7": 70})
+    backup = BackupChannel(main_channel_id=-100, backup_channel_id=-200, title="B", topic_map=topic_map)
     media = MediaItem(title="M", media_type=MediaType.MOVIE)
     test_session.add_all([backup, media])
     await test_session.flush()
