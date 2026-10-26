@@ -232,7 +232,8 @@ export function SearchBar({ className, compact }: { className?: string; compact?
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => hasResults && setIsOpen(true)}
-          className={`bg-transparent border-none outline-none text-[#fafafa] placeholder:text-[#71717a] w-full ${compact ? "text-xs" : "text-sm"}`}
+          // 16 px on a phone: iOS zooms the page in on focusing a smaller field
+          className={`bg-transparent border-none outline-none text-[#fafafa] placeholder:text-[#71717a] w-full ${compact ? "text-xs" : "text-base md:text-sm"}`}
         />
       </div>
 
@@ -249,7 +250,9 @@ export function SearchBar({ className, compact }: { className?: string; compact?
             right: className ? 0 : "auto",
           }}
         >
-          <div className="rounded-2xl overflow-hidden">
+          {/* Its own scroll, held inside: grown past the screen, the panel's end was
+              reached by scrolling the page under it */}
+          <div className="rounded-2xl overflow-y-auto overscroll-contain max-h-[min(70vh,calc(100dvh-6rem))]">
             {hasResults ? (
               <div className="p-2 flex flex-col gap-1">
                 {/* Films section */}
