@@ -5,6 +5,11 @@ import { api } from "./client";
 // the other's stream. Not crypto.randomUUID: it's missing on http:// from the LAN
 const VIEWER = Math.random().toString(36).slice(2, 10);
 
+// Bytes of the current /play stream the page has read, reported with the client-ring
+// poll: Safari keeps downloading what the page doesn't read (it piled up 600 MB and iOS
+// reloaded the page), so the backend holds the stream a bounded amount past this
+export const streamRead = { bytes: 0 };
+
 export function getStreamUrl(
   mediaId: number,
   options?: {
@@ -70,7 +75,7 @@ export async function getStreamClients(
 ): Promise<{ inUse: number; total: number } | null> {
   try {
     const response = await api.get<{ in_use: number; total: number }>(
-      `/api/v1/stream/clients/${mediaId}?v=${VIEWER}`,
+      `/api/v1/stream/clients/${mediaId}?v=${VIEWER}&read=${streamRead.bytes}`,
     );
     return { inUse: response.data.in_use, total: response.data.total };
   } catch {

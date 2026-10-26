@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { streamRead } from "@/lib/api/stream";
 
 // Download at most this far past the playhead: the rest of the browser's quota (~150 MB
 // of video in desktop Chrome) keeps played video for backward seeks. Past the quota the
@@ -64,6 +65,7 @@ async function feed(
   if (!response.ok || !response.body) throw new Error(`stream ${response.status}`);
   onHeaders(response.headers);
   const reader = response.body.getReader();
+  streamRead.bytes = 0; // a new stream: the backend counts it from zero too
   const ahead = () => video.buffered.end(video.buffered.length - 1) - video.currentTime;
   let sb: SourceBuffer | null = null;
   let head = new Uint8Array(0);
@@ -71,6 +73,7 @@ async function feed(
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
+    streamRead.bytes += value.byteLength;
     let chunk = value;
     if (!sb) {
       const joined = new Uint8Array(head.length + value.length);

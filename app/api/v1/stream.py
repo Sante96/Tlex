@@ -27,6 +27,27 @@ from app.services.streaming.telegram import refresh_all_file_ids
 # token: /play puts it in the URL ffmpeg reads
 VIEWER = Query("", pattern=r"^[A-Za-z0-9-]{0,64}$", description="The player's id")
 
+# Flow control for /play. Safari keeps downloading a fetch body the page doesn't read
+# (the player stops reading 60 s ahead): on an iPhone 600 MB piled up in its memory in
+# 3 minutes, and iOS reloaded the page. The player reports with its client-ring poll how
+# many bytes of the stream it has read; /play stops sending MAX_UNREAD past that. Chrome
+# slows the stream by itself and never gets near it.
+MAX_UNREAD = 48 * 1024 * 1024  # a 4K concert's 3 s or so: covers the 2 s between reports
+_read: dict[tuple[int, str], int] = {}
+
+
+async def _paced(chunks, key: tuple[int, str]):
+    """The stream, held while the page is MAX_UNREAD behind. A page that has never
+    reported (an older player) is not held."""
+    sent = 0
+    async with aclosing(chunks) as stream:
+        async for chunk in stream:
+            while key in _read and sent - _read[key] > MAX_UNREAD:
+                await asyncio.sleep(0.25)
+            sent += len(chunk)
+            yield chunk
+
+
 settings = get_settings()
 router = APIRouter()
 
@@ -215,11 +236,17 @@ async def pool_status() -> dict:
 
 
 @router.get("/clients/{media_id}")
-async def stream_clients(media_id: int, v: str = VIEWER) -> dict:
+async def stream_clients(
+    media_id: int,
+    v: str = VIEWER,
+    read: int | None = Query(None, ge=0, description="Bytes of the /play stream read"),
+) -> dict:
     """The player's client ring: the clients this title's stream holds, of the pool's.
 
     In-memory, no DB: the player asks every couple of seconds.
     """
+    if read is not None and v:
+        _read[(media_id, v)] = read
     return {
         "in_use": reader_clients(media_id, v),
         "total": worker_manager.pool_status()["total_clients"],
@@ -235,6 +262,7 @@ async def stream_release(media_id: int, v: str = VIEWER) -> dict:
     This immediately frees the Telegram worker clients back to the pool.
     """
     await release_reader(media_id, viewer=v)
+    _read.pop((media_id, v), None)
     logger.info(f"[RELEASE] Released stream reader for media {media_id}")
     return {"status": "ok"}
 
@@ -453,13 +481,18 @@ async def stream_play(
         hevc=video_codec == "hevc",
     )
 
+    # A new stream (start, seek, audio track) counts its bytes from zero: until the page
+    # reports on it, it isn't held
+    key = (media_id, v)
+    _read.pop(key, None)
+
     # The request's session would hold its pool connection for the whole film
     await session.close()
     # 200 without ranges: a live remux can't serve byte ranges, and Chromium
     # (desktop and the Android TV WebView) rejects the invalid
     # "Content-Range: bytes 0-*/*" this used to send as a format error.
     return StreamingResponse(
-        _counted(ffmpeg_remuxer.stream(input_url, options), media_id, v),
+        _counted(_paced(ffmpeg_remuxer.stream(input_url, options), key), media_id, v),
         media_type="video/mp4",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
