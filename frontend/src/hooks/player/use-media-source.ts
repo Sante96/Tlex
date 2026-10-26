@@ -9,6 +9,13 @@ const AHEAD_SECONDS = 60;
 // server again. Left to the browser, Safari evicts only what is 30 s behind: at a 4K
 // concert's bitrate that alone is past its quota, and playback stopped at the buffer's end
 const BEHIND_SECONDS = 10;
+// Safari on iPhone and iPad (the only browsers with -webkit-touch-callout) evicts by
+// itself past ~100 MB, and not only played video: an iPad cut out the playhead's own
+// range and stalled 5 s into a seek (buffer [8, 34.7] [63.1, 93.5], a 14 Mbit/s film).
+// There the buffer stays under that in bytes as well, at the title's bitrate
+const IOS = typeof CSS !== "undefined" && CSS.supports("-webkit-touch-callout", "none");
+const MAX_AHEAD_BYTES = 48e6;
+const MAX_BEHIND_BYTES = 16e6;
 // The init segment (ftyp + moov) comes before the first fragment
 const MAX_INIT_BYTES = 4 * 1024 * 1024;
 
@@ -113,6 +120,13 @@ async function feed(
   const reader = response.body.getReader();
   streamRead.bytes = 0; // a new stream: the backend counts it from zero too
   const ahead = () => video.buffered.end(video.buffered.length - 1) - video.currentTime;
+  // The stream's bitrate so far (bytes per second of video), for the iOS byte limits
+  const perSecond = () =>
+    streamRead.bytes / Math.max(1, video.buffered.end(video.buffered.length - 1));
+  const aheadLimit = () =>
+    IOS ? Math.min(AHEAD_SECONDS, MAX_AHEAD_BYTES / perSecond()) : AHEAD_SECONDS;
+  const behindLimit = () =>
+    IOS ? Math.min(BEHIND_SECONDS, Math.max(1, MAX_BEHIND_BYTES / perSecond())) : BEHIND_SECONDS;
   let sb: SourceBuffer | null = null;
   let head = new Uint8Array(0);
 
@@ -154,9 +168,9 @@ async function feed(
       }
     }
     await appended(sb);
-    await trimBehind(video, sb, BEHIND_SECONDS);
+    if (video.buffered.length) await trimBehind(video, sb, behindLimit());
 
-    while (video.buffered.length && ahead() > AHEAD_SECONDS) {
+    while (video.buffered.length && ahead() > aheadLimit()) {
       await sleep(1000);
       if (signal.aborted) return true;
     }
