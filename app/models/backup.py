@@ -10,11 +10,25 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+class ArchiveAccount(Base):
+    """A Telegram account kept out of streaming: it owns an archive group (a backup no
+    worker is in) and goes online once a day to fill it, so a ban of the workers, who
+    make thousands of requests a day, can't take it down with them."""
+
+    __tablename__ = "archive_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    phone_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    session_string: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class BackupChannel(Base):
@@ -38,6 +52,11 @@ class BackupChannel(Base):
     is_promoted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # An archive group: its account fills it, never promoted on its own, no stream fallback.
+    # Not SET NULL: the account's removal would turn its group into a workers' backup
+    archive_account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("archive_accounts.id"), nullable=True
+    )
 
     messages: Mapped[list["BackupMessage"]] = relationship(
         "BackupMessage", back_populates="backup_channel", cascade="all, delete-orphan"

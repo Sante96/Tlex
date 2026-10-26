@@ -28,7 +28,7 @@ settings = get_settings()
 BACKUP_DIR = Path("db-backups")
 KEEP = 7
 # Account takeover material: Telegram sessions, live login tokens, pending TV logins
-SECRET_TABLES = ("workers", "refresh_tokens", "device_codes")
+SECRET_TABLES = ("workers", "archive_accounts", "refresh_tokens", "device_codes")
 DUMP_TIMEOUT = 300
 
 
@@ -63,7 +63,10 @@ async def _send(path: Path) -> None:
 
     async with async_session_maker() as session:
         chat_id = await session.scalar(
-            select(BackupChannel.backup_channel_id).where(BackupChannel.is_active).limit(1)
+            # Not an archive group: no worker is in it
+            select(BackupChannel.backup_channel_id)
+            .where(BackupChannel.is_active, BackupChannel.archive_account_id.is_(None))
+            .limit(1)
         )
     if chat_id is None:
         logger.info("[DB BACKUP] No backup group: the copy stays on this machine only")

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_admin_user, get_current_user, get_db
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
-from app.models import MediaItem, Profile, User
+from app.models import ArchiveAccount, MediaItem, Profile, User
 from app.models.media import MediaType
 from app.models.worker import Worker, WorkerStatus
 
@@ -88,6 +88,8 @@ class VerifyCodeRequest(BaseModel):
     phone_number: str
     code: str
     password: str | None = None  # 2FA password if needed
+    # An archive account (owner of an archive group): saved apart, never streams
+    archive: bool = False
 
 
 @router.post("/workers/send-code")
@@ -204,15 +206,30 @@ async def verify_code(
         except Exception:
             pass  # Fall back to sign_in value
 
-        # Check if worker already exists
-        existing = await db.execute(select(Worker).where(Worker.phone_number == phone))
-        if existing.scalar_one_or_none():
+        # A number is a worker or an archive account, once
+        existing = await db.scalar(select(Worker.id).where(Worker.phone_number == phone))
+        existing = existing or await db.scalar(
+            select(ArchiveAccount.id).where(ArchiveAccount.phone_number == phone)
+        )
+        if existing:
             del _pending_auth[phone]
             try:
                 await client.stop()
             except Exception:
                 pass
             raise HTTPException(status_code=400, detail="Worker with this phone already exists")
+
+        if body.archive:
+            account = ArchiveAccount(phone_number=phone, session_string=session_string)
+            db.add(account)
+            await db.commit()
+            try:
+                await client.stop()
+            except Exception:
+                pass
+            del _pending_auth[phone]
+            logger.info(f"Added archive account {phone}")
+            return {"status": "ok", "archive_account_id": account.id}
 
         # Save to DB
         worker = Worker(

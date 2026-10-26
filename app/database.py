@@ -104,6 +104,9 @@ SCHEMA_UPGRADES = (
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_profile_media"
     " ON watchlist (profile_id, media_item_id)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_profile_series ON watchlist (profile_id, series_id)",
+    # Archive groups (create_all has made archive_accounts before these run)
+    "ALTER TABLE backup_channels ADD COLUMN IF NOT EXISTS archive_account_id INTEGER"
+    " REFERENCES archive_accounts(id)",
 )
 
 

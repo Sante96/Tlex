@@ -3,11 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import DBSession, get_admin_user
 from app.core.worker_manager import worker_manager
-from app.models.backup import BackupChannel
+from app.models.backup import ArchiveAccount, BackupChannel
+from app.services.backup.archive import archive_client, join_main
 from app.services.backup.service import backup_service
 
 router = APIRouter(prefix="/backup", tags=["backup"])
@@ -35,6 +36,8 @@ class CreateBackupRequest(BaseModel):
     main_channel_id: int
     title: str
     invite_members: bool = True
+    # An archive group of that account instead of a workers' backup
+    archive_account_id: int | None = None
 
 
 class BackupTopicOut(BaseModel):
@@ -56,6 +59,7 @@ class BackupChannelOut(BaseModel):
     max_failures: int
     last_failure_at: str | None
     topics: list[BackupTopicOut]
+    archive_account_id: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -86,6 +90,7 @@ class BackupChannelOut(BaseModel):
             max_failures=obj.max_failures,
             last_failure_at=obj.last_failure_at.isoformat() if obj.last_failure_at else None,
             topics=topics,
+            archive_account_id=obj.archive_account_id,
         )
 
 
@@ -113,6 +118,9 @@ async def create_backup(
     if not worker_result:
         raise HTTPException(503, "No workers available")
     _, client = worker_result
+
+    if body.archive_account_id is not None:
+        return await _create_archive(session, client, body, body.archive_account_id)
 
     try:
         backup = await backup_service.create_backup_channel(
@@ -149,6 +157,30 @@ async def create_backup(
     return BackupChannelOut.from_orm(backup)
 
 
+async def _create_archive(
+    session: DBSession, worker, body: CreateBackupRequest, account_id: int
+) -> BackupChannelOut:
+    """The account makes the group and forwards the messages itself: they are its own,
+    and no worker is let in (no members invited, no admins promoted)."""
+    account = await session.get(ArchiveAccount, account_id)
+    if account is None:
+        raise HTTPException(404, "Archive account not found")
+    async with archive_client(session, account) as archive:
+        await join_main(worker, archive, body.main_channel_id)
+        try:
+            backup = await backup_service.create_backup_channel(
+                session, archive, body.main_channel_id, body.title, archive_account_id=account.id
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        try:
+            synced = await backup_service.sync_messages(session, archive, backup)
+            logger.info(f"Archive {backup.id}: {synced} messages forwarded")
+        except Exception as e:
+            logger.warning(f"Archive first sync partially failed: {e}")
+    return BackupChannelOut.from_orm(backup)
+
+
 @router.post("/channels/{backup_id}/sync")
 async def sync_backup(
     backup_id: int,
@@ -166,7 +198,10 @@ async def sync_backup(
         raise HTTPException(503, "No workers available")
     _, client = worker_result
 
-    synced = await backup_service.sync_messages(session, client, backup)
+    if backup.archive_account_id is not None:
+        synced = await backup_service.sync_archive(session, client, backup)
+    else:
+        synced = await backup_service.sync_messages(session, client, backup)
     return {"synced": synced, "total": backup.synced_count}
 
 
@@ -200,6 +235,13 @@ async def promote_backup(
         raise HTTPException(404, "Backup channel not found")
     if backup.is_promoted:
         raise HTTPException(400, "Already promoted")
+
+    if backup.archive_account_id is not None:
+        try:
+            new_backup = await backup_service.promote_archive(session, backup)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return BackupChannelOut.from_orm(new_backup)
 
     worker_result = await worker_manager.get_best_worker(session)
     if not worker_result:
@@ -243,14 +285,66 @@ async def delete_backup(
         raise HTTPException(404, "Backup channel not found")
 
     backup_tg_id = backup.backup_channel_id
+    account = (
+        await session.get(ArchiveAccount, backup.archive_account_id)
+        if backup.archive_account_id
+        else None
+    )
     await session.delete(backup)
     await session.commit()
 
     if delete_telegram:
         try:
-            worker_result = await worker_manager.get_best_worker(session)
-            if worker_result:
+            if account is not None:  # only its owner can delete an archive group
+                async with archive_client(session, account) as archive:
+                    await archive.get_chat(backup_tg_id)  # its access hash
+                    await backup_service.delete_telegram_group(archive, backup_tg_id)
+            elif worker_result := await worker_manager.get_best_worker(session):
                 _, client = worker_result
                 await backup_service.delete_telegram_group(client, backup_tg_id)
         except Exception as e:
             logger.warning(f"[BACKUP] Could not delete Telegram group {backup_tg_id}: {e}")
+
+
+# ============================================================================
+# Archive accounts (their login is the workers' one, with archive=true)
+# ============================================================================
+
+
+class ArchiveAccountOut(BaseModel):
+    id: int
+    phone: str  # last 4 digits, as for workers
+    groups: int
+
+
+@router.get("/archive-accounts", response_model=list[ArchiveAccountOut])
+async def list_archive_accounts(
+    session: DBSession, _admin=Depends(get_admin_user)
+) -> list[ArchiveAccountOut]:
+    groups = (
+        select(func.count(BackupChannel.id))
+        .where(BackupChannel.archive_account_id == ArchiveAccount.id)
+        .scalar_subquery()
+    )
+    rows = await session.execute(select(ArchiveAccount, groups).order_by(ArchiveAccount.id))
+    return [
+        ArchiveAccountOut(id=account.id, phone=account.phone_number[-4:], groups=count)
+        for account, count in rows.tuples().all()
+    ]
+
+
+@router.delete("/archive-accounts/{account_id}", status_code=204)
+async def delete_archive_account(
+    account_id: int, session: DBSession, _admin=Depends(get_admin_user)
+) -> None:
+    account = await session.get(ArchiveAccount, account_id)
+    if account is None:
+        raise HTTPException(404, "Archive account not found")
+    owned = await session.scalar(
+        select(func.count(BackupChannel.id)).where(BackupChannel.archive_account_id == account_id)
+    )
+    if owned:
+        # Its group would lose the only account that can fill or promote it
+        raise HTTPException(400, "Remove its archive group first")
+    await session.delete(account)
+    await session.commit()

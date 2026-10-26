@@ -32,7 +32,7 @@ async def test_the_full_copy_stays_here_the_one_without_secrets_goes_to_telegram
 
     local, shared = dumps
     assert not any(arg.startswith("--exclude-table-data") for arg in local)
-    for table in ("workers", "refresh_tokens", "device_codes"):
+    for table in ("workers", "archive_accounts", "refresh_tokens", "device_codes"):
         assert f"--exclude-table-data={table}" in shared
     assert sent == [True]
     assert [p.name for p in db_backup.BACKUP_DIR.iterdir()] == [f"tlex-{date.today()}.dump"]

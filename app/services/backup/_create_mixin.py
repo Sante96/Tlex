@@ -79,16 +79,26 @@ class BackupCreateMixin:
         client: Client,
         main_channel_id: int,
         title: str,
+        archive_account_id: int | None = None,
     ) -> BackupChannel:
         """
         Create a megagroup with forum topics mirroring the main channel,
         then mirror all existing topics. Save to DB.
+
+        archive_account_id: an archive group, made by that account's client. A main
+        channel has one backup and one archive at most.
         """
-        existing = await session.execute(
-            select(BackupChannel).where(BackupChannel.main_channel_id == main_channel_id)
+        kind = (
+            BackupChannel.archive_account_id.is_(None)
+            if archive_account_id is None
+            else BackupChannel.archive_account_id.is_not(None)
         )
-        if existing.scalar_one_or_none():
-            raise ValueError(f"A backup already exists for channel {main_channel_id}")
+        existing = await session.execute(
+            select(BackupChannel.id).where(BackupChannel.main_channel_id == main_channel_id, kind)
+        )
+        if existing.first():
+            what = "a backup" if archive_account_id is None else "an archive"
+            raise ValueError(f"Channel {main_channel_id} already has {what}")
 
         logger.info(f"[BACKUP] Creating megagroup for {main_channel_id} titled '{title}'")
 
@@ -102,6 +112,7 @@ class BackupCreateMixin:
             backup_channel_id=backup_tg_id,
             title=title,
             topic_map=topic_map,
+            archive_account_id=archive_account_id,
         )
         session.add(backup)
         await session.commit()

@@ -2,7 +2,7 @@
 
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from loguru import logger
 from pyrogram import Client, raw
@@ -12,11 +12,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import flood_seconds
 from app.database import async_session_maker
-from app.models.backup import BackupChannel, BackupMessage
+from app.models.backup import ArchiveAccount, BackupChannel, BackupMessage
 from app.services.backup._failover_mixin import BackupFailoverMixin
+from app.services.backup.archive import archive_client, join_main
+
+# A day, give or take the scheduler's tick (6 h by default): the archive account goes
+# online once a day
+ARCHIVE_SYNC_EVERY = timedelta(hours=20)
 
 
 class BackupSyncMixin(BackupFailoverMixin):
+    async def sync_archive(
+        self, session: AsyncSession, worker: Client, backup: BackupChannel
+    ) -> int:
+        """Fill an archive group from its own account. The worker, an admin of the main
+        group, only lets the account in when it isn't a member."""
+        account = await session.get(ArchiveAccount, backup.archive_account_id)
+        if account is None:
+            return 0
+        async with archive_client(session, account) as archive:
+            await join_main(worker, archive, backup.main_channel_id)
+            return await self.sync_messages(session, archive, backup)
+
     async def sync_messages(
         self,
         session: AsyncSession,
@@ -216,6 +233,13 @@ class BackupSyncMixin(BackupFailoverMixin):
             try:
                 for backup in backups:
                     try:
+                        if backup.archive_account_id is not None:
+                            # Never health-checked nor promoted on its own: by hand only
+                            last = backup.last_sync_at
+                            if last is None or datetime.utcnow() - last >= ARCHIVE_SYNC_EVERY:
+                                total_synced += await self.sync_archive(session, client, backup)
+                            continue
+
                         is_dead = await self.check_health(session, client, backup)
                         if is_dead:
                             logger.warning(

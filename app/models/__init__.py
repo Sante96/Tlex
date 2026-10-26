@@ -1,6 +1,6 @@
 """Database models package."""
 
-from app.models.backup import BackupChannel, BackupMessage
+from app.models.backup import ArchiveAccount, BackupChannel, BackupMessage
 from app.models.media import Franchise, MediaItem, MediaPart, MediaStream, Series
 from app.models.user import (
     DeviceCode,
@@ -25,6 +25,7 @@ __all__ = [
     "MediaItem",
     "MediaPart",
     "MediaStream",
+    "ArchiveAccount",
     "BackupChannel",
     "BackupMessage",
 ]

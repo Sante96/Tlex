@@ -243,6 +243,10 @@ class WorkerManager:
             logger.info(f"[POOL] Acquired {len(result)} client(s), pool={in_use}/{total} in use")
             return result
 
+    def primary_clients(self) -> list[Client]:
+        """One client per worker account (joining a chat is done once per account)."""
+        return list(self._clients.values())
+
     def pool_pressure(self) -> float:
         """
         Return pool usage ratio (0.0 = all free, 1.0 = all in use).
