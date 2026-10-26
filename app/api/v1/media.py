@@ -556,6 +556,14 @@ async def _update_concert(session: DBSession, item: MediaItem, body: MediaUpdate
     """A concert's details are the library's (TMDB has nothing to fall back on): an edit
     is for everyone, unlike a film's per-user poster."""
     fields = body.model_dump(exclude_unset=True)
+    # Checked before anything is written: a bad value used to be a 500
+    if "title" in fields and not (fields["title"] or "").strip():
+        raise HTTPException(status_code=422, detail="A concert needs a title")
+    if fields.get("release_date"):
+        try:
+            date.fromisoformat(fields["release_date"])
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Not a date (YYYY-MM-DD)") from None
     for name in ("title", "overview", "poster_path", "backdrop_path", "setlist"):
         if name in fields:
             setattr(item, name, fields[name])

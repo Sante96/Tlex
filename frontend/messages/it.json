@@ -354,7 +354,8 @@
     "imageUrl": "Link dell'immagine",
     "useUrl": "Usa il link",
     "upload": "Carica dal PC",
-    "imageFailed": "Immagine non salvata"
+    "imageFailed": "Immagine non salvata",
+    "chaptersUnread": "I capitoli di questo file non sono ancora stati letti: riprova tra qualche minuto."
   },
   "watchlist": {
     "title": "La Mia Lista",

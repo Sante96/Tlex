@@ -14,7 +14,8 @@ export function setlistLines(value: string): string[] {
 }
 
 interface SetlistTabProps {
-  chapters: Chapter[];
+  /** null: not read yet (the background pass reads them); []: the file has none */
+  chapters: Chapter[] | null;
   value: string;
   onChange: (value: string) => void;
 }
@@ -25,6 +26,9 @@ interface SetlistTabProps {
  */
 export function SetlistTab({ chapters, value, onChange }: SetlistTabProps) {
   const t = useTranslations();
+  if (chapters === null) {
+    return <p className="text-sm text-[#a1a1aa]">{t("editMedia.chaptersUnread")}</p>;
+  }
   if (chapters.length === 0) {
     return <p className="text-sm text-[#a1a1aa]">{t("editMedia.noChapters")}</p>;
   }

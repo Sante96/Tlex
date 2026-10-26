@@ -44,7 +44,8 @@ def concert_title(base_name: str) -> tuple[str, int | None]:
     name = _TAGS.sub(" ", _VIDEO_EXTENSION.sub("", base_name))
     title = " ".join(re.sub(r"[._]", " ", name).split())
     year = _YEAR.search(title)
-    return title, int(year.group()) if year else None
+    # A name made only of tags ("[BD].mkv"): the file's name rather than no title
+    return title or _VIDEO_EXTENSION.sub("", base_name), int(year.group()) if year else None
 
 
 def _words(text: str) -> list[str]:

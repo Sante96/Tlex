@@ -100,6 +100,59 @@ async def test_analyze_keeps_setlist_and_images(test_session, mocker):
     assert (row.chapters, row.setlist, row.poster_path) == (chapters, ["Opening"], "local:mine.png")
 
 
+async def test_patch_concert_refuses_bad_values(client: AsyncClient, auth_headers, test_session):
+    concert = await _concert(test_session)
+
+    for body in ({"release_date": "2024-13-40"}, {"title": None}, {"title": "   "}):
+        resp = await client.patch(f"/api/v1/media/{concert.id}", json=body, headers=auth_headers)
+        assert resp.status_code == 422, body
+
+    after = (await client.get(f"/api/v1/media/{concert.id}", headers=auth_headers)).json()
+    assert after["title"] == "Ambience Synesthesia"
+
+
+async def test_analyze_endpoint_keeps_setlist_and_images(
+    client: AsyncClient, admin_headers, test_session, mocker
+):
+    from app.core.worker_manager import worker_manager
+    from app.models.media import MediaPart
+
+    concert = await _concert(test_session, setlist=["Opening"], poster_path="local:mine.png")
+    test_session.add(
+        MediaPart(
+            media_item_id=concert.id,
+            telegram_file_id="f",
+            part_index=0,
+            start_byte=0,
+            end_byte=10,
+            file_size=10,
+            channel_id=-100,
+            message_id=1,
+        )
+    )
+    await test_session.commit()
+    telegram = MagicMock(get_chat=AsyncMock(side_effect=RuntimeError("offline")))
+    mocker.patch.object(
+        worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), telegram))
+    )
+    chapters = [{"start": 0.0, "end": 60.0, "title": None}]
+    mocker.patch.object(
+        ffprobe_service,
+        "analyze_from_telegram",
+        new=AsyncMock(return_value=ProbeResult(duration_seconds=60, streams=[], chapters=chapters)),
+    )
+
+    resp = await client.post(f"/api/v1/media/{concert.id}/analyze", headers=admin_headers)
+
+    assert resp.status_code == 200
+    body = (await client.get(f"/api/v1/media/{concert.id}", headers=admin_headers)).json()
+    assert (body["chapters"], body["setlist"], body["poster_path"]) == (
+        chapters,
+        ["Opening"],
+        "local:mine.png",
+    )
+
+
 async def test_refresh_metadata_refuses_concerts(
     client: AsyncClient, admin_headers, test_session, mocker
 ):

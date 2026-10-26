@@ -9,11 +9,11 @@ import asyncio
 import subprocess
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import get_settings
 from app.core.security import INTERNAL_STREAM_TOKEN
-from app.core.utils import find_ffmpeg
+from app.core.utils import find_ffmpeg, find_ffprobe
 from app.database import async_session_maker
 from app.models.media import MediaItem, MediaType
 from app.services.images import ImageError, save_image
@@ -21,11 +21,42 @@ from app.services.images import ImageError, save_image
 settings = get_settings()
 
 FRAME_AT = 0.5  # of the duration
+FALLBACK_AT = 300.0  # seconds in, when the duration couldn't be read
 GRAB_TIMEOUT = 180  # a 4K HEVC title over Telegram: the seek plus one GOP
+PROBE_TIMEOUT = 60
 PAUSE_SECONDS = 2  # between two concerts: viewers come first
+# PQ (HDR10, Dolby Vision's base layer) and HLG: tone-mapped to SDR, or the JPEG is grey
+HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}
+TONEMAP = (
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
+    "tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p,"
+)
 
 _running = False
+_again = False  # asked for while running: the running pass looks again before it ends
 _tasks: set[asyncio.Task] = set()
+
+
+async def _is_hdr(raw_url: str) -> bool:
+    cmd = [
+        find_ffprobe(),
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=color_transfer",
+        "-of",
+        "csv=p=0",
+        raw_url,
+    ]
+    try:
+        result = await asyncio.to_thread(
+            subprocess.run, cmd, capture_output=True, timeout=PROBE_TIMEOUT
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return result.stdout.decode(errors="replace").strip() in HDR_TRANSFERS
 
 
 async def grab_frame(media_id: int, at_seconds: float) -> bytes | None:
@@ -34,8 +65,7 @@ async def grab_frame(media_id: int, at_seconds: float) -> bytes | None:
         f"http://127.0.0.1:{settings.app_port}/api/v1/stream/raw/{media_id}"
         f"?internal={INTERNAL_STREAM_TOKEN}"
     )
-    # ponytail: no tone mapping, an HDR concert gives a washed-out frame; add zscale
-    # tonemap when one turns up
+    video_filter = (TONEMAP if await _is_hdr(raw_url) else "") + "scale=1280:-2"
     cmd = [
         find_ffmpeg(),
         "-hide_banner",
@@ -48,7 +78,7 @@ async def grab_frame(media_id: int, at_seconds: float) -> bytes | None:
         "-frames:v",
         "1",
         "-vf",
-        "scale=1280:-2",
+        video_filter,
         "-f",
         "image2",
         "-c:v",
@@ -72,46 +102,57 @@ async def grab_frame(media_id: int, at_seconds: float) -> bytes | None:
     return result.stdout
 
 
+async def _one_pass() -> int:
+    """A frame for every concert missing its poster or its backdrop."""
+    async with async_session_maker() as session:
+        rows = (
+            await session.execute(
+                select(MediaItem.id, MediaItem.duration_seconds).where(
+                    MediaItem.media_type == MediaType.CONCERT,
+                    or_(MediaItem.poster_path.is_(None), MediaItem.backdrop_path.is_(None)),
+                )
+            )
+        ).all()
+
+    done = 0
+    for media_id, duration in rows:
+        # A failure leaves it as it was: tried again on the next pass
+        at = duration * FRAME_AT if duration else FALLBACK_AT
+        data = await grab_frame(media_id, at)
+        if data:
+            try:
+                path = save_image(data)
+            except ImageError as e:
+                logger.warning(f"Frame of media {media_id}: {e}")
+                continue
+            async with async_session_maker() as session:
+                item = await session.get(MediaItem, media_id)
+                # Only the empty ones: an image someone chose (meanwhile, too) wins
+                if item is not None and (item.poster_path is None or item.backdrop_path is None):
+                    item.poster_path = item.poster_path or path
+                    item.backdrop_path = item.backdrop_path or path
+                    await session.commit()
+                    done += 1
+        await asyncio.sleep(PAUSE_SECONDS)
+    if rows:
+        logger.info(f"Concert frames: {done}/{len(rows)}")
+    return done
+
+
 async def backfill_concert_frames() -> int:
     """Give every concert without an image a frame. Returns how many got one."""
-    global _running
-    if _running:  # a scan finished while startup's run was still going
+    global _running, _again
+    if _running:  # a scan finished during this pass: it looks again before ending
+        _again = True
         return 0
     _running = True
     try:
-        async with async_session_maker() as session:
-            rows = (
-                await session.execute(
-                    select(MediaItem.id, MediaItem.duration_seconds).where(
-                        MediaItem.media_type == MediaType.CONCERT,
-                        MediaItem.poster_path.is_(None),
-                        MediaItem.duration_seconds.is_not(None),
-                    )
-                )
-            ).all()
-
         done = 0
-        for media_id, duration in rows:
-            # A failure leaves it without an image: tried again on the next run
-            data = await grab_frame(media_id, duration * FRAME_AT)
-            if data:
-                try:
-                    path = save_image(data)
-                except ImageError as e:
-                    logger.warning(f"Frame of media {media_id}: {e}")
-                    continue
-                async with async_session_maker() as session:
-                    item = await session.get(MediaItem, media_id)
-                    # Someone may have chosen an image meanwhile: it wins
-                    if item is not None and item.poster_path is None:
-                        item.poster_path = path
-                        item.backdrop_path = item.backdrop_path or path
-                        await session.commit()
-                        done += 1
-            await asyncio.sleep(PAUSE_SECONDS)
-        if rows:
-            logger.info(f"Concert frames: {done}/{len(rows)}")
-        return done
+        while True:
+            _again = False
+            done += await _one_pass()
+            if not _again:
+                return done
     finally:
         _running = False
 

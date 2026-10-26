@@ -53,19 +53,14 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
         .catch(() => {});
     }
     if (mediaId && !titleCache[`media-${mediaId}`]) {
+      // One request, shared with the page's own (getShared)
       getMediaDetails(Number(mediaId))
-        .then((data) =>
-          setTitleCache((prev) => ({
-            ...prev,
-            [`media-${mediaId}`]: data.title,
-          })),
-        )
-        .then(() => getMediaDetails(Number(mediaId)))
         .then((data) => {
           if (data.media_type === "CONCERT" && data.franchise_id) {
             const franchise = { id: data.franchise_id, title: data.franchise_title ?? "" };
             setConcertOf((prev) => ({ ...prev, [mediaId]: franchise }));
           }
+          setTitleCache((prev) => ({ ...prev, [`media-${mediaId}`]: data.title }));
         })
         .catch(() => {});
     }
@@ -93,7 +88,9 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
   }
 
   if (mediaMatch) {
-    const name = titleCache[`media-${mediaMatch[1]}`] || "...";
+    const name = titleCache[`media-${mediaMatch[1]}`];
+    // Until the details say what it is: "Film" flashed before a concert's trail
+    if (!name) return [{ label: "..." }];
     const concert = concertOf[mediaMatch[1]];
     if (concert) {
       return [

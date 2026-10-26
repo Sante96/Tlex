@@ -337,7 +337,7 @@ export function EditMediaModal({
           )}
           {activeTab === "setlist" && (
             <SetlistTab
-              chapters={chapters ?? []}
+              chapters={chapters ?? null}
               value={formSetlist}
               onChange={setFormSetlist}
             />

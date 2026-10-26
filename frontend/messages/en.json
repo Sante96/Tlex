@@ -354,7 +354,8 @@
     "imageUrl": "Image link",
     "useUrl": "Use link",
     "upload": "Upload from PC",
-    "imageFailed": "Image not saved"
+    "imageFailed": "Image not saved",
+    "chaptersUnread": "This file's chapters haven't been read yet: try again in a few minutes."
   },
   "watchlist": {
     "title": "My List",

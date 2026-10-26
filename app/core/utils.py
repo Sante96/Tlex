@@ -32,6 +32,15 @@ def find_ffmpeg() -> str:
     return path
 
 
+def find_ffprobe() -> str:
+    """Find ffprobe executable path."""
+    path = shutil.which("ffprobe")
+    if path is None:
+        logger.warning("ffprobe not found in PATH, using 'ffprobe'")
+        return "ffprobe"
+    return path
+
+
 def find_mkvextract() -> str:
     """Find mkvextract executable path."""
     path = shutil.which("mkvextract")

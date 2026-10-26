@@ -85,6 +85,7 @@ def test_concert_franchise_name(topic, name):
             ("Genshin Concert 2023 Melodies of an Endless Journey", 2023),
         ),
         ("[BD] Aimer Live at Budokan [1080p].mkv", ("Aimer Live at Budokan", None)),
+        ("[BD].mkv", ("[BD]", None)),  # only tags: the file name rather than nothing
     ],
 )
 def test_concert_title(base, expected):
