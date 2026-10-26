@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
+from app.services.scanner.concerts import concert_franchise_name, process_concert_group
 from app.services.scanner.processor import process_group
 from app.services.scanner.telegram import TelegramScanner
 
@@ -114,11 +115,11 @@ class ScannerService:
         """Scan a single topic and process files."""
         try:
             is_movies_topic = topic_id == settings.scanner_movies_topic_id
+            # "Concerti · <anime/game>": every file is a concert of that franchise
+            franchise = None if is_movies_topic else concert_franchise_name(topic_name)
+            kind = "Movies" if is_movies_topic else "Concerts" if franchise else "Series"
 
-            logger.debug(
-                f"Scanning topic {topic_id} ({topic_name or 'unknown'})"
-                f" - Type: {'Movies' if is_movies_topic else 'Series'}"
-            )
+            logger.debug(f"Scanning topic {topic_id} ({topic_name or 'unknown'}) - Type: {kind}")
 
             files = await self._scanner.scan_channel(client, channel_id, limit, topic_id)
             stats["files_found"] += len(files)
@@ -127,13 +128,16 @@ class ScannerService:
             groups = self._scanner.group_files(files)
             for group in groups:
                 try:
-                    item = await process_group(
-                        session,
-                        group,
-                        client,
-                        force_movie=is_movies_topic,
-                        series_name=topic_name if not is_movies_topic else None,
-                    )
+                    if franchise:
+                        item = await process_concert_group(session, group, client, franchise)
+                    else:
+                        item = await process_group(
+                            session,
+                            group,
+                            client,
+                            force_movie=is_movies_topic,
+                            series_name=topic_name if not is_movies_topic else None,
+                        )
                     if item:
                         stats["media_created"] += 1
                 except Exception as e:

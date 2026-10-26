@@ -23,6 +23,36 @@ def _first(value):
     return value[0] if isinstance(value, list) else value
 
 
+async def already_scanned(session: AsyncSession, first_file: ScannedFile) -> bool:
+    """A media item already holds this Telegram message."""
+    existing_part = await session.execute(
+        select(MediaPart).where(
+            MediaPart.channel_id == first_file.channel_id,
+            MediaPart.message_id == first_file.message_id,
+        )
+    )
+    return existing_part.scalar_one_or_none() is not None
+
+
+def add_parts(session: AsyncSession, media_item: MediaItem, files: list[ScannedFile]) -> None:
+    """The item's Telegram files, in order, with their byte ranges in the whole file."""
+    current_offset = 0
+    for idx, f in enumerate(files):
+        part = MediaPart(
+            media_item_id=media_item.id,
+            telegram_file_id=f.file_id,
+            part_index=idx,
+            start_byte=current_offset,
+            end_byte=current_offset + f.file_size,
+            file_size=f.file_size,
+            channel_id=f.channel_id,
+            topic_id=f.topic_id,
+            message_id=f.message_id,
+        )
+        session.add(part)
+        current_offset += f.file_size
+
+
 async def process_group(
     session: AsyncSession,
     group: MediaGroup,
@@ -31,14 +61,7 @@ async def process_group(
     series_name: str | None = None,
 ) -> MediaItem | None:
     """Process a media group and create database entries."""
-    first_file = group.files[0]
-    existing_part = await session.execute(
-        select(MediaPart).where(
-            MediaPart.channel_id == first_file.channel_id,
-            MediaPart.message_id == first_file.message_id,
-        )
-    )
-    if existing_part.scalar_one_or_none():
+    if await already_scanned(session, group.files[0]):
         logger.debug(f"Skipping existing: {group.base_name}")
         return None
 
@@ -166,22 +189,7 @@ async def process_group(
     session.add(media_item)
     await session.flush()
 
-    # Create MediaParts
-    current_offset = 0
-    for idx, f in enumerate(group.files):
-        part = MediaPart(
-            media_item_id=media_item.id,
-            telegram_file_id=f.file_id,
-            part_index=idx,
-            start_byte=current_offset,
-            end_byte=current_offset + f.file_size,
-            file_size=f.file_size,
-            channel_id=f.channel_id,
-            topic_id=f.topic_id,
-            message_id=f.message_id,
-        )
-        session.add(part)
-        current_offset += f.file_size
+    add_parts(session, media_item, group.files)
 
     # Analyze streams
     if client and group.files:
