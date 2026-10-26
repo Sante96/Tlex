@@ -131,6 +131,9 @@ class ScannerService:
 
             groups = self._scanner.group_files(files)
             for group in groups:
+                if not group.complete:
+                    logger.info(f"Skipping {group.base_name} for now: not all its parts are here")
+                    continue
                 try:
                     if franchise:
                         item = await process_concert_group(session, group, client, franchise)
