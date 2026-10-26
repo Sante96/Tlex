@@ -13,7 +13,7 @@ export interface ContinueWatchingItem {
   title: string;
   poster_path: string | null;
   backdrop_path: string | null;
-  media_type: "MOVIE" | "EPISODE";
+  media_type: "MOVIE" | "EPISODE" | "CONCERT";
   position_seconds: number;
   duration_seconds: number;
   progress_percent: number;
@@ -27,6 +27,8 @@ export interface ContinueWatchingItem {
   series_poster_path?: string | null;
   season_number?: number | null;
   episode_number?: number | null;
+  /** A concert's anime/game */
+  franchise_title?: string | null;
 }
 
 export async function getWatchProgress(

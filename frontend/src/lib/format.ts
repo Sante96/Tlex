@@ -47,13 +47,18 @@ export function cleanEpisodeTitle(title: string): string {
 }
 
 /**
- * Build TMDB image URL
+ * The URL of a poster/backdrop path: TMDB's ("/abc.jpg", at that size), or one of the
+ * library's own images ("local:<name>": a concert's frame, an upload, a saved link),
+ * served by the backend at a single size.
  */
 export function getTmdbImageUrl(
   path: string | null,
   size: "w300" | "w500" | "w780" | "w1280" | "original" = "w500",
 ): string | null {
   if (!path) return null;
+  if (path.startsWith("local:")) {
+    return `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/images/${path.slice(6)}`;
+  }
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 

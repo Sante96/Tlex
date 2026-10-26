@@ -146,3 +146,16 @@ export {
   setBackupSyncInterval,
 } from "./backup";
 export type { BackupChannel, BackupTopic } from "./backup";
+export {
+  getFranchises,
+  getFranchise,
+  updateFranchise,
+  getFranchiseTmdbImages,
+} from "./franchises";
+export type {
+  FranchiseSummary,
+  FranchiseDetails,
+  ConcertInfo,
+  FranchiseUpdateBody,
+} from "./franchises";
+export { uploadImage, imageFromUrl } from "./images";

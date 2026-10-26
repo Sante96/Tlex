@@ -8,7 +8,7 @@ export interface MediaItem {
   poster_path: string | null;
   backdrop_path: string | null;
   release_date: string | null;
-  media_type: "MOVIE" | "EPISODE";
+  media_type: "MOVIE" | "EPISODE" | "CONCERT";
   duration_seconds: number | null;
   series_id?: number | null;
   season_number?: number | null;
@@ -40,6 +40,10 @@ export interface MediaDetails extends MediaItem {
   total_size: number;
   /** null: not read yet; []: the file has none */
   chapters?: Chapter[] | null;
+  /** Concerts: their anime/game, and a song title per chapter (null: untitled) */
+  franchise_id?: number | null;
+  franchise_title?: string | null;
+  setlist?: (string | null)[] | null;
 }
 
 /** A chapter of the file (seconds): a segment of the player's seekbar */
@@ -159,7 +163,10 @@ export interface MediaUpdateBody {
   overview?: string;
   poster_path?: string;
   backdrop_path?: string;
+  /** "" clears it (concerts) */
   release_date?: string;
+  /** Concerts: a song title per chapter */
+  setlist?: (string | null)[];
 }
 
 export async function updateMediaItem(
