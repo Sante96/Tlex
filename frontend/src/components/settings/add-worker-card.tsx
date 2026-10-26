@@ -13,26 +13,48 @@ import {
 } from "@/components/ui/select";
 import { sendWorkerCode, verifyWorkerCode } from "@/lib/api";
 import { AxiosError } from "axios";
+// The flags as inline SVGs, in the bundle: not emoji (Windows has no flag emoji), not
+// fetched (the old flag package loaded each one from a CDN)
+import {
+  IT,
+  BE,
+  US,
+  GB,
+  FR,
+  DE,
+  ES,
+  NL,
+  CH,
+  AT,
+  PT,
+  PL,
+  UA,
+  RU,
+  JP,
+  CN,
+  IN,
+  BR,
+} from "country-flag-icons/react/3x2";
 
 const COUNTRY_PREFIXES = [
-  { dial: "+39", iso: "IT" },
-  { dial: "+32", iso: "BE" },
-  { dial: "+1", iso: "US" },
-  { dial: "+44", iso: "GB" },
-  { dial: "+33", iso: "FR" },
-  { dial: "+49", iso: "DE" },
-  { dial: "+34", iso: "ES" },
-  { dial: "+31", iso: "NL" },
-  { dial: "+41", iso: "CH" },
-  { dial: "+43", iso: "AT" },
-  { dial: "+351", iso: "PT" },
-  { dial: "+48", iso: "PL" },
-  { dial: "+380", iso: "UA" },
-  { dial: "+7", iso: "RU" },
-  { dial: "+81", iso: "JP" },
-  { dial: "+86", iso: "CN" },
-  { dial: "+91", iso: "IN" },
-  { dial: "+55", iso: "BR" },
+  { dial: "+39", iso: "IT", Flag: IT },
+  { dial: "+32", iso: "BE", Flag: BE },
+  { dial: "+1", iso: "US", Flag: US },
+  { dial: "+44", iso: "GB", Flag: GB },
+  { dial: "+33", iso: "FR", Flag: FR },
+  { dial: "+49", iso: "DE", Flag: DE },
+  { dial: "+34", iso: "ES", Flag: ES },
+  { dial: "+31", iso: "NL", Flag: NL },
+  { dial: "+41", iso: "CH", Flag: CH },
+  { dial: "+43", iso: "AT", Flag: AT },
+  { dial: "+351", iso: "PT", Flag: PT },
+  { dial: "+48", iso: "PL", Flag: PL },
+  { dial: "+380", iso: "UA", Flag: UA },
+  { dial: "+7", iso: "RU", Flag: RU },
+  { dial: "+81", iso: "JP", Flag: JP },
+  { dial: "+86", iso: "CN", Flag: CN },
+  { dial: "+91", iso: "IN", Flag: IN },
+  { dial: "+55", iso: "BR", Flag: BR },
 ];
 
 type Step = "idle" | "sending" | "code" | "2fa" | "verifying" | "done";
@@ -122,20 +144,26 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
         ) : (
           <div className="flex flex-col gap-3">
             {/* Phone input (always visible when not done) */}
-            <div className="flex gap-2">
+            {/* On a phone the button goes under the number: in one row the field was
+                squeezed between the prefix and the button */}
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               <Select
                 value={prefix}
                 onValueChange={setPrefix}
                 disabled={step !== "idle" && step !== "sending"}
               >
                 <SelectTrigger
-                  className="w-[120px] shrink-0"
+                  className="w-[104px] shrink-0"
                   style={{ height: "40px" }}
                 >
-                  {/* The country code, not a flag: the flag package loaded every flag
-                      from a CDN */}
-                  <span className="text-sm truncate">
-                    {selectedCountry?.iso} {prefix}
+                  <span className="flex items-center gap-2 text-sm truncate">
+                    {selectedCountry && (
+                      <selectedCountry.Flag
+                        title={selectedCountry.iso}
+                        className="h-3.5 w-auto shrink-0 rounded-[2px]"
+                      />
+                    )}
+                    {prefix}
                   </span>
                 </SelectTrigger>
                 <SelectContent
@@ -144,7 +172,13 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                 >
                   {COUNTRY_PREFIXES.map((p) => (
                     <SelectItem key={p.dial} value={p.dial}>
-                      {p.iso} {p.dial}
+                      <span className="flex items-center gap-2">
+                        <p.Flag
+                          title={p.iso}
+                          className="h-3.5 w-auto shrink-0 rounded-[2px]"
+                        />
+                        {p.dial}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -156,13 +190,14 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                 onChange={(e) => setLocalNumber(e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, handleSendCode)}
                 disabled={step !== "idle" && step !== "sending"}
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
               {step === "idle" && (
                 <DSButton
                   onClick={handleSendCode}
                   disabled={!localNumber.trim()}
                   icon={<Plus className="w-4 h-4" />}
+                  className="w-full sm:w-auto"
                 >
                   {t("workers.sendCode")}
                 </DSButton>
@@ -171,6 +206,7 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                 <DSButton
                   disabled
                   icon={<Loader2 className="w-4 h-4 animate-spin" />}
+                  className="w-full sm:w-auto"
                 />
               )}
             </div>
