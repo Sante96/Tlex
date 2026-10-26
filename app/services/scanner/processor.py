@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.media import CodecType, MediaItem, MediaPart, MediaStream, MediaType, Series
 from app.services.ffprobe import ffprobe_service
 from app.services.scanner.models import MediaGroup, ScannedFile
+from app.services.scanner.movies import find_movie
 from app.services.tmdb import tmdb_client
 
 # Limit concurrent background subtitle/font extractions triggered by scanner
@@ -112,7 +113,11 @@ async def process_group(
     series_obj = None
 
     if media_type == MediaType.MOVIE:
-        tmdb_result = await tmdb_client.search_movie(title, year)
+        # guessit's alternative titles: often the original after the Italian one
+        alternatives = guess.get("alternative_title") or []
+        if isinstance(alternatives, str):
+            alternatives = [alternatives]
+        tmdb_result = await find_movie(title, year, [str(a) for a in alternatives])
     else:
         tmdb_result = await tmdb_client.search_tv(title, season, episode)
 
