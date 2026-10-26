@@ -28,10 +28,6 @@ export function useNextEpisode({
   const [nextEpisode, setNextEpisode] = useState<NextEpisode | null>(null);
   const [recommendations, setRecommendations] = useState<MediaItem[]>([]);
   const [cancelledAt, setCancelledAt] = useState<number | null>(null);
-  // TEMPORARY, while Up next is redone: ?endcard shows it from the start
-  const [preview] = useState(
-    () => typeof window !== "undefined" && new URLSearchParams(location.search).has("endcard"),
-  );
   const fetchedRef = useRef(false);
 
   // What comes next, once
@@ -50,7 +46,6 @@ export function useNextEpisode({
 
   // Derive overlay visibility from current playback state
   const showNextOverlay = useMemo(() => {
-    if (preview && hasNext && cancelledAt === null) return true;
     if (!hasNext || duration <= 0 || currentTime <= 0) return false;
     // From the credits on. Do NOT hide when the video ends: the countdown plays the next
     const from = creditsStart ?? duration - SHOW_OVERLAY_BEFORE_END;
@@ -58,7 +53,7 @@ export function useNextEpisode({
     // If user cancelled, only re-show if they seeked back past the threshold
     if (cancelledAt !== null && currentTime >= cancelledAt) return false;
     return true;
-  }, [hasNext, duration, currentTime, cancelledAt, preview, creditsStart]);
+  }, [hasNext, duration, currentTime, cancelledAt, creditsStart]);
 
   const cancelNextOverlay = useCallback(() => {
     setCancelledAt(currentTime);
