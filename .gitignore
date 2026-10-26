@@ -58,6 +58,7 @@ ENV/
 /data/
 /cache/
 /images/
+/db-backups/
 
 # ============================================
 # Telegram Sessions (SENSITIVE!)

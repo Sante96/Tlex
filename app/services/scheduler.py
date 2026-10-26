@@ -15,6 +15,9 @@ REDIS_KEY_INTERVAL = "tlex:scanner:interval_hours"
 REDIS_KEY_BACKUP_INTERVAL = "tlex:backup:interval_hours"
 REDIS_KEY_SCAN_LAST_RUN = "tlex:scanner:last_run"
 REDIS_KEY_BACKUP_LAST_RUN = "tlex:backup:last_run"
+REDIS_KEY_DB_BACKUP_LAST_RUN = "tlex:backup:db_last_run"
+# Counted from the last run, not at a fixed hour: the machine isn't always on at night
+DB_BACKUP_EVERY = timedelta(days=1)
 DEFAULT_BACKUP_INTERVAL_HOURS = 6
 TICK_SECONDS = 60
 
@@ -203,10 +206,17 @@ class BackupSyncScheduler:
 
         while self._running:
             try:
+                r = await self._get_redis()
+                last_dump = await _last_run(r, REDIS_KEY_DB_BACKUP_LAST_RUN)
+                if last_dump is None or datetime.now() >= last_dump + DB_BACKUP_EVERY:
+                    from app.services.db_backup import backup_database
+
+                    await _mark_run(r, REDIS_KEY_DB_BACKUP_LAST_RUN)
+                    await backup_database()
+
                 # Same tick scheme as AutoScanScheduler
                 interval_hours = await self.get_interval_hours()
                 if interval_hours > 0:
-                    r = await self._get_redis()
                     last = await _last_run(r, REDIS_KEY_BACKUP_LAST_RUN) or self._last_sync
                     if last is None or datetime.now() >= last + timedelta(hours=interval_hours):
                         from app.services.backup.service import backup_service

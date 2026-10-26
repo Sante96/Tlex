@@ -105,6 +105,8 @@ services:
       # Own images of concerts (uploads, downloaded links, video frames): not a cache,
       # uploads can't be made again
       - ./images:/app/images
+      # The database copy of each of the last 7 days (app/services/db_backup.py)
+      - ./db-backups:/app/db-backups
 
   # ============================================
   # Frontend (Next.js)
