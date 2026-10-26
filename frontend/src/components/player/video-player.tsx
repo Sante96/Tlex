@@ -407,6 +407,50 @@ export function VideoPlayer({
     };
   }, [mediaId]);
 
+  // ponytail: temporary diagnostics. iOS Safari reloads the player page after about a
+  // minute with the video stuck, and an iPhone can't be inspected from here: the state
+  // goes to the backend log ([DIAG]) every 5 s and on every media event. Remove when found.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const started = performance.now();
+    const send = (event: string) => {
+      const buffered = [];
+      for (let i = 0; i < video.buffered.length; i++) {
+        buffered.push([+video.buffered.start(i).toFixed(1), +video.buffered.end(i).toFixed(1)]);
+      }
+      const body = JSON.stringify({
+        event,
+        media: mediaId,
+        up: Math.round((performance.now() - started) / 1000),
+        t: +video.currentTime.toFixed(1),
+        paused: video.paused,
+        muted: video.muted,
+        rs: video.readyState,
+        ns: video.networkState,
+        buf: buffered,
+        err: video.error ? `${video.error.code} ${video.error.message}` : null,
+        hidden: document.hidden,
+        ua: navigator.userAgent.slice(13, 60),
+      });
+      fetch("/api/v1/stream/diag", { method: "POST", body, keepalive: true }).catch(() => {});
+    };
+    const events = ["waiting", "stalled", "pause", "play", "playing", "error", "emptied", "abort", "suspend", "volumechange"];
+    const onEvent = (e: Event) => send(e.type);
+    events.forEach((name) => video.addEventListener(name, onEvent));
+    const onError = (e: ErrorEvent | PromiseRejectionEvent) =>
+      send(`js: ${"message" in e ? e.message : String(e.reason)}`.slice(0, 300));
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onError);
+    const timer = setInterval(() => send("tick"), 5000);
+    return () => {
+      clearInterval(timer);
+      events.forEach((name) => video.removeEventListener(name, onEvent));
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onError);
+    };
+  }, [mediaId]);
+
   const isMobile = useIsMobile();
   const isTV = useIsTV();
   const controlsVisible = showControls || !isPlaying || isLoading || isSeeking || settingsOpen;

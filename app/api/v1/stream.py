@@ -195,6 +195,15 @@ async def stream_raw(
     )
 
 
+@router.post("/diag")
+async def stream_diag(request: Request) -> dict:
+    """Temporary: the player's state, from devices that can't be inspected (iOS Safari
+    reloads the page after a minute of playback). Remove once that's understood."""
+    body = (await request.body())[:4000].decode(errors="replace")
+    logger.info(f"[DIAG] {body}")
+    return {"ok": True}
+
+
 @router.get("/pool-status")
 async def pool_status() -> dict:
     """
