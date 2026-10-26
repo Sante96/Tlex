@@ -34,13 +34,15 @@
     "settings": "Settings",
     "libraries": "Libraries",
     "expandMenu": "Expand the menu",
-    "collapseMenu": "Collapse the menu"
+    "collapseMenu": "Collapse the menu",
+    "concerts": "Concerts"
   },
   "search": {
     "placeholder": "Search movies, shows...",
     "movies": "Movies",
     "series": "TV Shows",
-    "noResults": "No results for"
+    "noResults": "No results for",
+    "concerts": "Concerts"
   },
   "auth": {
     "login": {
@@ -153,7 +155,8 @@
     "resume": "Resume",
     "details": "Details",
     "timeLeft": "{time} left",
-    "recentlyAdded": "Recently added"
+    "recentlyAdded": "Recently added",
+    "recentConcerts": "Latest concerts"
   },
   "settings": {
     "audio": {
@@ -314,7 +317,8 @@
     "editSeason": "Edit Season",
     "seasonNotFound": "Season not found",
     "moviesEmpty": "No movies found. Start a scan to import content.",
-    "seriesEmpty": "No TV shows found. Start a scan to import content."
+    "seriesEmpty": "No TV shows found. Start a scan to import content.",
+    "concertsEmpty": "No concerts yet. Create a \"Concerti · name\" topic in the group and run a scan."
   },
   "topbar": {
     "changeAvatar": "Change Avatar",
@@ -380,5 +384,8 @@
     "crashText": "This page ran into a problem. Try again, or go back home.",
     "notFoundTitle": "Page not found",
     "notFoundText": "That address doesn't match any page."
+  },
+  "concerts": {
+    "count": "{n, plural, one {# concert} other {# concerts}}"
   }
 }

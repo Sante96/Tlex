@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Heart, Film, Tv, Settings } from "lucide-react";
+import { Home, Heart, Film, Tv, Music, Settings } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 const navRoutes = [
   { key: "nav.home", href: "/", icon: Home },
   { key: "nav.movies", href: "/movies", icon: Film },
   { key: "nav.series", href: "/series", icon: Tv },
+  { key: "nav.concerts", href: "/concerts", icon: Music },
   { key: "nav.watchlist", href: "/watchlist", icon: Heart },
   { key: "nav.settings", href: "/settings", icon: Settings },
 ];

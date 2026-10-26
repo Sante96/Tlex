@@ -40,7 +40,7 @@ function heroItems(
       subtitle:
         w.season_number && w.episode_number
           ? `S${w.season_number} · E${w.episode_number} · ${cleanEpisodeTitle(w.title)}`
-          : undefined,
+          : (w.franchise_title ?? undefined),
       overview: w.overview,
       backdropUrl: getTmdbImageUrl(w.backdrop_path, "original")!,
       stillUrl: getTmdbImageUrl(w.still_path ?? w.backdrop_path, "w500"),
@@ -83,6 +83,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [series, setSeries] = useState<SeriesItem[]>([]);
+  const [concerts, setConcerts] = useState<MediaItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<
     ContinueWatchingItem[]
   >([]);
@@ -108,13 +109,15 @@ export default function HomePage() {
     setLoading(true);
     setFailed(false);
     try {
-      const [mediaData, seriesData, watching] = await Promise.all([
+      const [mediaData, seriesData, watching, concertData] = await Promise.all([
         getMediaList({ media_type: "MOVIE", sort: "recent", limit: ROW }),
         getSeriesList({ sort: "recent", page_size: ROW }),
         getContinueWatching(10),
+        getMediaList({ media_type: "CONCERT", sort: "recent", limit: ROW }),
       ]);
       setMedia(mediaData.items);
       setSeries(seriesData.items);
+      setConcerts(concertData.items);
       setContinueWatching(watching);
     } catch {
       setFailed(true); // not "your library is empty"
@@ -157,7 +160,7 @@ export default function HomePage() {
     );
   }
 
-  if (media.length === 0 && series.length === 0) {
+  if (media.length === 0 && series.length === 0 && concerts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <h1 className="text-2xl font-bold text-[#fafafa] mb-4">
@@ -211,6 +214,25 @@ export default function HomePage() {
                     ? yearOf(m.release_date)
                     : ""
                 }
+                className={cardClass}
+              />
+            ))}
+          </StaggerGrid>
+        </section>
+      )}
+
+      {/* Concerti */}
+      {concerts.length > 0 && (
+        <section>
+          <SectionHeader title={t("home.recentConcerts")} href="/concerts" />
+          <StaggerGrid className={gridClass}>
+            {concerts.map((c) => (
+              <PosterCard
+                key={c.id}
+                href={`/media/${c.id}`}
+                imageUrl={getTmdbImageUrl(c.poster_path, "w300")}
+                title={c.title}
+                subtitle={c.release_date ? yearOf(c.release_date) : ""}
                 className={cardClass}
               />
             ))}

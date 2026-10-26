@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ExpandableOverview } from "@/components/ui/expandable-overview";
@@ -169,6 +170,14 @@ export default function MediaDetailPage() {
               {media.title}
             </h1>
             <div className="flex flex-col gap-1">
+              {media.media_type === "CONCERT" && media.franchise_id && (
+                <Link
+                  href={`/concerts/${media.franchise_id}`}
+                  className="text-sm font-semibold text-plex-orange hover:underline w-fit"
+                >
+                  {media.franchise_title}
+                </Link>
+              )}
               {year && (
                 <span className="text-xs md:text-sm text-[#d4d4d8]">
                   {year}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Film, Tv, Loader2, ArrowRight } from "lucide-react";
+import { Search, Film, Tv, Music, Loader2, ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { getMediaList, getSeriesList } from "@/lib/api";
 import { getTmdbImageUrl, yearOf } from "@/lib/format";
@@ -12,7 +12,7 @@ interface SearchResult {
   id: number;
   title: string;
   poster_path: string | null;
-  type: "movie" | "series";
+  type: "movie" | "series" | "concert";
   year?: string;
 }
 
@@ -49,6 +49,8 @@ function ResultRow({
           <div className="w-full h-full flex items-center justify-center">
             {result.type === "movie" ? (
               <Film className="h-4 w-4 text-white/20" />
+            ) : result.type === "concert" ? (
+              <Music className="h-4 w-4 text-white/20" />
             ) : (
               <Tv className="h-4 w-4 text-white/20" />
             )}
@@ -74,6 +76,7 @@ export function SearchBar({ className, compact }: { className?: string; compact?
   const [query, setQuery] = useState("");
   const [movies, setMovies] = useState<SearchResult[]>([]);
   const [series, setSeries] = useState<SearchResult[]>([]);
+  const [concerts, setConcerts] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,21 +84,33 @@ export function SearchBar({ className, compact }: { className?: string; compact?
   const panelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const hasResults = movies.length > 0 || series.length > 0;
+  const hasResults = movies.length > 0 || series.length > 0 || concerts.length > 0;
 
   const search = useCallback(async (term: string) => {
     if (term.length < 2) {
       setMovies([]);
       setSeries([]);
+      setConcerts([]);
       setIsOpen(false);
       return;
     }
     setLoading(true);
     try {
-      const [mediaRes, seriesRes] = await Promise.all([
+      // Concerts are found by their anime/game too ("arknights")
+      const [mediaRes, seriesRes, concertRes] = await Promise.all([
         getMediaList({ search: term, limit: 4, media_type: "MOVIE" }),
         getSeriesList({ search: term, page_size: 4 }),
+        getMediaList({ search: term, limit: 4, media_type: "CONCERT" }),
       ]);
+      setConcerts(
+        concertRes.items.map((c) => ({
+          id: c.id,
+          title: c.title,
+          poster_path: c.poster_path,
+          type: "concert" as const,
+          year: c.release_date ? yearOf(c.release_date) : undefined,
+        })),
+      );
       setMovies(
         mediaRes.items.map((m) => ({
           id: m.id,
@@ -122,6 +137,7 @@ export function SearchBar({ className, compact }: { className?: string; compact?
     } catch {
       setMovies([]);
       setSeries([]);
+      setConcerts([]);
     } finally {
       setLoading(false);
     }
@@ -171,7 +187,7 @@ export function SearchBar({ className, compact }: { className?: string; compact?
     setIsOpen(false);
     setQuery("");
     router.push(
-      result.type === "movie" ? `/media/${result.id}` : `/series/${result.id}`,
+      result.type === "series" ? `/series/${result.id}` : `/media/${result.id}`,
     );
   };
 
@@ -271,6 +287,28 @@ export function SearchBar({ className, compact }: { className?: string; compact?
                       <ResultRow
                         key={`series-${s.id}`}
                         result={s}
+                        onSelect={handleSelect}
+                        onKeyDown={handleResultKeyDown}
+                      />
+                    ))}
+                  </div>
+                )}
+                {(movies.length > 0 || series.length > 0) && concerts.length > 0 && (
+                  <div className="h-px bg-white/[0.05] mx-3 my-1" />
+                )}
+                {/* Concerts section */}
+                {concerts.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 px-3 pt-1.5 pb-1">
+                      <Music className="h-3 w-3 text-emerald-400" />
+                      <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">
+                        {t("search.concerts")}
+                      </span>
+                    </div>
+                    {concerts.map((c) => (
+                      <ResultRow
+                        key={`concert-${c.id}`}
+                        result={c}
                         onSelect={handleSelect}
                         onKeyDown={handleResultKeyDown}
                       />

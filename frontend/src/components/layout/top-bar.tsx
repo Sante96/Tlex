@@ -19,7 +19,7 @@ import { SearchBar } from "@/components/layout/search-bar";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/contexts/profile-context";
 import { useIsTV, useTVTier } from "@/hooks/use-platform";
-import { updateProfile, getSeriesDetails, getMediaDetails } from "@/lib/api";
+import { updateProfile, getSeriesDetails, getMediaDetails, getFranchise } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_AVATAR = "/avatars/avatar-01.png";
@@ -28,11 +28,15 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
   const pathname = usePathname();
   const t = useTranslations();
   const [titleCache, setTitleCache] = useState<Record<string, string>>({});
+  // A concert's media page sits under its anime/game: Concerti › Arknights › title
+  const [concertOf, setConcertOf] = useState<Record<string, { id: number; title: string }>>({});
 
   // Extract IDs from pathname
   const seasonMatch = pathname.match(/^\/series\/(\d+)\/season\/(\d+)/);
   const seriesMatch = pathname.match(/^\/series\/(\d+)$/);
   const mediaMatch = pathname.match(/^\/media\/(\d+)$/);
+  const franchiseMatch = pathname.match(/^\/concerts\/(\d+)$/);
+  const franchiseId = franchiseMatch?.[1];
 
   const seriesId = seasonMatch?.[1] || seriesMatch?.[1];
   const mediaId = mediaMatch?.[1];
@@ -56,9 +60,23 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
             [`media-${mediaId}`]: data.title,
           })),
         )
+        .then(() => getMediaDetails(Number(mediaId)))
+        .then((data) => {
+          if (data.media_type === "CONCERT" && data.franchise_id) {
+            const franchise = { id: data.franchise_id, title: data.franchise_title ?? "" };
+            setConcertOf((prev) => ({ ...prev, [mediaId]: franchise }));
+          }
+        })
         .catch(() => {});
     }
-  }, [seriesId, mediaId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (franchiseId && !titleCache[`franchise-${franchiseId}`]) {
+      getFranchise(Number(franchiseId))
+        .then((data) =>
+          setTitleCache((prev) => ({ ...prev, [`franchise-${franchiseId}`]: data.title })),
+        )
+        .catch(() => {});
+    }
+  }, [seriesId, mediaId, franchiseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (seasonMatch) {
     const name = titleCache[`series-${seasonMatch[1]}`] || "...";
@@ -76,7 +94,20 @@ function useBreadcrumbItems(): { label: string; href?: string }[] | null {
 
   if (mediaMatch) {
     const name = titleCache[`media-${mediaMatch[1]}`] || "...";
+    const concert = concertOf[mediaMatch[1]];
+    if (concert) {
+      return [
+        { label: t("nav.concerts"), href: "/concerts" },
+        { label: concert.title, href: `/concerts/${concert.id}` },
+        { label: name },
+      ];
+    }
     return [{ label: t("nav.movies"), href: "/movies" }, { label: name }];
+  }
+
+  if (franchiseMatch) {
+    const name = titleCache[`franchise-${franchiseMatch[1]}`] || "...";
+    return [{ label: t("nav.concerts"), href: "/concerts" }, { label: name }];
   }
 
   return null;

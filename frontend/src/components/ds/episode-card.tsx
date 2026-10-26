@@ -2,7 +2,9 @@ import { FadeImage } from "@/components/ui/fade-image";
 import { Play, Check, Pencil } from "lucide-react";
 
 interface EpisodeCardProps {
-  episodeNumber: number;
+  /** An episode's number; a concert has none and shows its label (the year) */
+  episodeNumber?: number;
+  label?: string;
   title: string;
   duration?: string;
   overview?: string | null;
@@ -15,6 +17,7 @@ interface EpisodeCardProps {
 
 export function EpisodeCard({
   episodeNumber,
+  label,
   title,
   duration,
   overview,
@@ -46,7 +49,7 @@ export function EpisodeCard({
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-[#52525b] text-lg font-medium">
-          E{episodeNumber}
+          {episodeNumber !== undefined && `E${episodeNumber}`}
         </div>
       )}
 
@@ -80,13 +83,13 @@ export function EpisodeCard({
       >
         <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
         <div className="flex items-center gap-2 text-xs text-white/70">
-          <span>Episodio {episodeNumber}</span>
-          {duration && (
-            <>
-              <span>·</span>
-              <span>{duration}</span>
-            </>
+          {episodeNumber !== undefined ? (
+            <span>Episodio {episodeNumber}</span>
+          ) : (
+            label && <span>{label}</span>
           )}
+          {duration && (episodeNumber !== undefined || label) && <span>·</span>}
+          {duration && <span>{duration}</span>}
         </div>
         {overview && (
           <p className="text-[11px] text-white/60 leading-relaxed line-clamp-2">
