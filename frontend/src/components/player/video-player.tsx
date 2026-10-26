@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
+import { VolumeX } from "lucide-react";
 import { DSButton } from "@/components/ds";
 import { useRouter } from "next/navigation";
 import { PlayerControls } from "./player-controls";
@@ -115,6 +116,8 @@ export function VideoPlayer({
   // Kept across videos and reloads (they reset to full volume every time)
   const [volume, setVolume] = useState(() => storedNumber("player_volume", 1));
   const [isMuted, setIsMuted] = useState(() => storedNumber("player_muted", 0) === 1);
+  // The browser refused the sound without a tap (iOS after a reload): playing muted
+  const [soundBlocked, setSoundBlocked] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [seekTime, setSeekTime] = useState(initialPosition);
@@ -170,6 +173,11 @@ export function VideoPlayer({
     setCurrentTime,
     setDuration,
     onError: () => setStreamError(true),
+    // Shown muted, not saved: the preference stays, the browser just wants a tap first
+    onAutoMuted: () => {
+      setIsMuted(true);
+      setSoundBlocked(true);
+    },
   });
 
   // Apply saved subtitle offset when video is ready
@@ -198,6 +206,7 @@ export function VideoPlayer({
       const newMuted = !isMuted;
       videoRef.current.muted = newMuted;
       setIsMuted(newMuted);
+      setSoundBlocked(false);
       localStorage.setItem("player_muted", newMuted ? "1" : "0");
     }
   }, [isMuted]);
@@ -546,6 +555,23 @@ export function VideoPlayer({
         warning={poolWarning}
         poolPressure={poolStatus?.pool_pressure}
       />
+
+      {soundBlocked && (
+        // A phone has no mute button (its keys set the volume): this is where the tap
+        // the browser wants goes
+        <DSButton
+          variant="secondary"
+          icon={<VolumeX className="h-4 w-4" />}
+          onClick={() => {
+            if (videoRef.current) videoRef.current.muted = false;
+            setIsMuted(false);
+            setSoundBlocked(false);
+          }}
+          className="absolute top-20 right-4 z-30"
+        >
+          {t("player.tapForSound")}
+        </DSButton>
+      )}
 
       {/* Video + subtitles — shrinks left when next episode panel slides in */}
       <motion.div

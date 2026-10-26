@@ -376,6 +376,7 @@
     "pause": "Pause",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "tapForSound": "Tap for sound",
     "fullscreenHomeScreen": "On iPhone, full screen is TLEX opened from the home screen: in Safari tap Share → Add to Home Screen.",
     "pip": "Picture in Picture",
     "mute": "Mute",

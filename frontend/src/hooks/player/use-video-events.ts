@@ -16,6 +16,8 @@ interface VideoEventsProps {
   setDuration: (duration: number) => void;
   /** The stream failed (a 5xx, the pool full, Telegram): there's no more data coming */
   onError?: () => void;
+  /** The browser refused the sound without a tap: the video plays on muted */
+  onAutoMuted?: () => void;
 }
 
 export function useVideoEvents({
@@ -31,6 +33,7 @@ export function useVideoEvents({
   setCurrentTime,
   setDuration,
   onError,
+  onAutoMuted,
 }: VideoEventsProps) {
   const videoMovingRef = useRef(false);
   const isMutedRef = useRef(isMuted);
@@ -41,6 +44,10 @@ export function useVideoEvents({
   useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
+  const onAutoMutedRef = useRef(onAutoMuted);
+  useEffect(() => {
+    onAutoMutedRef.current = onAutoMuted;
+  }, [onAutoMuted]);
 
   // Keep refs in sync with props (no effect re-runs)
   useEffect(() => {
@@ -82,6 +89,18 @@ export function useVideoEvents({
       videoMovingRef.current = true;
       video.muted = isMutedRef.current;
       setIsLoading(false);
+      if (video.muted) return;
+      // The video started muted (autoplay); iOS pauses it when script turns the sound on
+      // without a tap (a page that reloaded by itself, say), and it sat paused. It plays
+      // on muted instead: the mute button shows it, and a tap there brings the sound
+      const refused = () => {
+        if (!video.paused || video.muted) return;
+        video.muted = true;
+        video.play().catch(() => {});
+        onAutoMutedRef.current?.();
+      };
+      refused();
+      setTimeout(refused, 0); // the pause may come right after the unmute
     };
 
     // Fake loader: video starts from keyframe BEFORE requested time.
