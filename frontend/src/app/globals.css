@@ -66,10 +66,25 @@
   background: #e5a00d;
 }
 
-/* Firefox scrollbar */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #3f3f46 transparent;
+/* The page's own scrollbar starts under the top bar (h-14; the TV's by its tiers), not
+   beside it */
+html::-webkit-scrollbar-track {
+  margin-top: 3.5rem;
+}
+html[data-tv-tier="720"]::-webkit-scrollbar-track {
+  margin-top: 2.5rem;
+}
+html[data-tv-tier="1080"]::-webkit-scrollbar-track {
+  margin-top: 3rem;
+}
+
+/* Firefox scrollbar. Only there: Chrome (121+) drops the ::-webkit-scrollbar styles above
+   where these standard ones are set, and on Windows showed its own, arrows and track */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3f46 transparent;
+  }
 }
 
 /* Hide scrollbar for cast/horizontal scroll areas */

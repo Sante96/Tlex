@@ -14,6 +14,7 @@ import {
 } from "@/components/layout";
 import { AuthGuard } from "@/components/auth-guard";
 import { SplashScreen } from "@/components/splash-screen";
+import { NAV_MOTION } from "@/components/ds/nav-item";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { useProfile } from "@/contexts/profile-context";
 import { useIsMobile, useIsTablet } from "@/lib/breakpoints";
@@ -67,7 +68,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
     <motion.div
       initial={false}
       animate={{ marginLeft }}
-      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      transition={NAV_MOTION}
     >
       <TopBar />
       <main className="pb-16 md:pb-0 landscape:pb-0">

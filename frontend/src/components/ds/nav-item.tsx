@@ -4,6 +4,11 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** The sidebar's motion (its width, the page's margin): its labels fade with it */
+export const NAV_MOTION = { duration: 0.3, ease: [0.4, 0, 0.2, 1] as const };
+export const NAV_FADE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+export const NAV_FADE = `opacity 0.3s ${NAV_FADE_EASE}`;
+
 interface DSNavItemProps {
   href: string;
   icon: React.ReactNode;
@@ -48,20 +53,18 @@ export function DSNavItem({
         {icon}
       </span>
 
-      {/* Label — minmax(0,1fr): can shrink to 0 when collapsed */}
+      {/* Label: minmax(0,1fr) shrinks to 0 when collapsed. Cut by the closing edge (no
+          ellipsis) as it fades, in step with the card */}
       <span
-        className="truncate"
-        style={{
-          opacity: collapsed ? 0 : 1,
-          transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
-        }}
+        className="overflow-hidden whitespace-nowrap"
+        style={{ opacity: collapsed ? 0 : 1, transition: NAV_FADE }}
       >
         {label}
       </span>
 
-      {/* Chevron — only rendered when visible to avoid ghost space in auto column */}
-      {!collapsed && active && (
-        <span className="pr-3.5" style={{ opacity: 1, transition: "opacity 0.15s ease 0.12s" }}>
+      {/* Chevron: fading with the label (collapsed, the card cuts it off) */}
+      {active && (
+        <span className="pr-3.5" style={{ opacity: collapsed ? 0 : 1, transition: NAV_FADE }}>
           <ChevronRight className="h-4 w-4 text-plex-orange" />
         </span>
       )}

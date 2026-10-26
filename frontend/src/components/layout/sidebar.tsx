@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { Home, Heart, Film, Tv, Music, Settings, Menu, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DSNavItem, DSIconButton } from "@/components/ds";
+import { NAV_FADE, NAV_MOTION } from "@/components/ds/nav-item";
+import { TlexWordmark } from "@/components/tlex-wordmark";
 import Image from "next/image";
 import pkg from "../../../package.json";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -113,10 +115,8 @@ export function Sidebar() {
       // reload and profile switch
       initial={false}
       animate={{ width: sidebarWidth }}
-      transition={collapsed
-        ? { duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: 0.1 }
-        : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
-      }
+      // One motion: the page's margin, the labels and the wordmark go with it
+      transition={NAV_MOTION}
       onFocus={handleTvFocus}
       onBlur={handleTvBlur}
       style={{
@@ -133,21 +133,22 @@ export function Sidebar() {
         : "flex items-center gap-3 h-12 pb-4"
       }>
         {isTV ? (
-          collapsed ? (
-            <Link
-              href="/"
-              className="flex items-center justify-center w-9 h-9 tv-1080:w-10 tv-1080:h-10 rounded-[10px] flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
-            >
-              <Image src="/tlex-icon.svg" alt="TLEX" width={32} height={32} className="w-6 h-6 tv-1080:w-7 tv-1080:h-7 tv-4k:w-8 tv-4k:h-8" unoptimized />
-            </Link>
-          ) : (
-            <Link
-              href="/"
-              className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange rounded-[10px]"
-            >
-              <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-7 tv-1080:h-8 tv-4k:h-10 w-auto" unoptimized />
-            </Link>
-          )
+          // Closed, the X icon; opening, it fades as the letters come in
+          <Link
+            href="/"
+            className="relative flex items-center h-9 tv-1080:h-10 shrink-0 rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plex-orange"
+          >
+            <Image
+              src="/tlex-icon.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="absolute left-1.5 w-6 h-6 tv-1080:w-7 tv-1080:h-7 tv-4k:w-8 tv-4k:h-8"
+              style={{ opacity: collapsed ? 1 : 0, transition: NAV_FADE }}
+              unoptimized
+            />
+            <TlexWordmark hidden={collapsed} className="h-7 tv-1080:h-8 tv-4k:h-10 w-auto" />
+          </Link>
         ) : (
           <>
             <DSIconButton
@@ -157,15 +158,8 @@ export function Sidebar() {
               icon={<Menu className="h-[22px] w-[22px]" />}
               className="w-10 h-10 flex-shrink-0"
             />
-            <Link
-              href="/"
-              className="flex items-center whitespace-nowrap"
-              style={{
-                opacity: collapsed ? 0 : 1,
-                transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
-              }}
-            >
-              <Image src="/tlex-logo.svg" alt="TLEX" width={200} height={58} className="h-7 w-auto" unoptimized />
+            <Link href="/" className="flex items-center whitespace-nowrap">
+              <TlexWordmark hidden={collapsed} className="h-7 w-auto" />
             </Link>
           </>
         )}
@@ -193,10 +187,7 @@ export function Sidebar() {
       {/* Library label */}
       <span
         className="text-[11px] tv-4k:text-xs font-semibold uppercase text-[#52525b] tracking-[1px] whitespace-nowrap"
-        style={{
-          opacity: collapsed ? 0 : 1,
-          transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
-        }}
+        style={{ opacity: collapsed ? 0 : 1, transition: NAV_FADE }}
       >
         {t("nav.libraries")}
       </span>
@@ -226,10 +217,7 @@ export function Sidebar() {
           <Loader2 className="h-4 w-4 animate-spin text-plex-orange flex-shrink-0" />
           <span
             className="text-xs font-medium text-plex-orange whitespace-nowrap"
-            style={{
-              opacity: collapsed ? 0 : 1,
-              transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
-            }}
+            style={{ opacity: collapsed ? 0 : 1, transition: NAV_FADE }}
           >
             {t("home.scanning")}
           </span>
@@ -254,10 +242,7 @@ export function Sidebar() {
       {/* Credit */}
       <div
         className="flex flex-row items-center justify-between pt-2 tv-1080:pt-3 tv-4k:pt-4 select-none"
-        style={{
-          opacity: collapsed ? 0 : 1,
-          transition: collapsed ? "opacity 0.08s ease" : "opacity 0.15s ease 0.12s",
-        }}
+        style={{ opacity: collapsed ? 0 : 1, transition: NAV_FADE }}
       >
         <p className="text-[10px] tv-4k:text-[11px] text-[#3f3f46] tracking-wide whitespace-nowrap">{t("common.madeBy")}</p>
         <p className="text-[10px] tv-4k:text-[11px] text-[#3f3f46] tracking-wide whitespace-nowrap">v{pkg.version}</p>
