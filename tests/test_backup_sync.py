@@ -94,3 +94,44 @@ async def test_failed_batch_keeps_the_others(test_session, mocker):
     client.forwarded.clear()
     assert await backup_service.sync_messages(test_session, client, backup) == 100
     assert client.forwarded == list(range(101, 201))
+
+
+class FloodedClient(FakeClient):
+    """Telegram slows the reading of the topic down once, then answers."""
+
+    def __init__(self):
+        super().__init__()
+        self.reads = 0
+
+    async def get_discussion_replies(self, chat_id, topic_id, limit):
+        from pyrogram.errors import FloodWait
+
+        self.reads += 1
+        if self.reads == 1:
+            raise FloodWait(value=16)
+        for i in range(1, 4):
+            yield SimpleNamespace(id=i, document=True, video=None)
+
+    async def invoke(self, query):
+        self.forwarded.extend(query.id)
+        return SimpleNamespace(
+            updates=[SimpleNamespace(message=SimpleNamespace(id=10_000 + i)) for i in query.id]
+        )
+
+
+async def test_a_flood_wait_while_reading_waits_and_goes_on(test_session, mocker):
+    # Reading 48 topics in a row, Telegram asked to wait 16 s on GetReplies: the error
+    # ended the whole sync every hour, after the new topics were made, so they stayed empty
+    sleep = AsyncMock()
+    mocker.patch.object(_sync_mixin, "asyncio", SimpleNamespace(sleep=sleep))
+    backup = BackupChannel(
+        main_channel_id=-1001, backup_channel_id=-1002, title="t",
+        topic_map={"5": {"backup_id": 7, "name": "x"}},
+    )
+    test_session.add(backup)
+    await test_session.commit()
+    client: Any = FloodedClient()
+
+    assert await backup_service.sync_messages(test_session, client, backup) == 3
+    assert client.forwarded == [1, 2, 3]
+    assert sleep.await_args_list[0].args[0] >= 16

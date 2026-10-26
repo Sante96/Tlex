@@ -138,13 +138,24 @@ class BackupSyncMixin(BackupFailoverMixin):
     ) -> int:
         """Forward new media messages from one topic to the matching backup topic."""
         pending: list[int] = []
-
-        # Pyrogram annotates its async generators as coroutines
-        async for message in client.get_discussion_replies(  # pyright: ignore[reportGeneralTypeIssues]
-            main_channel_id, main_topic_id, limit=limit or 10000
-        ):
-            if message.id not in already_synced and (message.document or message.video):
-                pending.append(message.id)
+        while True:
+            try:
+                # Pyrogram annotates its async generators as coroutines
+                async for message in client.get_discussion_replies(  # pyright: ignore[reportGeneralTypeIssues]
+                    main_channel_id, main_topic_id, limit=limit or 10000
+                ):
+                    if message.id not in already_synced and (message.document or message.video):
+                        pending.append(message.id)
+                break
+            except FloodWait as e:
+                # Reading every topic in a row, Telegram asks to slow down (16 s seen): the
+                # error ended the whole sync, every hour, after the new topics were made,
+                # and they stayed empty. Waited out, the topic is read again
+                logger.warning(
+                    f"[BACKUP] FloodWait {flood_seconds(e)}s reading topic {main_topic_id}"
+                )
+                await asyncio.sleep(flood_seconds(e) + 1)
+                pending = []
 
         if not pending:
             return 0
