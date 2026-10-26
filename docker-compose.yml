@@ -64,7 +64,9 @@ services:
   # Note: This creates a temporary random URL.
   # To use a custom domain, use docker-compose.override.yml
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pinned: 2026.10.2+ no longer trusts the compromised eMudhra intermediates (Cloudflare,
+    # 2026-10); `latest` stayed whatever was pulled once
+    image: cloudflare/cloudflared:2026.10.3
     container_name: tlex-cloudflared
     restart: unless-stopped
     command: tunnel --url http://frontend:3000
