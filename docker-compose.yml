@@ -69,6 +69,9 @@ services:
     image: cloudflare/cloudflared:2026.10.3
     container_name: tlex-cloudflared
     restart: unless-stopped
+    # A quick tunnel (random trycloudflare URL), only when asked for:
+    # docker compose --profile tunnel up -d cloudflared. The VPS serves TLEX through nginx
+    profiles: ["tunnel"]
     command: tunnel --url http://frontend:3000
     depends_on:
       - frontend # ============================================
@@ -120,7 +123,8 @@ services:
     container_name: tlex-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # FRONTEND_PORT in .env: on the VPS 127.0.0.1:3000 (nginx in front); on the PC the LAN
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       # Backend URL for server-side API calls (route handlers, SSR)
       BACKEND_URL: http://backend:8000
