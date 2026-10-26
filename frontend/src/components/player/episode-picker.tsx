@@ -230,7 +230,7 @@ export function EpisodePicker({
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen((v) => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-white hover:bg-white/[0.08] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-white hover:bg-white/8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 >
                   {t("media.season")} {activeSeason}
                   <ChevronDown
@@ -243,7 +243,7 @@ export function EpisodePicker({
 
                 {dropdownOpen && (
                   <div
-                    className="absolute top-full left-0 mt-1 min-w-[160px] rounded-xl overflow-hidden shadow-lg backdrop-blur-xl z-40"
+                    className="absolute top-full left-0 mt-1 min-w-40 rounded-xl overflow-hidden shadow-lg backdrop-blur-xl z-40"
                     style={{ backgroundColor: "rgba(20, 20, 20, 0.95)" }}
                   >
                     {seasons.map((season) => (
@@ -257,7 +257,7 @@ export function EpisodePicker({
                           "flex items-center w-full px-4 py-2.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-inset",
                           activeSeason === season.season_number
                             ? "text-plex-orange bg-plex-orange/10"
-                            : "text-white hover:bg-white/[0.08]",
+                            : "text-white hover:bg-white/8",
                         )}
                       >
                         {t("media.season")} {season.season_number}
@@ -390,7 +390,7 @@ function EpisodeThumb({
       data-current={isCurrent ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "flex-shrink-0 w-44 md:w-80 rounded-xl overflow-hidden transition-all group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+        "shrink-0 w-44 md:w-80 rounded-xl overflow-hidden transition-all group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/80",
         isCurrent && "ring-2 ring-plex-orange",
       )}
     >
@@ -453,11 +453,11 @@ function EpisodeThumb({
         {/* Now playing indicator */}
         {isCurrent && (
           <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-            <div className="flex gap-[3px] items-end h-4">
+            <div className="flex gap-0.75 items-end h-4">
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="w-[3px] bg-plex-orange rounded-full animate-pulse"
+                  className="w-0.75 bg-plex-orange rounded-full animate-pulse"
                   style={{
                     height: `${8 + i * 4}px`,
                     animationDelay: `${i * 150}ms`,

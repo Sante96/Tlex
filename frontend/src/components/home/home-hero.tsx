@@ -84,7 +84,7 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
     >
       {/* The pictures fade out at the bottom (a mask, not a dark overlay: the page's
           background is a warm gradient, and the hero ended on a hard black edge) */}
-      <div className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
+      <div className="absolute inset-0 overflow-hidden mask-[linear-gradient(to_bottom,black_55%,transparent)]">
         {items.map((it, i) =>
           seen.has(i) || i === next ? (
             <div
@@ -106,13 +106,13 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
           ) : null,
         )}
         {/* Dark on the left and low down, for the text and the strip */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#09090b]/90 via-[#09090b]/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-r from-[#09090b]/90 via-[#09090b]/50 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
       </div>
 
       {/* A fixed height: the text grows upwards, so a longer title doesn't push the page
           down every time the hero moves on */}
-      <div className="relative flex flex-col justify-end gap-6 h-[480px] md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
+      <div className="relative flex flex-col justify-end gap-6 h-120 md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
         <div className="flex flex-col gap-2 md:gap-3 max-w-2xl text-shadow">
           {/* The text changes with the title; the buttons below stay put (and their glass
               blurred: a fading ancestor would turn the blur off) */}

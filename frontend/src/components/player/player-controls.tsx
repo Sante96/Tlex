@@ -129,7 +129,7 @@ export function PlayerControls({
       {/* Top bar */}
       <div
         className={cn(
-          "flex items-center p-4 bg-gradient-to-b from-black/80 to-transparent",
+          "flex items-center p-4 bg-linear-to-b from-black/80 to-transparent",
           fade,
         )}
       >
@@ -246,7 +246,7 @@ export function PlayerControls({
       {/* Bottom controls */}
       <div
         className={cn(
-          "bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10 space-y-1",
+          "bg-linear-to-t from-black/80 to-transparent px-4 pb-3 pt-10 space-y-1",
           fade,
         )}
       >
