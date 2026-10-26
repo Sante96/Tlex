@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import { streamRead } from "@/lib/api/stream";
 
-// Download at most this far past the playhead: the rest of the browser's quota (~150 MB
-// of video in desktop Chrome) keeps played video for backward seeks. Past the quota the
-// browser evicts the oldest data.
+// Download at most this far past the playhead
 const AHEAD_SECONDS = 60;
+// Kept behind the playhead: short rewinds play from the buffer, longer ones ask the
+// server again. Left to the browser, Safari evicts only what is 30 s behind: at a 4K
+// concert's bitrate that alone is past its quota, and playback stopped at the buffer's end
+const BEHIND_SECONDS = 10;
 // The init segment (ftyp + moov) comes before the first fragment
 const MAX_INIT_BYTES = 4 * 1024 * 1024;
 
@@ -53,6 +55,17 @@ function appended(sb: SourceBuffer) {
   });
 }
 
+/** Remove what was played more than `keep` seconds ago. False: nothing worth it. */
+async function trimBehind(video: HTMLVideoElement, sb: SourceBuffer, keep: number) {
+  if (!video.buffered.length) return false;
+  const start = video.buffered.start(0);
+  const end = video.currentTime - keep;
+  if (end - start < 1) return false;
+  sb.remove(start, end);
+  await appended(sb);
+  return true;
+}
+
 /** Feed the fragmented MP4 of `url` into `ms`. False: MSE can't play it. */
 async function feed(
   video: HTMLVideoElement,
@@ -96,11 +109,13 @@ async function feed(
         break;
       } catch (e) {
         if ((e as DOMException).name !== "QuotaExceededError") throw e;
-        await sleep(1000); // full: playback makes room, the browser evicts played data
+        // Full: what was played goes first, else playback makes room
+        if (!(await trimBehind(video, sb, 2))) await sleep(1000);
         if (signal.aborted) return true;
       }
     }
     await appended(sb);
+    await trimBehind(video, sb, BEHIND_SECONDS);
 
     while (video.buffered.length && ahead() > AHEAD_SECONDS) {
       await sleep(1000);
@@ -155,7 +170,13 @@ export function useMediaSource(
               video.src = url;
             }
           })
-          .catch(() => {
+          .catch((e) => {
+            // ponytail: temporary, with the player's [DIAG]: why a stream ended
+            fetch("/api/v1/stream/diag", {
+              method: "POST",
+              body: JSON.stringify({ event: "feed-error", error: String(e) }),
+              keepalive: true,
+            }).catch(() => {});
             if (!controller.signal.aborted && ms.readyState === "open") {
               ms.endOfStream("network");
             }
