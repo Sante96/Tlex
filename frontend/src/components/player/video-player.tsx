@@ -14,6 +14,7 @@ import { releaseStream, type Chapter, type MediaStream, type Profile } from "@/l
 
 import { usePlayerPreferences } from "@/hooks/player/use-player-preferences";
 import { usePoolStatus } from "@/hooks/player/use-pool-status";
+import { useStreamClients } from "@/hooks/player/use-stream-clients";
 import { useVideoSync } from "@/hooks/player/use-video-sync";
 import { useMediaSource } from "@/hooks/player/use-media-source";
 import { useVideoEvents } from "@/hooks/player/use-video-events";
@@ -93,6 +94,7 @@ export function VideoPlayer({
     null,
   );
   const subtitleRendererRef = useRef<SubtitleRendererHandle>(null);
+  const clients = useStreamClients(mediaId, videoRef);
   const episodesButtonRef = useRef<HTMLButtonElement>(null);
 
   // Core Playback State
@@ -528,6 +530,7 @@ export function VideoPlayer({
         duration={duration}
         chapters={chapters}
         chapterWord={chapterWord}
+        clients={clients}
         volume={volume}
         isMuted={isMuted}
         isFullscreen={isFullscreen}

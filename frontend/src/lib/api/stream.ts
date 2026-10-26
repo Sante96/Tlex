@@ -58,6 +58,20 @@ export async function getPoolStatus(): Promise<PoolStatus | null> {
   }
 }
 
+/** The Telegram clients a title's stream holds now, of the pool's (the player's ring) */
+export async function getStreamClients(
+  mediaId: number,
+): Promise<{ inUse: number; total: number } | null> {
+  try {
+    const response = await api.get<{ in_use: number; total: number }>(
+      `/api/v1/stream/clients/${mediaId}`,
+    );
+    return { inUse: response.data.in_use, total: response.data.total };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Release a cached stream reader and its Telegram clients.
  * Call this when the player unmounts (user navigates away).

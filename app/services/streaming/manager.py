@@ -19,6 +19,12 @@ _reader_cache: dict[int, tuple[VirtualStreamReader, float]] = {}
 _READER_TTL = 60  # Seconds of inactivity before releasing
 
 
+def reader_clients(media_id: int) -> int:
+    """How many clients the title's playback reader holds now (0: not playing)."""
+    entry = _reader_cache.get(media_id)
+    return len(entry[0]._clients) if entry else 0
+
+
 async def get_virtual_reader(
     session: AsyncSession, media_id: int, *, persistent: bool = False
 ) -> VirtualStreamReader | None:

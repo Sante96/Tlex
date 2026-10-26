@@ -387,7 +387,8 @@
     "streamError": "Impossibile riprodurre il video",
     "seekHint": "← → sposta · Enter conferma · Esc annulla",
     "chapter": "Capitolo {n}",
-    "song": "Brano {n}"
+    "song": "Brano {n}",
+    "clients": "{inUse} client su {total}"
   },
   "errors": {
     "crashTitle": "Qualcosa è andato storto",

@@ -94,6 +94,7 @@ export {
   warmStream,
   releaseStream,
   getPoolStatus,
+  getStreamClients,
 } from "./stream";
 export type { PoolStatus } from "./stream";
 

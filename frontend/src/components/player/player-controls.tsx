@@ -14,6 +14,8 @@ import { formatTime } from "@/lib/format";
 import { PlayerSettingsDropdown } from "./player-settings";
 import { VideoSeekbar } from "./video-seekbar";
 import { VolumeSlider } from "./volume-slider";
+import { ClientRing } from "./client-ring";
+import type { StreamClients } from "@/hooks/player/use-stream-clients";
 import type { Chapter, MediaStream } from "@/lib/api";
 
 function PlayerTooltip({
@@ -41,6 +43,8 @@ interface PlayerControlsProps {
   duration: number;
   chapters?: Chapter[] | null;
   chapterWord?: "chapter" | "song";
+  /** The Telegram clients streaming this title (the ring next to the volume) */
+  clients?: StreamClients | null;
   volume: number;
   isMuted: boolean;
   isFullscreen: boolean;
@@ -83,6 +87,7 @@ export function PlayerControls({
   duration,
   chapters,
   chapterWord,
+  clients,
   volume,
   isMuted,
   isFullscreen,
@@ -274,6 +279,19 @@ export function PlayerControls({
                 onToggleMute={onToggleMute}
               />
             </div>}
+            {clients && clients.total > 0 && (
+              <div className="px-2 py-1.5">
+                {isTV ? (
+                  <ClientRing {...clients} />
+                ) : (
+                  <PlayerTooltip
+                    label={t("player.clients", { inUse: clients.inUse, total: clients.total })}
+                  >
+                    <ClientRing {...clients} />
+                  </PlayerTooltip>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right — Controls */}

@@ -387,7 +387,8 @@
     "streamError": "Couldn't play the video",
     "seekHint": "← → move · Enter confirm · Esc cancel",
     "chapter": "Chapter {n}",
-    "song": "Song {n}"
+    "song": "Song {n}",
+    "clients": "{inUse} of {total} clients"
   },
   "errors": {
     "crashTitle": "Something went wrong",

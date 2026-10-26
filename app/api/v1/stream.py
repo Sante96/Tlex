@@ -19,7 +19,7 @@ from app.core.worker_manager import worker_manager
 from app.models.media import CodecType, MediaItem, MediaStream
 from app.services.ffmpeg import RemuxOptions, ffmpeg_remuxer
 from app.services.mkv_cues import extract_keyframes_from_url
-from app.services.streaming import get_virtual_reader, release_reader
+from app.services.streaming import get_virtual_reader, reader_clients, release_reader
 from app.services.streaming.telegram import refresh_all_file_ids
 
 settings = get_settings()
@@ -197,6 +197,18 @@ async def pool_status() -> dict:
     No DB session required — reads in-memory pool state.
     """
     return worker_manager.pool_status()
+
+
+@router.get("/clients/{media_id}")
+async def stream_clients(media_id: int) -> dict:
+    """The player's client ring: the clients this title's stream holds, of the pool's.
+
+    In-memory, no DB: the player asks every couple of seconds.
+    """
+    return {
+        "in_use": reader_clients(media_id),
+        "total": worker_manager.pool_status()["total_clients"],
+    }
 
 
 @router.post("/release/{media_id}")
