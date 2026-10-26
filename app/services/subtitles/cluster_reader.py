@@ -188,7 +188,16 @@ async def extract_cued_blocks(
         async with semaphore:
             return await reader.read_window(start, min(end, reader.total_size))
 
-    data = await asyncio.gather(*(fetch(s, e) for s, e in windows))
+    tasks = [asyncio.create_task(fetch(s, e)) for s, e in windows]
+    try:
+        data = await asyncio.gather(*tasks)
+    except BaseException:
+        # gather leaves the other reads running: the next title's extraction would start
+        # beside them, and failures under load piled up until they held the whole pool
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     logger.info(
         f"Subtitle cues: {len(placed)} blocks of {len(cues_by_track)} tracks in "
         f"{len(windows)} reads ({sum(map(len, data)) // 1024} KB)"

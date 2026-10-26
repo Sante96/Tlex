@@ -11,6 +11,7 @@ Coverage:
 - read_small: Telegram's GetFile alignment rules
 """
 
+import asyncio
 import zlib
 
 import pytest
@@ -23,8 +24,10 @@ from app.services.subtitles.builders import (
     build_sup_content,
 )
 from app.services.subtitles.cluster_reader import (
+    SubtitleCue,
     _build_read_ranges,
     _parallel_fetch_and_parse,
+    extract_cued_blocks,
     extract_via_scan,
 )
 from app.services.subtitles.ebml_parser import (
@@ -723,6 +726,31 @@ class TestExtractAllSubtitles:
 
     async def test_no_subtitle_tracks(self):
         assert await extract_all_subtitles(MockReader(b"\x00" * 500)) == []
+
+
+class TestExtractCuedBlocks:
+    async def test_a_failed_read_stops_the_others(self):
+        # A read failing (Telegram throttling) ended the extraction while its other reads
+        # went on: title after title piled up behind it, holding every client of the pool
+        started, cancelled = [], []
+
+        class StuckReader(MockReader):
+            async def read_window(self, start, end):
+                started.append(start)
+                if len(started) == 1:
+                    await asyncio.sleep(0)  # the others start meanwhile
+                    raise RuntimeError("Failed to fetch chunk 0 of part 1 after 5 attempts")
+                try:
+                    await asyncio.Event().wait()  # Telegram never answers
+                except asyncio.CancelledError:
+                    cancelled.append(start)
+                    raise
+
+        cues = {3: [SubtitleCue(i, i * 1_000_000, 10, None) for i in range(3)]}  # 3 windows
+        with pytest.raises(RuntimeError, match="after 5 attempts"):
+            await extract_cued_blocks(StuckReader(total_size=10_000_000), cues, 0, 1_000_000)
+        assert len(started) == 3
+        assert cancelled == started[1:]
 
 
 class TestCacheAllSubtitleTracks:
