@@ -286,6 +286,8 @@ class TestStreamPlayHeaders:
 
     async def test_ffmpeg_reads_through_the_players_own_reader(self, mock_reader_get, mocker):
         # Without the player's id in ffmpeg's URL, two devices fell back on one reader
+        from app.api.deps import get_db
+
         mocker.patch(
             "app.api.v1.stream._get_keyframe_for_time", new_callable=AsyncMock, return_value=0.0
         )
@@ -296,8 +298,14 @@ class TestStreamPlayHeaders:
             yield b"fmp4"
 
         mocker.patch("app.api.v1.stream.ffmpeg_remuxer.stream", side_effect=remux)
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.get(f"{STREAM_BASE}/play/{MEDIA_ID}?v=tab1")
+        # No database: a connection pooled by an earlier test's event loop broke this one
+        session = MagicMock(scalar=AsyncMock(return_value="hevc"), close=AsyncMock())
+        app.dependency_overrides[get_db] = lambda: session
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                await c.get(f"{STREAM_BASE}/play/{MEDIA_ID}?v=tab1")
+        finally:
+            app.dependency_overrides.pop(get_db, None)
         assert urls and urls[0].endswith("&v=tab1")
 
 
