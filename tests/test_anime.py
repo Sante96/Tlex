@@ -153,3 +153,26 @@ async def test_the_library_is_classified_once_from_tmdb(test_session: AsyncSessi
     # A film's genres too: until now only "Update metadata" filled them in
     assert (film.is_anime, film.genres) == (False, "Commedia,Fantascienza")
     tv.assert_awaited_once()  # the one already classified is left alone
+
+
+async def test_the_anime_beats_its_live_action_adaptation_of_the_same_title(mocker):
+    # "Yuru Camp": TMDB lists the 2020 drama first, the 2018 anime second, both ゆるキャン△
+    def show(tmdb_id, name, original, genres, language):
+        return {"id": tmdb_id, "name": name, "original_name": original, "genre_ids": genres,
+                "original_language": language, "first_air_date": "2020-01-09"}
+
+    results = [
+        show(95623, "Eiga YuruCamp△", "ゆるキャン△", [35, 18], "ja"),
+        show(76075, "Laid-Back Camp", "ゆるキャン△", [16, 35], "ja"),
+    ]
+    mocker.patch.object(tmdb_client, "_get", new=AsyncMock(return_value={"results": results}))
+    match = await tmdb_client.search_tv("Yuru Camp")
+    assert match is not None and match.tmdb_id == 76075
+
+    # Not for Western animation: the live-action one stays first when it comes first
+    results[:] = [
+        show(82452, "Avatar", "Avatar: The Last Airbender", [10759, 18], "en"),
+        show(246, "Avatar", "Avatar: The Last Airbender", [16, 10759], "en"),
+    ]
+    match = await tmdb_client.search_tv("Avatar")
+    assert match is not None and match.tmdb_id == 82452

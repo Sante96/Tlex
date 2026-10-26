@@ -265,7 +265,21 @@ class TMDBClient:
             logger.warning(f"No TMDB results for TV: {title}")
             return None
 
-        r = data["results"][0]
+        results = data["results"]
+        r = results[0]
+        # A live-action adaptation can come first under the anime's own title (Yuru Camp's
+        # 2020 drama before the 2018 anime, both ゆるキャン△): with the same original title,
+        # the anime. Only an anime: Western animation keeps TMDB's order
+        r = next(
+            (
+                x
+                for x in results
+                if x.get("original_name") == r.get("original_name")
+                and ANIMATION_GENRE in x.get("genre_ids", [])
+                and x.get("original_language") == "ja"
+            ),
+            r,
+        )
         poster_path = r.get("poster_path")
         overview = r.get("overview")
 
