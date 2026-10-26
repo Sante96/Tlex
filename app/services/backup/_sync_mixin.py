@@ -22,16 +22,16 @@ ARCHIVE_SYNC_EVERY = timedelta(hours=20)
 
 
 class BackupSyncMixin(BackupFailoverMixin):
-    async def sync_archive(
-        self, session: AsyncSession, worker: Client, backup: BackupChannel
-    ) -> int:
-        """Fill an archive group from its own account. The worker, an admin of the main
-        group, only lets the account in when it isn't a member."""
+    async def sync_archive(self, session: AsyncSession, backup: BackupChannel) -> int:
+        """Fill an archive group from its own account. A worker account only lets it into
+        the main group when it isn't a member."""
+        from app.core.worker_manager import worker_manager
+
         account = await session.get(ArchiveAccount, backup.archive_account_id)
         if account is None:
             return 0
         async with archive_client(session, account) as archive:
-            await join_main(worker, archive, backup.main_channel_id)
+            await join_main(worker_manager.primary_clients(), archive, backup.main_channel_id)
             return await self.sync_messages(session, archive, backup)
 
     async def sync_messages(
@@ -233,11 +233,14 @@ class BackupSyncMixin(BackupFailoverMixin):
             try:
                 for backup in backups:
                     try:
+                        # A failed batch of the previous one rolled the session back,
+                        # expiring this row: read in async code, it would raise
+                        await session.refresh(backup)
                         if backup.archive_account_id is not None:
                             # Never health-checked nor promoted on its own: by hand only
                             last = backup.last_sync_at
                             if last is None or datetime.utcnow() - last >= ARCHIVE_SYNC_EVERY:
-                                total_synced += await self.sync_archive(session, client, backup)
+                                total_synced += await self.sync_archive(session, backup)
                             continue
 
                         is_dead = await self.check_health(session, client, backup)

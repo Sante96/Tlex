@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from app.api.deps import DBSession, get_admin_user
 from app.core.worker_manager import worker_manager
 from app.models.backup import ArchiveAccount, BackupChannel
-from app.services.backup.archive import archive_client, join_main
+from app.services.backup.archive import archive_client, chat_ids, join_main
 from app.services.backup.service import backup_service
 
 router = APIRouter(prefix="/backup", tags=["backup"])
@@ -114,13 +114,13 @@ async def create_backup(
     Optionally invites all current members of the main channel.
     Message sync must be triggered separately.
     """
+    if body.archive_account_id is not None:
+        return await _create_archive(session, body, body.archive_account_id)
+
     worker_result = await worker_manager.get_best_worker(session)
     if not worker_result:
         raise HTTPException(503, "No workers available")
     _, client = worker_result
-
-    if body.archive_account_id is not None:
-        return await _create_archive(session, client, body, body.archive_account_id)
 
     try:
         backup = await backup_service.create_backup_channel(
@@ -158,7 +158,7 @@ async def create_backup(
 
 
 async def _create_archive(
-    session: DBSession, worker, body: CreateBackupRequest, account_id: int
+    session: DBSession, body: CreateBackupRequest, account_id: int
 ) -> BackupChannelOut:
     """The account makes the group and forwards the messages itself: they are its own,
     and no worker is let in (no members invited, no admins promoted)."""
@@ -166,7 +166,10 @@ async def _create_archive(
     if account is None:
         raise HTTPException(404, "Archive account not found")
     async with archive_client(session, account) as archive:
-        await join_main(worker, archive, body.main_channel_id)
+        try:
+            await join_main(worker_manager.primary_clients(), archive, body.main_channel_id)
+        except RuntimeError as e:  # no worker account may invite it
+            raise HTTPException(400, str(e)) from e
         try:
             backup = await backup_service.create_backup_channel(
                 session, archive, body.main_channel_id, body.title, archive_account_id=account.id
@@ -193,15 +196,16 @@ async def sync_backup(
     if not backup:
         raise HTTPException(404, "Backup channel not found")
 
+    if backup.archive_account_id is not None:
+        synced = await backup_service.sync_archive(session, backup)
+        return {"synced": synced, "total": backup.synced_count}
+
     worker_result = await worker_manager.get_best_worker(session)
     if not worker_result:
         raise HTTPException(503, "No workers available")
     _, client = worker_result
 
-    if backup.archive_account_id is not None:
-        synced = await backup_service.sync_archive(session, client, backup)
-    else:
-        synced = await backup_service.sync_messages(session, client, backup)
+    synced = await backup_service.sync_messages(session, client, backup)
     return {"synced": synced, "total": backup.synced_count}
 
 
@@ -297,7 +301,7 @@ async def delete_backup(
         try:
             if account is not None:  # only its owner can delete an archive group
                 async with archive_client(session, account) as archive:
-                    await archive.get_chat(backup_tg_id)  # its access hash
+                    await chat_ids(archive)  # its groups' access hashes
                     await backup_service.delete_telegram_group(archive, backup_tg_id)
             elif worker_result := await worker_manager.get_best_worker(session):
                 _, client = worker_result

@@ -112,15 +112,18 @@ class BackupFailoverMixin(BackupCreateMixin):
             + (f", {unsynced} left on the old channel (not in the backup)" if unsynced else "")
         )
 
-        archives = await session.execute(
+        others = await session.execute(
             select(BackupChannel).where(
-                BackupChannel.main_channel_id == old_main,
-                BackupChannel.archive_account_id.is_not(None),
-                BackupChannel.id != backup.id,
+                BackupChannel.main_channel_id == old_main, BackupChannel.id != backup.id
             )
         )
-        for archive in archives.scalars().all():
-            await self._follow_new_main(session, archive, new_main, msg_map, topic_map)
+        for other in others.scalars().all():
+            if other.archive_account_id is not None:
+                await self._follow_new_main(session, other, new_main, msg_map, topic_map)
+            else:
+                # The workers' backup of a main group whose archive took over: lost too.
+                # Left active, it would fail its health check and promote itself onto it
+                other.is_active = False
 
         backup.is_active = False
         backup.is_promoted = True
