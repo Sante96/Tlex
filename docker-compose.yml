@@ -99,9 +99,12 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      # Subtitle/font cache. The backend writes nothing else to disk (Telegram sessions
-      # live in the database); ./data holds the other services' databases.
+      # Subtitle/font cache (it can be deleted: it's made again). Telegram sessions live
+      # in the database; ./data holds the other services' databases.
       - ./cache:/app/cache
+      # Own images of concerts (uploads, downloaded links, video frames): not a cache,
+      # uploads can't be made again
+      - ./images:/app/images
 
   # ============================================
   # Frontend (Next.js)

@@ -7,6 +7,7 @@ from app.api.v1 import (
     auth,
     backup,
     device_auth,
+    images,
     media,
     people,
     profiles,
@@ -39,5 +40,7 @@ router.include_router(progress.router)
 router.include_router(profiles.router)
 router.include_router(watchlist.router)
 router.include_router(people.router, dependencies=_user_auth)
+# Own images: GET is public (random names, see app/services/images.py), adding needs login
+router.include_router(images.router, prefix="/images", tags=["images"])
 router.include_router(workers.router, tags=["workers"])
 router.include_router(backup.router)
