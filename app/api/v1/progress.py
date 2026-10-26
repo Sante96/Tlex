@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile, get_db
-from app.models import MediaItem, Profile, Series, WatchProgress
+from app.models import Franchise, MediaItem, Profile, Series, WatchProgress
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
@@ -50,6 +50,8 @@ class ContinueWatchingItem(BaseModel):
     series_poster_path: str | None = None
     season_number: int | None = None
     episode_number: int | None = None
+    # A concert's anime/game (the hero's line under its title)
+    franchise_title: str | None = None
 
 
 @router.get("/{media_id}", response_model=ProgressResponse | None)
@@ -142,9 +144,10 @@ async def get_continue_watching(
     """
     # Get all incomplete progress items with media and series info
     result = await db.execute(
-        select(WatchProgress, MediaItem, Series)
+        select(WatchProgress, MediaItem, Series, Franchise.title)
         .join(MediaItem, WatchProgress.media_item_id == MediaItem.id)
         .outerjoin(Series, MediaItem.series_id == Series.id)
+        .outerjoin(Franchise, MediaItem.franchise_id == Franchise.id)
         .where(
             WatchProgress.profile_id == profile.id,
             WatchProgress.completed == False,  # noqa: E712
@@ -158,7 +161,7 @@ async def get_continue_watching(
     seen_series: dict[int, bool] = {}  # series_id -> already added
     items: list[ContinueWatchingItem] = []
 
-    for progress, media, series in rows:
+    for progress, media, series, franchise_title in rows:
         # Movies: always include individually
         if media.series_id is None:
             items.append(
@@ -173,6 +176,7 @@ async def get_continue_watching(
                     progress_percent=progress.progress_percent,
                     still_path=media.backdrop_path,
                     overview=media.overview,
+                    franchise_title=franchise_title,
                 )
             )
         else:

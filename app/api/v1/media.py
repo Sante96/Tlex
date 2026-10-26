@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel
 from pyrogram.types import Message
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload, undefer
 
 from app.api.deps import DBSession, get_admin_user, get_current_user, get_current_user_optional
 from app.core.worker_manager import worker_manager
-from app.models.media import MediaItem, MediaStream, MediaType
+from app.models.media import Franchise, MediaItem, MediaStream, MediaType
 from app.models.user import User
 from app.schemas import (
     MediaItemDetailResponse,
@@ -48,18 +48,20 @@ async def list_media(
 
     # Base query
     query = select(MediaItem).options(selectinload(MediaItem.parts))
+    count_query = select(func.count()).select_from(MediaItem)
 
     if media_type:
         query = query.where(MediaItem.media_type == media_type)
-    if search:
-        query = query.where(MediaItem.title.ilike(f"%{search}%"))
-
-    # Get total count
-    count_query = select(func.count()).select_from(MediaItem)
-    if media_type:
         count_query = count_query.where(MediaItem.media_type == media_type)
     if search:
-        count_query = count_query.where(MediaItem.title.ilike(f"%{search}%"))
+        # A concert is also found by its anime/game ("arknights" finds its lives)
+        matches = or_(MediaItem.title.ilike(f"%{search}%"), Franchise.title.ilike(f"%{search}%"))
+        query = query.outerjoin(Franchise, MediaItem.franchise_id == Franchise.id).where(matches)
+        count_query = count_query.outerjoin(
+            Franchise, MediaItem.franchise_id == Franchise.id
+        ).where(matches)
+
+    # Get total count
     total_result = await session.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -118,7 +120,9 @@ async def get_media(
             selectinload(MediaItem.parts),
             selectinload(MediaItem.streams),
             selectinload(MediaItem.series),
+            selectinload(MediaItem.franchise),
             undefer(MediaItem.chapters),
+            undefer(MediaItem.setlist),
         )
     )
     result = await session.execute(query)
@@ -189,6 +193,9 @@ async def get_media(
             for s in item.streams
         ],
         chapters=item.chapters,
+        franchise_id=item.franchise_id,
+        franchise_title=item.franchise.title if item.franchise else None,
+        setlist=item.setlist,
     )
 
 
@@ -499,7 +506,8 @@ class MediaUpdateBody(BaseModel):
     overview: str | None = None
     poster_path: str | None = None
     backdrop_path: str | None = None
-    release_date: str | None = None
+    release_date: str | None = None  # "" clears it (concerts)
+    setlist: list[str | None] | None = None  # concerts: a song title per chapter
 
 
 @router.patch("/{media_id}")
@@ -517,6 +525,9 @@ async def update_media_item(
     if not item:
         raise HTTPException(status_code=404, detail="Media not found")
 
+    if item.media_type == MediaType.CONCERT:
+        return await _update_concert(session, item, body)
+
     override = await upsert_media_override(
         session,
         current_user,
@@ -533,6 +544,29 @@ async def update_media_item(
         "overview": item.overview,
         "poster_path": override.poster_path or item.poster_path,
         "backdrop_path": override.backdrop_path or item.backdrop_path,
+        "release_date": str(item.release_date) if item.release_date else None,
+    }
+
+
+async def _update_concert(session: DBSession, item: MediaItem, body: MediaUpdateBody) -> dict:
+    """A concert's details are the library's (TMDB has nothing to fall back on): an edit
+    is for everyone, unlike a film's per-user poster."""
+    fields = body.model_dump(exclude_unset=True)
+    for name in ("title", "overview", "poster_path", "backdrop_path", "setlist"):
+        if name in fields:
+            setattr(item, name, fields[name])
+    if "release_date" in fields:
+        item.release_date = (
+            date.fromisoformat(fields["release_date"]) if fields["release_date"] else None
+        )
+    await session.commit()
+    logger.info(f"Updated concert {item.id}: {', '.join(fields)}")
+    return {
+        "id": item.id,
+        "title": item.title,
+        "overview": item.overview,
+        "poster_path": item.poster_path,
+        "backdrop_path": item.backdrop_path,
         "release_date": str(item.release_date) if item.release_date else None,
     }
 

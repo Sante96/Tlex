@@ -1,0 +1,140 @@
+"""Concerts through the media API: shared edits, setlist, search by franchise, Continue
+Watching."""
+
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import undefer
+
+from app.models.media import Franchise, MediaItem, MediaType
+from app.models.user import Profile, User, WatchProgress
+from app.services.ffprobe import ProbeResult, ffprobe_service
+from app.services.scanner import processor
+from app.services.scanner.models import ScannedFile
+
+
+async def _concert(session: AsyncSession, **fields) -> MediaItem:
+    concert = MediaItem(
+        title="Ambience Synesthesia",
+        media_type=MediaType.CONCERT,
+        franchise=Franchise(key="arknights", title="Arknights"),
+        duration_seconds=5940,
+        **fields,
+    )
+    session.add(concert)
+    await session.commit()
+    return concert
+
+
+async def test_patch_concert_writes_for_everyone(
+    client: AsyncClient, auth_headers, admin_headers, test_session
+):
+    concert = await _concert(test_session)
+    body = {
+        "title": "Synesthesia",
+        "release_date": "2024-08-03",
+        "poster_path": "local:mine.png",
+        "setlist": ["Opening", None, "Encore", "extra"],
+    }
+
+    resp = await client.patch(f"/api/v1/media/{concert.id}", json=body, headers=auth_headers)
+
+    assert resp.status_code == 200
+    other = (await client.get(f"/api/v1/media/{concert.id}", headers=admin_headers)).json()
+    assert other["title"] == "Synesthesia"
+    assert other["release_date"] == "2024-08-03"
+    assert other["poster_path"] == "local:mine.png"
+    assert other["setlist"] == ["Opening", None, "Encore", "extra"]
+    assert (other["franchise_id"], other["franchise_title"]) == (concert.franchise_id, "Arknights")
+
+
+async def test_patch_concert_date_can_be_cleared(client: AsyncClient, auth_headers, test_session):
+    concert = await _concert(test_session, release_date=date(2024, 1, 1))
+
+    await client.patch(f"/api/v1/media/{concert.id}", json={"release_date": ""}, headers=auth_headers)
+
+    body = (await client.get(f"/api/v1/media/{concert.id}", headers=auth_headers)).json()
+    assert body["release_date"] is None
+
+
+async def test_patch_movie_poster_stays_per_user(
+    client: AsyncClient, auth_headers, admin_headers, test_session
+):
+    film = MediaItem(title="Film", media_type=MediaType.MOVIE, poster_path="/tmdb.jpg")
+    test_session.add(film)
+    await test_session.commit()
+
+    await client.patch(
+        f"/api/v1/media/{film.id}", json={"poster_path": "/mine.jpg"}, headers=auth_headers
+    )
+
+    other = (await client.get(f"/api/v1/media/{film.id}", headers=admin_headers)).json()
+    assert other["poster_path"] == "/tmdb.jpg"
+
+
+async def test_analyze_keeps_setlist_and_images(test_session, mocker):
+    concert = await _concert(test_session, setlist=["Opening"], poster_path="local:mine.png")
+    chapters = [{"start": 0.0, "end": 60.0, "title": None}]
+    mocker.patch.object(
+        ffprobe_service,
+        "analyze_from_telegram",
+        new=AsyncMock(return_value=ProbeResult(duration_seconds=60, streams=[], chapters=chapters)),
+    )
+    first_file = ScannedFile(
+        message_id=1, file_id="f", file_name="x.mkv", file_size=1, base_name="x.mkv", channel_id=1
+    )
+
+    await processor.analyze_streams(test_session, concert, first_file, MagicMock())
+    await test_session.commit()
+
+    row = (
+        await test_session.execute(
+            select(MediaItem)
+            .options(undefer(MediaItem.setlist), undefer(MediaItem.chapters))
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    assert (row.chapters, row.setlist, row.poster_path) == (chapters, ["Opening"], "local:mine.png")
+
+
+async def test_search_finds_concerts_by_franchise(client: AsyncClient, auth_headers, test_session):
+    await _concert(test_session)
+    test_session.add(MediaItem(title="Arknights: the movie", media_type=MediaType.MOVIE))
+    await test_session.commit()
+
+    resp = await client.get(
+        "/api/v1/media", params={"search": "arkni", "media_type": "CONCERT"}, headers=auth_headers
+    )
+
+    body = resp.json()
+    assert body["total"] == 1
+    assert [i["title"] for i in body["items"]] == ["Ambience Synesthesia"]
+
+
+async def test_continue_watching_names_the_franchise(
+    client: AsyncClient, auth_headers, test_session
+):
+    concert = await _concert(test_session)
+    user = (
+        await test_session.execute(select(User).where(User.email == "test@example.com"))
+    ).scalar_one()
+    profile = (
+        await test_session.execute(select(Profile).where(Profile.user_id == user.id))
+    ).scalar_one()
+    test_session.add(
+        WatchProgress(
+            user_id=user.id,
+            profile_id=profile.id,
+            media_item_id=concert.id,
+            position_seconds=600,
+            duration_seconds=5940,
+        )
+    )
+    await test_session.commit()
+
+    items = (await client.get("/api/v1/progress", headers=auth_headers)).json()
+
+    assert [(i["media_type"], i["franchise_title"]) for i in items] == [("CONCERT", "Arknights")]

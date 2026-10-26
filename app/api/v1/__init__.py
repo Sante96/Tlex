@@ -7,6 +7,7 @@ from app.api.v1 import (
     auth,
     backup,
     device_auth,
+    franchises,
     images,
     media,
     people,
@@ -31,6 +32,9 @@ _user_auth = [Depends(get_current_user)]
 router.include_router(media.router, prefix="/media", tags=["media"], dependencies=_user_auth)
 router.include_router(series.router, prefix="/series", tags=["series"], dependencies=_user_auth)
 router.include_router(seasons.router, prefix="/series", tags=["seasons"], dependencies=_user_auth)
+router.include_router(
+    franchises.router, prefix="/franchises", tags=["concerts"], dependencies=_user_auth
+)
 _stream_auth = [Depends(get_stream_user)]
 router.include_router(stream.router, prefix="/stream", tags=["stream"], dependencies=_stream_auth)
 router.include_router(

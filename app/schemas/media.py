@@ -69,6 +69,10 @@ class MediaItemDetailResponse(MediaItemResponse):
     streams: list[MediaStreamResponse]
     # None: not probed yet; []: the file has no chapters
     chapters: list[ChapterResponse] | None = None
+    # Concerts: their anime/game, and the song titles of the chapters (one per chapter)
+    franchise_id: int | None = None
+    franchise_title: str | None = None
+    setlist: list[str | None] | None = None
 
 
 class MediaListResponse(BaseModel):
