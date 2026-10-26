@@ -121,15 +121,15 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         {/* Dark on the left and low down, for the text and the strip */}
         <div className="absolute inset-0 bg-linear-to-r from-[#09090b]/90 via-[#09090b]/50 to-transparent" />
         <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
-        {/* From lg, under the column of cards on the right: their titles over the picture */}
+        {/* From lg, under the cards on the right: their titles over the picture */}
         {items.length > 1 && (
           <div className="hidden lg:block absolute inset-y-0 right-0 w-[28rem] bg-linear-to-l from-[#09090b]/85 via-[#09090b]/45 to-transparent" />
         )}
       </div>
 
       {/* A fixed height: the text grows upwards, so a longer title doesn't push the page
-          down every time the hero moves on. From lg the strip is a column on the right
-          and the text sits down in the bottom-left corner */}
+          down every time the hero moves on. From lg the strip sits beside the text, on the
+          right, and the text goes down in the bottom-left corner */}
       <div className="relative flex flex-col lg:flex-row justify-end lg:justify-between lg:items-end gap-6 lg:gap-10 h-120 md:h-[max(520px,64vh)] px-4 md:px-8 pb-4 md:pb-8">
         <div className="flex flex-col gap-2 md:gap-3 max-w-2xl text-shadow">
           {/* The text changes with the title; the buttons below stay put (and their glass
@@ -174,14 +174,14 @@ export function HomeHero({ items }: { items: HeroItem[] }) {
         {items.length > 1 && (
           // relative: the cards' offsets are the strip's, for scrolling the active one in.
           // A column of its own height at most: more cards scroll inside it
-          // Room above it (it used to touch the top bar); the bottom fades out over 64 px
-          // into the page, the padding letting the last card scroll clear of the fade.
-          // The mouse over the cards holds the rotation (not over the whole hero)
+          // From lg a row at the bottom right, beside the text: more cards than fit scroll
+          // sideways, fading out at both edges (the padding lets the first and last ones
+          // clear the fades). The mouse over the cards holds the rotation (not over the whole hero)
           <div
             ref={stripRef}
             onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
             onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
-            className="relative flex lg:flex-col gap-3 md:gap-4 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto scrollbar-hide py-1 lg:pt-6 lg:pb-16 -mx-1 px-1 lg:max-h-full lg:shrink-0 lg:mask-[linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-64px),transparent)]"
+            className="relative flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1 lg:pl-6 lg:pr-12 lg:min-w-0 lg:max-w-[45%] lg:mask-[linear-gradient(to_right,transparent,black_24px,black_calc(100%-48px),transparent)]"
           >
             {items.map((it, i) => (
               <StripCard
