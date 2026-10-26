@@ -549,17 +549,6 @@ export function VideoPlayer({
   }, []);
   const controlsVisible = showControls || !isPlaying || isLoading || isSeeking || settingsOpen;
 
-  useVideoHotkeys({
-    togglePlay,
-    toggleFullscreen,
-    toggleMute,
-    skip,
-    jumpChapter: chapters && chapters.length > 1 ? jumpChapter : undefined,
-    onActivity: handleMouseMove,
-    controlsVisible,
-    isTV,
-  });
-
   const togglePiP = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return;
@@ -603,6 +592,19 @@ export function VideoPlayer({
   const upNextImage = nextEpisode
     ? getTmdbImageUrl(nextEpisode.still_path ?? nextEpisode.backdrop_path, "original")
     : getTmdbImageUrl(recommendations[0]?.backdrop_path ?? null, "original");
+
+  useVideoHotkeys({
+    togglePlay,
+    toggleFullscreen,
+    toggleMute,
+    skip,
+    jumpChapter: chapters && chapters.length > 1 ? jumpChapter : undefined,
+    onActivity: handleMouseMove,
+    // Up next's buttons are the controls on screen: the TV remote's arrows move between
+    // them and OK presses them (as hidden controls, arrows sought and closed it)
+    controlsVisible: controlsVisible || upNext,
+    isTV,
+  });
 
   // Moving on counts this one as watched
   const playNextEpisode = useCallback(() => {

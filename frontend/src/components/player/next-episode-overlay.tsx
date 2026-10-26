@@ -9,6 +9,7 @@ import { type MediaItem, type NextEpisode } from "@/lib/api";
 import { useProfile } from "@/contexts/profile-context";
 import { cleanEpisodeTitle, getTmdbImageUrl } from "@/lib/format";
 import { useIsLandscape } from "@/lib/breakpoints";
+import { useIsTV } from "@/hooks/use-platform";
 
 const COUNTDOWN_SECONDS = 15;
 
@@ -70,6 +71,8 @@ function UpNextCard({
 }) {
   const t = useTranslations();
   const landscape = useIsLandscape();
+  // The TV remote starts on it; not with a keyboard, where Space plays and pauses
+  const isTV = useIsTV();
   const autoplay = useProfile().profile?.preferences?.autoplay_next !== false;
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const onPlayRef = useRef(onPlay);
@@ -114,7 +117,7 @@ function UpNextCard({
       {/* Orange, filling darker over the countdown */}
       <button
         type="button"
-        autoFocus
+        autoFocus={isTV}
         onClick={onPlay}
         className={`${BUTTON} ${landscape ? "" : "flex-1 px-2"} relative overflow-hidden bg-plex-orange text-black hover:bg-[#f0b429]`}
       >
@@ -206,6 +209,7 @@ function RecommendationsCard({
 }) {
   const t = useTranslations();
   const landscape = useIsLandscape();
+  const isTV = useIsTV();
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -237,7 +241,7 @@ function RecommendationsCard({
             <button
               key={film.id}
               type="button"
-              autoFocus={i === 0}
+              autoFocus={isTV && i === 0}
               onClick={() => onPick(film.id)}
               className="group shrink-0 w-36 lg:w-40 xl:w-52 tv-1080:w-64 text-left focus-visible:outline-none"
             >
