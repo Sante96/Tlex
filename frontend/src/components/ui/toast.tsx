@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed bottom-[calc(var(--bottom-nav-h)+var(--bottom-nav-gap)+12px)] md:bottom-6 landscape:bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none">
         <AnimatePresence mode="sync">
           {toasts.map((t) => (
             <motion.div

@@ -124,7 +124,11 @@ export function Sidebar() {
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderRight: "1px solid rgba(39, 39, 42, 0.5)",
-        padding: isTV ? `${tvPad.v}px ${tvPad.h}px` : "20px 14px",
+        padding: isTV
+          ? `${tvPad.v}px ${tvPad.h}px`
+          : "calc(20px + env(safe-area-inset-top, 0px)) 14px 20px",
+        // Clear of the notch held sideways, of the status bar opened from the home screen
+        left: "env(safe-area-inset-left, 0px)",
       }}
     >
       {/* Header */}

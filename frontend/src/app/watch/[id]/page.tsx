@@ -142,7 +142,7 @@ function Watch() {
           icon={<ArrowLeft className="h-5 w-5" />}
           aria-label={t("common.back")}
           onClick={() => router.back()}
-          className="absolute top-4 left-4 h-10 w-10 text-white"
+          className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-[calc(1rem+env(safe-area-inset-left))] h-10 w-10 text-white"
         />
         <div className="relative flex flex-col items-center gap-6 text-center text-shadow">
           <div className="flex flex-col gap-1">

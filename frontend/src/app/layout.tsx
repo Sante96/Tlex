@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -11,6 +11,15 @@ import "./globals.css";
 // The same typeface on every device: the system font made the app look different on
 // Windows, Android, iOS and the TV. next/font serves it from this server, not Google.
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
+
+// The whole screen, the notch's, island's and rounded corners' parts too: the bars keep
+// clear of them by env(safe-area-inset-*) (without cover those are all 0, and the bottom
+// bar sat under the home indicator)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "TLEX",

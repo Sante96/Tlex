@@ -71,7 +71,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
       transition={NAV_MOTION}
     >
       <TopBar />
-      <main className="pb-16 md:pb-0 landscape:pb-0">
+      <main className="pb-(--bottom-nav-space) md:pb-0 landscape:pb-0">
         {/* Navigations run in a transition: the old page fades out and the new one in
             (globals.css). The browser animates snapshots, so the glass keeps its blur. */}
         <ViewTransition name="page">
@@ -104,7 +104,8 @@ export default function MainLayout({
       <ProfileGate>
         {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
         <SidebarProvider>
-          <div className="min-h-screen">
+          {/* Sideways, clear of the notch (the sidebar is fixed: it moves by itself) */}
+          <div className="min-h-screen pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
             <AppBackground />
             <Sidebar />
             <MainContent>{children}</MainContent>

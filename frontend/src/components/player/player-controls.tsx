@@ -133,6 +133,10 @@ export function PlayerControls({
         "absolute inset-0 flex flex-col z-20",
         !visible && "pointer-events-none",
       )}
+      style={{
+        padding:
+          "env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)",
+      }}
     >
       {/* Top bar */}
       <div

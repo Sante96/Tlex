@@ -195,7 +195,9 @@ export function TopBar() {
 
   return (
     <header
-      className="vt-topbar h-14 flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 relative"
+      // Opened from the home screen, the status bar sits over the page: the bar grows under
+      // it (env() is 0 in Safari and on computers)
+      className="vt-topbar h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex items-center px-4 md:px-6 gap-3 sticky top-0 z-30 relative"
       style={{ borderBottom: "1px solid rgba(39, 39, 42, 0.5)" }}
     >
       {/* Blur layer as sibling — keeps header from creating a stacking context */}

@@ -147,7 +147,7 @@ function UpNextCard({
       className={
         landscape
           ? // Above the control bar, over the next episode's picture
-            "absolute z-30 right-3 sm:right-8 bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4 text-right"
+            "absolute z-30 right-[calc(0.75rem+env(safe-area-inset-right))] sm:right-[calc(2rem+env(safe-area-inset-right))] bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4 text-right"
           : // Right under the video, moved up to 7% from the top (a 16:9 picture, full width)
             "absolute z-30 inset-x-4 top-[calc(7%+56.25vw+2rem)] mx-auto max-w-md flex flex-col gap-3"
       }
@@ -220,7 +220,7 @@ function RecommendationsCard({
       aria-label={t("player.youMightLike")}
       className={
         landscape
-          ? "absolute z-30 right-3 sm:right-8 bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4"
+          ? "absolute z-30 right-[calc(0.75rem+env(safe-area-inset-right))] sm:right-[calc(2rem+env(safe-area-inset-right))] bottom-24 sm:bottom-28 flex flex-col items-end gap-3 tv-1080:gap-4"
           : "absolute z-30 inset-x-4 top-[calc(7%+56.25vw+2rem)] mx-auto max-w-md flex flex-col gap-3"
       }
     >
