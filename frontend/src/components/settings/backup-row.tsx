@@ -73,6 +73,11 @@ export function BackupRow({
                 ? t("active")
                 : t("inactive")}
           </span>
+          {b.archive_account_id !== null && (
+            <span className="inline-flex items-center h-5 px-2 rounded text-[10px] font-semibold bg-purple-500/15 text-purple-400">
+              {t("archive")}
+            </span>
+          )}
           <span className="text-sm font-medium text-[#fafafa] truncate">
             {b.title}
           </span>

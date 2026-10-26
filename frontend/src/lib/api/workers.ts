@@ -68,6 +68,7 @@ export async function verifyWorkerCode(
   phoneNumber: string,
   code: string,
   password?: string,
+  archive = false,
 ): Promise<{ status: string; worker_id?: number; is_premium?: boolean }> {
   const response = await api.post<{
     status: string;
@@ -77,6 +78,7 @@ export async function verifyWorkerCode(
     phone_number: phoneNumber,
     code,
     password,
+    archive,
   });
   return response.data;
 }

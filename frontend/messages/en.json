@@ -229,7 +229,9 @@
     "verifyCodePlaceholder": "Verification code",
     "verify": "Verify",
     "twoFaInfo": "Account with two-step verification (2FA)",
-    "twoFaPlaceholder": "2FA Password"
+    "twoFaPlaceholder": "2FA Password",
+    "archive": "Archive account (never used for streaming)",
+    "archiveAdded": "Archive account added: you can now create its archive group under Backup."
   },
   "backup": {
     "title": "Backup Channel",
@@ -259,7 +261,12 @@
     "promoted": "Promoted",
     "promoteToMain": "Promote to Main",
     "promoteConfirm": "Promote this backup to main channel? All media will be redirected to the new channel and a new backup will be created automatically.",
-    "failures": "Failures"
+    "failures": "Failures",
+    "kindBackup": "Workers' backup",
+    "kindArchive": "Archive · account …{phone}",
+    "archive": "Archive",
+    "archiveHint": "Created and filled by the archive account, once a day. No worker joins it.",
+    "promoteArchiveConfirm": "Promote the archive to main channel? Only if the main group and the backup are lost: the current workers will join the archive as admins and all media will be moved there."
   },
   "scanner": {
     "title": "Auto Scanner",

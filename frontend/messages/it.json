@@ -229,7 +229,9 @@
     "verifyCodePlaceholder": "Codice di verifica",
     "verify": "Verifica",
     "twoFaInfo": "Account con verifica in due passaggi (2FA)",
-    "twoFaPlaceholder": "Password 2FA"
+    "twoFaPlaceholder": "Password 2FA",
+    "archive": "Account archivio (non usato per lo streaming)",
+    "archiveAdded": "Account archivio aggiunto: ora puoi creargli un gruppo archivio nel Backup."
   },
   "backup": {
     "title": "Canale di Backup",
@@ -259,7 +261,12 @@
     "promoted": "Promosso",
     "promoteToMain": "Promuovi a Main",
     "promoteConfirm": "Promuovere il backup a canale principale? Tutti i media verranno reindirizzati al nuovo canale e verrà creato automaticamente un nuovo backup.",
-    "failures": "Errori"
+    "failures": "Errori",
+    "kindBackup": "Backup dei worker",
+    "kindArchive": "Archivio · account …{phone}",
+    "archive": "Archivio",
+    "archiveHint": "Lo crea e lo riempie l'account archivio, una volta al giorno. Nessun worker ci entra.",
+    "promoteArchiveConfirm": "Promuovere l'archivio a canale principale? Da usare solo se il gruppo principale e il backup sono persi: i worker attuali entreranno nell'archivio come amministratori e tutti i media verranno spostati lì."
   },
   "scanner": {
     "title": "Scanner Automatico",

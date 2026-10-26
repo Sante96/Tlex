@@ -19,6 +19,14 @@ export interface BackupChannel {
   max_failures: number;
   last_failure_at: string | null;
   topics: BackupTopic[];
+  /** An archive group: its own account fills it, promoted by hand only */
+  archive_account_id: number | null;
+}
+
+export interface ArchiveAccount {
+  id: number;
+  phone: string; // last 4 digits
+  groups: number;
 }
 
 export async function listBackupChannels(): Promise<BackupChannel[]> {
@@ -26,10 +34,18 @@ export async function listBackupChannels(): Promise<BackupChannel[]> {
   return data;
 }
 
+export async function listArchiveAccounts(): Promise<ArchiveAccount[]> {
+  const { data } = await api.get<ArchiveAccount[]>(
+    "/api/v1/backup/archive-accounts",
+  );
+  return data;
+}
+
 export async function createBackupChannel(body: {
   main_channel_id: number;
   title: string;
   invite_members: boolean;
+  archive_account_id?: number;
 }): Promise<BackupChannel> {
   const { data } = await api.post<BackupChannel>(
     "/api/v1/backup/channels",
@@ -71,7 +87,6 @@ export async function promoteBackupChannel(id: number): Promise<BackupChannel> {
   );
   return data;
 }
-
 
 export async function getBackupSyncInterval(): Promise<{
   interval_hours: number;

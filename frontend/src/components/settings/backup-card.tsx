@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import {
   listBackupChannels,
+  listArchiveAccounts,
   createBackupChannel,
   syncBackupChannel,
   toggleBackupChannel,
@@ -20,6 +21,7 @@ import {
   promoteBackupChannel,
   getBackupSyncInterval,
   setBackupSyncInterval,
+  type ArchiveAccount,
   type BackupChannel,
 } from "@/lib/api/backup";
 import { getConfiguredChannels } from "@/lib/api/scanner";
@@ -44,6 +46,8 @@ export function BackupCard() {
   const [mainChannelId, setMainChannelId] = useState("");
   const [backupTitle, setBackupTitle] = useState("");
   const [inviteMembers, setInviteMembers] = useState(true);
+  const [archiveAccounts, setArchiveAccounts] = useState<ArchiveAccount[]>([]);
+  const [archiveAccountId, setArchiveAccountId] = useState(""); // "": a workers' backup
   const [creating, setCreating] = useState(false);
 
   // Per-row action state
@@ -84,10 +88,14 @@ export function BackupCard() {
         main_channel_id: id,
         title: backupTitle.trim(),
         invite_members: inviteMembers,
+        archive_account_id: archiveAccountId
+          ? parseInt(archiveAccountId)
+          : undefined,
       });
       setBackups((prev) => [...prev, backup]);
       setMainChannelId("");
       setBackupTitle("");
+      setArchiveAccountId("");
       setShowForm(false);
     } catch (e) {
       fail(e);
@@ -141,7 +149,9 @@ export function BackupCard() {
   };
 
   const handlePromote = async (id: number) => {
-    if (!confirm(t("promoteConfirm"))) return;
+    const archive = backups.find((b) => b.id === id)?.archive_account_id;
+    if (!confirm(t(archive ? "promoteArchiveConfirm" : "promoteConfirm")))
+      return;
     setPromotingId(id);
     try {
       const newBackup = await promoteBackupChannel(id);
@@ -235,6 +245,9 @@ export function BackupCard() {
         {/* Create form */}
         {showForm && (
           <BackupForm
+            archiveAccounts={archiveAccounts}
+            archiveAccountId={archiveAccountId}
+            onArchiveAccountIdChange={setArchiveAccountId}
             channelIds={channelIds}
             mainChannelId={mainChannelId}
             onMainChannelIdChange={setMainChannelId}
@@ -252,7 +265,11 @@ export function BackupCard() {
         {!showForm && (
           <DSButton
             variant="secondary"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              // Read now: one may have been added in the workers' card meanwhile
+              listArchiveAccounts().then(setArchiveAccounts, fail);
+            }}
             icon={<Plus className="w-4 h-4" />}
           >
             {t("createNew")}

@@ -4,22 +4,20 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Phone, Plus, Loader2 } from "lucide-react";
 import { DSButton, DSCard, DSInput } from "@/components/ds";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import {
-  sendWorkerCode,
-  verifyWorkerCode,
-} from "@/lib/api";
+import { sendWorkerCode, verifyWorkerCode } from "@/lib/api";
 import { AxiosError } from "axios";
 
 const COUNTRY_PREFIXES = [
   { dial: "+39", iso: "IT" },
   { dial: "+32", iso: "BE" },
-  { dial: "+1",  iso: "US" },
+  { dial: "+1", iso: "US" },
   { dial: "+44", iso: "GB" },
   { dial: "+33", iso: "FR" },
   { dial: "+49", iso: "DE" },
@@ -30,7 +28,7 @@ const COUNTRY_PREFIXES = [
   { dial: "+351", iso: "PT" },
   { dial: "+48", iso: "PL" },
   { dial: "+380", iso: "UA" },
-  { dial: "+7",  iso: "RU" },
+  { dial: "+7", iso: "RU" },
   { dial: "+81", iso: "JP" },
   { dial: "+86", iso: "CN" },
   { dial: "+91", iso: "IN" },
@@ -54,6 +52,9 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
   const fullPhone = `${prefix}${localNumber.replace(/\s/g, "")}`;
   const [password2fa, setPassword2fa] = useState("");
   const [error, setError] = useState("");
+  // An archive account: saved apart from the workers, never streams
+  const [archive, setArchive] = useState(false);
+  const [addedArchive, setAddedArchive] = useState(false);
 
   const getErrorMessage = (err: unknown): string => {
     if (err instanceof AxiosError && err.response?.data?.detail) {
@@ -83,15 +84,18 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
         fullPhone,
         code.trim(),
         twoFaPassword,
+        archive,
       );
       if (result.status === "2fa_required") {
         setStep("2fa");
         return;
       }
+      setAddedArchive(archive);
       setStep("done");
       setLocalNumber("");
       setCode("");
       setPassword2fa("");
+      setArchive(false);
       onWorkersChanged();
       setTimeout(() => setStep("idle"), 2000);
     } catch (err) {
@@ -113,7 +117,7 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
         {/* Add worker form */}
         {step === "done" ? (
           <p className="text-green-400 text-sm text-center py-2">
-            {t("workers.addSuccess")}
+            {addedArchive ? t("workers.archiveAdded") : t("workers.addSuccess")}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -124,14 +128,20 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                 onValueChange={setPrefix}
                 disabled={step !== "idle" && step !== "sending"}
               >
-                <SelectTrigger className="w-[120px] shrink-0" style={{ height: "40px" }}>
+                <SelectTrigger
+                  className="w-[120px] shrink-0"
+                  style={{ height: "40px" }}
+                >
                   {/* The country code, not a flag: the flag package loaded every flag
                       from a CDN */}
                   <span className="text-sm truncate">
                     {selectedCountry?.iso} {prefix}
                   </span>
                 </SelectTrigger>
-                <SelectContent position="popper" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                <SelectContent
+                  position="popper"
+                  style={{ maxHeight: "200px", overflowY: "auto" }}
+                >
                   {COUNTRY_PREFIXES.map((p) => (
                     <SelectItem key={p.dial} value={p.dial}>
                       {p.iso} {p.dial}
@@ -163,6 +173,21 @@ export function AddWorkerCard({ onWorkersChanged }: AddWorkerCardProps) {
                   icon={<Loader2 className="w-4 h-4 animate-spin" />}
                 />
               )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="archive-account"
+                className="text-xs text-[#a1a1aa]"
+              >
+                {t("workers.archive")}
+              </label>
+              <Switch
+                id="archive-account"
+                checked={archive}
+                onCheckedChange={setArchive}
+                disabled={step !== "idle"}
+              />
             </div>
 
             {/* Code input */}

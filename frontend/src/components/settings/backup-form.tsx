@@ -11,8 +11,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { ArchiveAccount } from "@/lib/api/backup";
+
+// The kind select's value for a workers' backup (an archive's is its account id)
+const WORKERS = "workers";
 
 interface BackupFormProps {
+  archiveAccounts: ArchiveAccount[];
+  archiveAccountId: string;
+  onArchiveAccountIdChange: (v: string) => void;
   channelIds: number[];
   mainChannelId: string;
   onMainChannelIdChange: (v: string) => void;
@@ -26,6 +33,9 @@ interface BackupFormProps {
 }
 
 export function BackupForm({
+  archiveAccounts,
+  archiveAccountId,
+  onArchiveAccountIdChange,
   channelIds,
   mainChannelId,
   onMainChannelIdChange,
@@ -64,19 +74,44 @@ export function BackupForm({
         </div>
       )}
 
+      {archiveAccounts.length > 0 && (
+        <Select
+          value={archiveAccountId || WORKERS}
+          onValueChange={(v) =>
+            onArchiveAccountIdChange(v === WORKERS ? "" : v)
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={WORKERS}>{t("kindBackup")}</SelectItem>
+            {archiveAccounts.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {t("kindArchive", { phone: a.phone })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <DSInput
         placeholder={t("backupTitle")}
         value={backupTitle}
         onChange={(e) => onBackupTitleChange(e.target.value)}
       />
 
-      <div className="flex items-center justify-between">
-        <label className="text-xs text-[#a1a1aa]">{t("inviteMembers")}</label>
-        <Switch
-          checked={inviteMembers}
-          onCheckedChange={onInviteMembersChange}
-        />
-      </div>
+      {archiveAccountId ? (
+        <p className="text-xs text-[#a1a1aa]">{t("archiveHint")}</p>
+      ) : (
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-[#a1a1aa]">{t("inviteMembers")}</label>
+          <Switch
+            checked={inviteMembers}
+            onCheckedChange={onInviteMembersChange}
+          />
+        </div>
+      )}
 
       <div className="flex gap-2">
         <DSButton variant="secondary" onClick={onCancel} className="flex-1">
