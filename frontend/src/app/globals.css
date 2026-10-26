@@ -67,14 +67,15 @@
 }
 
 /* The page's own scrollbar starts under the top bar (h-14; the TV's by its tiers), not
-   beside it */
-html::-webkit-scrollbar-track {
+   beside it. On body: Chrome takes the viewport scrollbar's pseudo-elements from there
+   (html::-webkit-scrollbar-track did nothing) */
+body::-webkit-scrollbar-track {
   margin-top: 3.5rem;
 }
-html[data-tv-tier="720"]::-webkit-scrollbar-track {
+html[data-tv-tier="720"] body::-webkit-scrollbar-track {
   margin-top: 2.5rem;
 }
-html[data-tv-tier="1080"]::-webkit-scrollbar-track {
+html[data-tv-tier="1080"] body::-webkit-scrollbar-track {
   margin-top: 3rem;
 }
 
