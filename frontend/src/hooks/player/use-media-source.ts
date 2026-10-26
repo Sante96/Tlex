@@ -12,14 +12,47 @@ const BEHIND_SECONDS = 10;
 // The init segment (ftyp + moov) comes before the first fragment
 const MAX_INIT_BYTES = 4 * 1024 * 1024;
 
-// ponytail: generic codec strings. Chromium only matches the codec family against the
-// init segment, not the profile; parse avcC/hvcC if another browser needs exact ones.
-const VIDEO_CODECS: Record<string, string> = {
-  avc1: "avc1.640028",
-  avc3: "avc3.640028",
-  hvc1: "hvc1.1.6.L93.B0",
-  hev1: "hev1.1.6.L93.B0",
-};
+// The video's codec string, read from its decoder configuration (avcC/hvcC) in the init
+// segment: Chrome matches only the codec family, but Safari sets its decoder up from the
+// string, and the generic "Main, level 3.1" of before made it fail on 4K Main 10 titles
+// ("failed to decode" on an iPad, a crawl on an iPhone). `at`: the box's first byte after
+// its type, in the latin1 text of the segment (one char per byte).
+function videoCodec(init: Uint8Array, text: string): string | null {
+  const entries = text.slice(text.indexOf("stsd"));
+  const at = (box: string) => {
+    const i = text.indexOf(box);
+    return i < 0 ? -1 : i + 4;
+  };
+  const hex = (n: number) => n.toString(16).toUpperCase();
+  let p = at("hvcC");
+  if (p > 0) {
+    // ISO/IEC 14496-15 annex E: hvc1.<space><profile>.<compatibility, bits reversed>.
+    // <tier><level>.<constraint bytes, trailing zeros dropped>
+    const sample = entries.includes("hev1") ? "hev1" : "hvc1";
+    const b = init[p + 1];
+    let compat = 0;
+    for (let i = 0; i < 4; i++) compat = compat * 256 + init[p + 2 + i];
+    let reversed = 0;
+    for (let i = 0; i < 32; i++) reversed = reversed * 2 + (Math.floor(compat / 2 ** i) % 2);
+    const constraints = Array.from(init.subarray(p + 6, p + 12));
+    while (constraints.length && constraints[constraints.length - 1] === 0) constraints.pop();
+    return [
+      sample,
+      ["", "A", "B", "C"][b >> 6] + (b & 0x1f),
+      hex(reversed),
+      (b & 0x20 ? "H" : "L") + init[p + 12],
+      ...constraints.map(hex),
+    ].join(".");
+  }
+  p = at("avcC");
+  if (p > 0) {
+    // avc1.<profile><compatibility><level>, two hex digits each
+    const sample = entries.includes("avc3") ? "avc3" : "avc1";
+    const bytes = [init[p + 1], init[p + 2], init[p + 3]];
+    return `${sample}.${bytes.map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+  }
+  return null;
+}
 
 // iPhone Safari (iOS 17.1+) has only ManagedMediaSource: MSE where the browser decides
 // when to buffer and may evict, which seekLocally already handles through `buffered`
@@ -32,10 +65,10 @@ function mediaSourceClass(): typeof MediaSource | undefined {
 
 function mimeFor(init: Uint8Array): string | null {
   const text = new TextDecoder("latin1").decode(init);
-  const entries = text.slice(text.indexOf("stsd"));
-  const box = Object.keys(VIDEO_CODECS).find((b) => entries.includes(b));
-  if (!box) return null;
-  const codecs = [VIDEO_CODECS[box], ...(entries.includes("mp4a") ? ["mp4a.40.2"] : [])];
+  const video = videoCodec(init, text);
+  if (!video) return null;
+  const audio = text.slice(text.indexOf("stsd")).includes("mp4a");
+  const codecs = [video, ...(audio ? ["mp4a.40.2"] : [])];
   const type = `video/mp4; codecs="${codecs.join(", ")}"`;
   return mediaSourceClass()?.isTypeSupported(type) ? type : null;
 }
@@ -98,6 +131,12 @@ async function feed(
         continue;
       }
       const type = mimeFor(head);
+      // ponytail: temporary, with the player's [DIAG]: the codec string it chose
+      fetch("/api/v1/stream/diag", {
+        method: "POST",
+        body: JSON.stringify({ event: "codec", type, url }),
+        keepalive: true,
+      }).catch(() => {});
       if (!type) return false;
       sb = ms.addSourceBuffer(type);
       chunk = head;
