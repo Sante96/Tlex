@@ -8,18 +8,29 @@ export const BREAKPOINTS = {
   "2xl": 1536,
 } as const;
 
-export function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(() => {
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.matchMedia(`(max-width: ${BREAKPOINTS.md - 1}px)`).matches;
+    return window.matchMedia(query).matches;
   });
 
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${BREAKPOINTS.md - 1}px)`);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    const mq = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
+  }, [query]);
 
-  return isMobile;
+  return matches;
+}
+
+export function useIsMobile(): boolean {
+  return useMediaQuery(`(max-width: ${BREAKPOINTS.md - 1}px)`);
+}
+
+/** md to lg: an iPad held upright. The sidebar there is a rail that opens over the page. */
+export function useIsTablet(): boolean {
+  return useMediaQuery(
+    `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${BREAKPOINTS.lg - 1}px)`,
+  );
 }

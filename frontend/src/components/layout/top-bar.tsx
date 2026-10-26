@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -223,7 +224,8 @@ export function TopBar() {
         ) : (
           <motion.div
             key="normal"
-            className="flex flex-1 items-center justify-between"
+            // min-w-0: without it a long breadcrumb pushed under the avatar instead of being cut
+            className="flex flex-1 min-w-0 items-center justify-between gap-3"
             initial={{ opacity: 0, x: -16 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -16 }}
@@ -236,11 +238,16 @@ export function TopBar() {
               ) : (
                 <>
                   {/* Logo on mobile */}
-                  <Link
-                    href="/"
-                    className="md:hidden text-xl font-extrabold tracking-tight text-plex-orange"
-                  >
-                    TLEX
+                  <Link href="/" className="md:hidden block w-fit" aria-label="TLEX">
+                    {/* The logo of the sidebar, not orange text */}
+                    <Image
+                      src="/tlex-logo.svg"
+                      alt="TLEX"
+                      width={200}
+                      height={58}
+                      className="h-6 w-auto"
+                      unoptimized
+                    />
                   </Link>
                   {/* SearchBar on desktop */}
                   <div className="hidden md:block">

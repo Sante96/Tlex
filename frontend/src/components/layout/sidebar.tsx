@@ -12,7 +12,7 @@ import pkg from "../../../package.json";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useIsTV, useTVTier, type TVTier } from "@/hooks/use-platform";
 import { getScannerStatus } from "@/lib/api";
-import { useIsMobile } from "@/lib/breakpoints";
+import { useIsMobile, useIsTablet } from "@/lib/breakpoints";
 import type { FocusEvent } from "react";
 
 const SIDEBAR_EXPANDED = 260;
@@ -57,13 +57,19 @@ export function Sidebar() {
   const t = useTranslations();
   const isTV = useIsTV();
   const isMobile = useIsMobile();
+  // An upright iPad: open, the sidebar took a third of the width. There it's a rail that
+  // opens over the page, and closes on the next page (opened on this one only) or a tap out
+  const isTablet = useIsTablet() && !isTV;
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const tabletOpen = openOn === pathname;
 
   const tvTier = useTVTier();
   const tvWidths = TV_WIDTHS[tvTier ?? "1080"];
   const tvPad = TV_PADDINGS[tvTier ?? "1080"];
   // Icon column fills the full inner width of the collapsed sidebar
   const tvIconCol = tvWidths.collapsed - tvPad.h * 2;
-  const collapsed = isTV ? !tvExpanded : isCollapsed;
+  const collapsed = isTV ? !tvExpanded : isTablet ? !tabletOpen : isCollapsed;
+  const toggle = isTablet ? () => setOpenOn(tabletOpen ? null : pathname) : toggleCollapsed;
   const sidebarWidth = isTV
     ? (collapsed ? tvWidths.collapsed : tvWidths.expanded)
     : (collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED);
@@ -96,6 +102,11 @@ export function Sidebar() {
   }, [isMobile]);
 
   return (
+    <>
+    {isTablet && tabletOpen && (
+      // Over the page: a tap outside closes it
+      <div className="hidden md:block fixed inset-0 z-30" onClick={() => setOpenOn(null)} />
+    )}
     <motion.aside
       className="vt-sidebar hidden md:flex fixed left-0 top-0 h-screen flex-col z-40 overflow-hidden"
       // Mounted at its saved width: it grew or shrank from its content's width on every
@@ -140,7 +151,7 @@ export function Sidebar() {
         ) : (
           <>
             <DSIconButton
-              onClick={toggleCollapsed}
+              onClick={toggle}
               aria-label={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
               aria-expanded={!collapsed}
               icon={<Menu className="h-[22px] w-[22px]" />}
@@ -252,6 +263,7 @@ export function Sidebar() {
         <p className="text-[10px] tv-4k:text-[11px] text-[#3f3f46] tracking-wide whitespace-nowrap">v{pkg.version}</p>
       </div>
     </motion.aside>
+    </>
   );
 }
 

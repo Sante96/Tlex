@@ -18,7 +18,8 @@ export function DSBreadcrumb({ items }: DSBreadcrumbProps) {
   const router = useRouter();
 
   return (
-    <div className="flex items-center gap-2">
+    // One line: a long title is cut, not wrapped (on a phone it made the header taller)
+    <div className="flex items-center gap-2 min-w-0">
       {/* Back button */}
       <DSButton
         type="button"
@@ -33,11 +34,14 @@ export function DSBreadcrumb({ items }: DSBreadcrumbProps) {
         const isLast = i === items.length - 1;
 
         return (
-          <div key={i} className="flex items-center gap-2">
+          <div
+            key={i}
+            className={cn("flex items-center gap-2", isLast ? "min-w-0" : "shrink-0")}
+          >
             {i > 0 && <span className="text-[#52525b] text-sm">/</span>}
 
             {isLast ? (
-              <span className="text-sm font-medium text-[#fafafa]">
+              <span className="text-sm font-medium text-[#fafafa] truncate min-w-0">
                 {item.label}
               </span>
             ) : item.href ? (

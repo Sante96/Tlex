@@ -67,8 +67,11 @@ export function HeroBanner({
   );
 
   return (
-    <div className="relative" style={isMobile ? undefined : { height }}>
-      <div className="relative z-10 h-full">
+    // A minimum, not a height: a narrow column (an upright iPad) wraps the title and
+    // buttons over more lines, and in a fixed height they spilled out over the top, under
+    // the header (title and Play button gone)
+    <div className="relative flex flex-col" style={isMobile ? undefined : { minHeight: height }}>
+      <div className="relative z-10 flex-1 flex flex-col">
         {isMobile ? (
           /* ── Mobile layout ── */
           <div className="flex flex-col gap-4 px-4 pt-5 pb-4 text-shadow">
@@ -95,10 +98,10 @@ export function HeroBanner({
           /* ── Desktop layout ── */
           <div
             className={cn(
-              "flex flex-row gap-8 h-full",
+              "flex flex-row gap-8 flex-1",
               align === "end" ? "items-end" : "items-center",
             )}
-            style={{ padding: "0 48px 32px 48px" }}
+            style={{ padding: "24px 48px 32px 48px" }}
           >
             {posterEl}
             <div className="flex flex-col gap-4 flex-1 text-shadow min-w-0">

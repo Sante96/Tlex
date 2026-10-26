@@ -16,7 +16,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { SplashScreen } from "@/components/splash-screen";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { useProfile } from "@/contexts/profile-context";
-import { useIsMobile } from "@/lib/breakpoints";
+import { useIsMobile, useIsTablet } from "@/lib/breakpoints";
 import { useIsTV, useTVTier } from "@/hooks/use-platform";
 import { AppBackground } from "@/components/layout/app-background";
 import { useDelayed } from "@/hooks/use-delayed";
@@ -48,6 +48,7 @@ function ProfileGate({ children }: { children: React.ReactNode }) {
 function MainContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebar();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const isTV = useIsTV();
   const tvTier = useTVTier();
   const tvWidths = TV_WIDTHS[tvTier ?? "1080"];
@@ -57,7 +58,8 @@ function MainContent({ children }: { children: React.ReactNode }) {
       ? // The TV sidebar opens over the page: pushing it re-laid the poster grid on every
         // frame of the animation, on the TV's weak hardware
         tvWidths.collapsed
-      : isCollapsed
+      : // On a tablet too: open, it took a third of an upright iPad
+        isCollapsed || isTablet
         ? SIDEBAR_COLLAPSED
         : SIDEBAR_EXPANDED;
 
