@@ -22,6 +22,11 @@ from app.services.mkv_cues import extract_keyframes_from_url
 from app.services.streaming import get_virtual_reader, reader_clients, release_reader
 from app.services.streaming.telegram import refresh_all_file_ids
 
+# The player's id (one per browser tab): each player its own reader, so two devices on a
+# title don't share two clients, nor cut each other's stream when one closes. A short
+# token: /play puts it in the URL ffmpeg reads
+VIEWER = Query("", pattern=r"^[A-Za-z0-9-]{0,64}$", description="The player's id")
+
 settings = get_settings()
 router = APIRouter()
 
@@ -96,6 +101,7 @@ async def stream_raw(
     media_id: int,
     request: Request,
     session: DBSession,
+    v: str = VIEWER,
 ) -> StreamingResponse:
     """
     Stream raw media file bytes.
@@ -112,7 +118,7 @@ async def stream_raw(
     """
     # Persistent reader: cached across range requests for dynamic client scaling
     # First request: 1 client. Subsequent requests: tries to acquire more.
-    reader = await get_virtual_reader(session, media_id, persistent=True)
+    reader = await get_virtual_reader(session, media_id, persistent=True, viewer=v)
     if reader is None:
         raise HTTPException(status_code=404, detail="Media not found")
 
@@ -177,7 +183,7 @@ async def stream_raw(
                 # them back now — unless another request (ffmpeg seeking, another
                 # viewer) is still reading through this reader.
                 # release_reader has no internal awaits — safe inside finally/CancelledError.
-                await release_reader(media_id, only_if_idle=True)
+                await release_reader(media_id, viewer=v, only_if_idle=True)
 
     # The request's session would hold its pool connection until the response ends
     await session.close()
@@ -200,26 +206,26 @@ async def pool_status() -> dict:
 
 
 @router.get("/clients/{media_id}")
-async def stream_clients(media_id: int) -> dict:
+async def stream_clients(media_id: int, v: str = VIEWER) -> dict:
     """The player's client ring: the clients this title's stream holds, of the pool's.
 
     In-memory, no DB: the player asks every couple of seconds.
     """
     return {
-        "in_use": reader_clients(media_id),
+        "in_use": reader_clients(media_id, v),
         "total": worker_manager.pool_status()["total_clients"],
     }
 
 
 @router.post("/release/{media_id}")
-async def stream_release(media_id: int) -> dict:
+async def stream_release(media_id: int, v: str = VIEWER) -> dict:
     """
     Release a cached stream reader and its Telegram clients.
 
     Called by the frontend when the player unmounts (user navigates away).
     This immediately frees the Telegram worker clients back to the pool.
     """
-    await release_reader(media_id)
+    await release_reader(media_id, viewer=v)
     logger.info(f"[RELEASE] Released stream reader for media {media_id}")
     return {"status": "ok"}
 
@@ -358,6 +364,7 @@ async def stream_play(
     audio: int = Query(0, description="Audio track index"),
     video: int = Query(0, description="Video track index"),
     t: float = Query(0, description="Start time in seconds"),
+    v: str = VIEWER,
 ) -> StreamingResponse:
     """
     Stream browser-compatible video with snap-to-keyframe seeking.
@@ -383,9 +390,9 @@ async def stream_play(
 
     logger.info(f"[PLAY] media={media_id}, audio={audio}, video={video}, t={t}")
 
-    # Build internal URL for FFmpeg to read from
+    # Build internal URL for FFmpeg to read from: the player's own reader
     base_url = f"http://127.0.0.1:{settings.app_port}"
-    input_url = f"{base_url}/api/v1/stream/raw/{media_id}?internal={INTERNAL_STREAM_TOKEN}"
+    input_url = f"{base_url}/api/v1/stream/raw/{media_id}?internal={INTERNAL_STREAM_TOKEN}&v={v}"
 
     # Get keyframe time for the requested position
     keyframe_time = await _get_keyframe_for_time(session, media_id, t)

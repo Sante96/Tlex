@@ -1,5 +1,10 @@
 import { api } from "./client";
 
+// This tab's id: the backend keeps one reader (and its Telegram clients) per player, so
+// two devices on one title each get their own, and one closing its player doesn't cut
+// the other's stream. Not crypto.randomUUID: it's missing on http:// from the LAN
+const VIEWER = Math.random().toString(36).slice(2, 10);
+
 export function getStreamUrl(
   mediaId: number,
   options?: {
@@ -15,6 +20,7 @@ export function getStreamUrl(
   if (options?.video !== undefined) params.set("video", String(options.video));
   if (options?.t !== undefined) params.set("t", String(options.t));
   if (options?.seek) params.set("s", String(options.seek));
+  params.set("v", VIEWER);
 
   const query = params.toString();
   // Use Next.js route handler (/api/stream/*) for proper streaming support
@@ -64,7 +70,7 @@ export async function getStreamClients(
 ): Promise<{ inUse: number; total: number } | null> {
   try {
     const response = await api.get<{ in_use: number; total: number }>(
-      `/api/v1/stream/clients/${mediaId}`,
+      `/api/v1/stream/clients/${mediaId}?v=${VIEWER}`,
     );
     return { inUse: response.data.in_use, total: response.data.total };
   } catch {
@@ -78,7 +84,7 @@ export async function getStreamClients(
  */
 export async function releaseStream(mediaId: number) {
   try {
-    await api.post(`/api/v1/stream/release/${mediaId}`);
+    await api.post(`/api/v1/stream/release/${mediaId}?v=${VIEWER}`);
   } catch {
     // Best-effort — don't block navigation
   }

@@ -284,6 +284,22 @@ class TestStreamPlayHeaders:
         assert "accept-ranges" not in resp.headers
         assert resp.content == b"fmp4"
 
+    async def test_ffmpeg_reads_through_the_players_own_reader(self, mock_reader_get, mocker):
+        # Without the player's id in ffmpeg's URL, two devices fell back on one reader
+        mocker.patch(
+            "app.api.v1.stream._get_keyframe_for_time", new_callable=AsyncMock, return_value=0.0
+        )
+        urls = []
+
+        async def remux(url, _options):
+            urls.append(url)
+            yield b"fmp4"
+
+        mocker.patch("app.api.v1.stream.ffmpeg_remuxer.stream", side_effect=remux)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get(f"{STREAM_BASE}/play/{MEDIA_ID}?v=tab1")
+        assert urls and urls[0].endswith("&v=tab1")
+
 
 async def test_abandoned_remux_frees_its_reader_thread(mocker):
     import sys
@@ -381,7 +397,7 @@ class TestStreamGeneratorDisconnect:
             return_value=True,  # always disconnected
         )
         await self._call()
-        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
+        mock_release.assert_called_once_with(MEDIA_ID, viewer="", only_if_idle=True)
 
     async def test_disconnect_release_called_with_correct_media_id(self, mocker, stream_mocks):
         reader, mock_release = stream_mocks
@@ -421,7 +437,7 @@ class TestStreamGeneratorDisconnect:
         with contextlib.suppress(BaseException):
             await self._call()
 
-        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
+        mock_release.assert_called_once_with(MEDIA_ID, viewer="", only_if_idle=True)
 
     async def test_normal_complete_then_disconnect_on_second_request(self, mocker, stream_mocks):
         """First request completes normally (no release); second request
@@ -451,7 +467,7 @@ class TestStreamGeneratorDisconnect:
 
         reader.read_range = one_chunk
         await self._call({"Range": "bytes=0-511"})
-        mock_release.assert_called_once_with(MEDIA_ID, only_if_idle=True)
+        mock_release.assert_called_once_with(MEDIA_ID, viewer="", only_if_idle=True)
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +520,7 @@ class TestReaderManager:
 
         release.assert_called_once_with([client])
         assert reader._force_released and reader._clients == []
-        assert media.id not in manager_module._reader_cache
+        assert (media.id, "") not in manager_module._reader_cache
 
     async def test_idle_only_release_keeps_reader_in_use(self, mocker, test_session, media_with_parts):
         media, _ = media_with_parts
@@ -523,13 +539,28 @@ class TestReaderManager:
         assert reader._force_released
         release.assert_called_once()
 
+    async def test_each_viewer_has_its_own_reader(self, mocker, test_session, media_with_parts):
+        # Two devices on the same title shared one reader (two clients for both, half the
+        # speed each), and one closing its player released it under the other
+        media, _ = media_with_parts
+        mocker.patch("app.services.streaming.manager.worker_manager.release_clients")
+        phone = await get_virtual_reader(test_session, media.id, persistent=True, viewer="phone")
+        tablet = await get_virtual_reader(test_session, media.id, persistent=True, viewer="tablet")
+        assert phone is not None and tablet is not None and phone is not tablet
+
+        await release_reader(media.id, viewer="phone")
+
+        assert phone._force_released and not tablet._force_released
+        again = await get_virtual_reader(test_session, media.id, persistent=True, viewer="tablet")
+        assert again is tablet
+
     async def test_reader_cached_during_query_is_reused(self, test_session, media_with_parts):
         media, _ = media_with_parts
         winner = MagicMock()
         real_execute = test_session.execute
 
         async def execute_while_other_request_caches(*args, **kwargs):
-            manager_module._reader_cache[media.id] = (winner, time.time())
+            manager_module._reader_cache[(media.id, "")] = (winner, time.time())
             return await real_execute(*args, **kwargs)
 
         test_session.execute = execute_while_other_request_caches

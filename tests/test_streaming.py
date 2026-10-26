@@ -547,11 +547,11 @@ class TestManagerGetVirtualReader:
 
         reader = await get_virtual_reader(test_session, media.id, persistent=True)
         assert reader is not None
-        assert media.id in manager_module._reader_cache
+        assert (media.id, "") in manager_module._reader_cache
 
         await release_reader(media.id)
 
-        assert media.id not in manager_module._reader_cache
+        assert (media.id, "") not in manager_module._reader_cache
         assert reader._force_released is True
 
     async def test_cleanup_removes_stale_reader(self, mocker, test_session, media_with_parts):
@@ -562,11 +562,11 @@ class TestManagerGetVirtualReader:
         assert reader is not None
 
         # Backdate last_access by 2 minutes to make the reader stale
-        manager_module._reader_cache[media.id] = (reader, time.time() - 120)
+        manager_module._reader_cache[(media.id, "")] = (reader, time.time() - 120)
 
         await cleanup_stale_readers()
 
-        assert media.id not in manager_module._reader_cache
+        assert (media.id, "") not in manager_module._reader_cache
 
 
 # ---------------------------------------------------------------------------

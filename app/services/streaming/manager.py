@@ -14,19 +14,21 @@ from app.services.streaming.reader import VirtualStreamReader
 
 settings = get_settings()
 
-# Readers persist across HTTP range requests so they can accumulate clients
-_reader_cache: dict[int, tuple[VirtualStreamReader, float]] = {}
+# Readers persist across HTTP range requests so they can accumulate clients. One per
+# player (viewer: an id the player sends), not per title: two devices on one title
+# shared a reader, half the speed each, and one closing its player cut the other
+_reader_cache: dict[tuple[int, str], tuple[VirtualStreamReader, float]] = {}
 _READER_TTL = 60  # Seconds of inactivity before releasing
 
 
-def reader_clients(media_id: int) -> int:
-    """How many clients the title's playback reader holds now (0: not playing)."""
-    entry = _reader_cache.get(media_id)
+def reader_clients(media_id: int, viewer: str = "") -> int:
+    """How many clients the player's reader of the title holds now (0: not playing)."""
+    entry = _reader_cache.get((media_id, viewer))
     return len(entry[0]._clients) if entry else 0
 
 
 async def get_virtual_reader(
-    session: AsyncSession, media_id: int, *, persistent: bool = False
+    session: AsyncSession, media_id: int, *, persistent: bool = False, viewer: str = ""
 ) -> VirtualStreamReader | None:
     """
     Get or create a VirtualStreamReader for a media item.
@@ -43,10 +45,11 @@ async def get_virtual_reader(
     Returns:
         VirtualStreamReader or None if media not found
     """
+    key = (media_id, viewer)
     # Check cache for persistent readers
-    if persistent and media_id in _reader_cache:
-        reader, _ = _reader_cache[media_id]
-        _reader_cache[media_id] = (reader, time.time())
+    if persistent and key in _reader_cache:
+        reader, _ = _reader_cache[key]
+        _reader_cache[key] = (reader, time.time())
         logger.info(
             f"[READER] Reusing cached reader for media {media_id} ({len(reader._clients)} clients)"
         )
@@ -62,8 +65,8 @@ async def get_virtual_reader(
 
     # Another request may have cached a reader while we awaited the query; reuse it,
     # otherwise the one we'd overwrite keeps its clients forever.
-    if persistent and media_id in _reader_cache:
-        return _reader_cache[media_id][0]
+    if persistent and key in _reader_cache:
+        return _reader_cache[key][0]
 
     if not media_item.parts:
         logger.error(f"Media {media_id} has no parts")
@@ -73,13 +76,13 @@ async def get_virtual_reader(
 
     if persistent:
         reader._persistent = True
-        _reader_cache[media_id] = (reader, time.time())
+        _reader_cache[key] = (reader, time.time())
         logger.info(f"[READER] Created persistent reader for media {media_id}")
 
     return reader
 
 
-async def release_reader(media_id: int, *, only_if_idle: bool = False) -> None:
+async def release_reader(media_id: int, *, viewer: str = "", only_if_idle: bool = False) -> None:
     """Explicitly release a cached reader and its clients.
 
     Force-releases immediately regardless of active streams, unless only_if_idle:
@@ -90,10 +93,10 @@ async def release_reader(media_id: int, *, only_if_idle: bool = False) -> None:
     NOTE: This function has no internal await points and is therefore safe to
     call from within a CancelledError handler or a finally block.
     """
-    entry = _reader_cache.get(media_id)
+    entry = _reader_cache.get((media_id, viewer))
     if entry and only_if_idle and entry[0]._active_streams > 0:
         return
-    entry = _reader_cache.pop(media_id, None)
+    entry = _reader_cache.pop((media_id, viewer), None)
     if entry:
         reader, _ = entry
         active = reader._active_streams
@@ -114,9 +117,9 @@ async def cleanup_stale_readers() -> None:
     """Release readers that haven't been used recently and have no active streams."""
     now = time.time()
     stale = [
-        mid
-        for mid, (reader, last_access) in _reader_cache.items()
+        key
+        for key, (reader, last_access) in _reader_cache.items()
         if now - last_access > _READER_TTL and reader._active_streams == 0
     ]
-    for mid in stale:
-        await release_reader(mid)
+    for media_id, viewer in stale:
+        await release_reader(media_id, viewer=viewer)
