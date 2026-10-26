@@ -366,6 +366,28 @@ async def stream_play_head(
     )
 
 
+async def _counted(chunks, media_id: int, viewer: str):
+    """Temporary diagnostics: how fast /play's output leaves, every 5 s. A browser that
+    reads only as it plays slows it to the film's bitrate once its buffer is full; one
+    that keeps downloading regardless does not. Remove with /diag."""
+    import time
+
+    sent = last_sent = 0
+    last = time.monotonic()
+    async with aclosing(chunks) as stream:
+        async for chunk in stream:
+            sent += len(chunk)
+            now = time.monotonic()
+            if now - last >= 5:
+                rate = (sent - last_sent) / (now - last) / 1e6
+                logger.info(
+                    f"[PLAY OUT] media={media_id} v={viewer} "
+                    f"sent={sent / 1e6:.0f}MB rate={rate:.2f}MB/s"
+                )
+                last, last_sent = now, sent
+            yield chunk
+
+
 @router.get("/play/{media_id}")
 async def stream_play(
     media_id: int,
@@ -437,7 +459,7 @@ async def stream_play(
     # (desktop and the Android TV WebView) rejects the invalid
     # "Content-Range: bytes 0-*/*" this used to send as a format error.
     return StreamingResponse(
-        ffmpeg_remuxer.stream(input_url, options),
+        _counted(ffmpeg_remuxer.stream(input_url, options), media_id, v),
         media_type="video/mp4",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
