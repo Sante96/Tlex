@@ -1,5 +1,6 @@
 """Own images (concerts and their franchises): uploaded, or downloaded from a pasted link."""
 
+import asyncio
 import re
 
 import httpx
@@ -119,6 +120,28 @@ async def test_from_url_stops_past_the_size_limit(monkeypatch):
 
     with pytest.raises(ImageError):
         await fetch_image("https://example.com/huge.png", transport=transport)
+
+
+async def test_from_url_unreachable_link_is_a_clear_error(monkeypatch):
+    _public_dns(monkeypatch)
+
+    def refuse(request):
+        raise httpx.ConnectError("connection refused", request=request)
+
+    with pytest.raises(ImageError):
+        await fetch_image("https://example.com/p.png", transport=httpx.MockTransport(refuse))
+
+
+async def test_from_url_gives_up_after_the_deadline(monkeypatch):
+    _public_dns(monkeypatch)
+    monkeypatch.setattr(images, "DOWNLOAD_DEADLINE", 0.05)
+
+    async def drip(request):
+        await asyncio.sleep(1)
+        return httpx.Response(200, content=PNG)
+
+    with pytest.raises(ImageError):
+        await fetch_image("https://example.com/p.png", transport=httpx.MockTransport(drip))
 
 
 async def test_from_url_endpoint_saves_what_it_fetched(

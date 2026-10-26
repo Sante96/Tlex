@@ -207,7 +207,10 @@ export function EditMediaModal({
         body.overview = formOverview;
       if (formPosterPath !== (initialPosterPath || ""))
         body.poster_path = formPosterPath;
-      if (formBackdropPath) body.backdrop_path = formBackdropPath;
+      // Only when changed: a franchise's backdrop shown here may be its newest concert's
+      // (a fallback), which saving a new name mustn't make its own
+      if (formBackdropPath !== (initialBackdropPath || ""))
+        body.backdrop_path = formBackdropPath;
       if (formReleaseDate !== (initialReleaseDate || ""))
         body.release_date = formReleaseDate;
       if (isConcert && formSetlist !== initialSetlist)

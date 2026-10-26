@@ -18,14 +18,14 @@ from app.services.scanner.models import MediaGroup
 from app.services.scanner.processor import add_parts, already_scanned, analyze_streams
 from app.services.tmdb import tmdb_client
 
-_CONCERT_TOPIC = re.compile(r"^\s*concerti\s*[·\-–—:]\s*(?P<name>\S.*?)\s*$", re.IGNORECASE)
+_CONCERT_TOPIC = re.compile(r"^\s*concerti\s*[·•・|\-–—:]\s*(?P<name>\S.*?)\s*$", re.IGNORECASE)
 _VIDEO_EXTENSION = re.compile(r"\.(mkv|mp4|avi|webm)$", re.IGNORECASE)
 _TAGS = re.compile(r"\[[^\]]*\]")
 _YEAR = re.compile(r"\b(19|20)\d{2}\b")
 
 
 def concert_franchise_name(topic_name: str | None) -> str | None:
-    """The anime/game of a "Concerti · <name>" topic (also "-", "–", ":"), else None."""
+    """The anime/game of a "Concerti · <name>" topic (also •, ・, |, -, –, :), else None."""
     match = _CONCERT_TOPIC.match(topic_name or "")
     return match.group("name") if match else None
 
@@ -47,8 +47,8 @@ def concert_title(base_name: str) -> tuple[str, int | None]:
     return title, int(year.group()) if year else None
 
 
-def _norm(text: str) -> str:
-    return re.sub(r"[\W_]+", "", text.casefold())
+def _words(text: str) -> list[str]:
+    return re.findall(r"\w+", text.casefold())
 
 
 async def get_or_create_franchise(session: AsyncSession, name: str) -> Franchise:
@@ -62,9 +62,11 @@ async def get_or_create_franchise(session: AsyncSession, name: str) -> Franchise
 
     franchise = Franchise(key=key, title=name)
     found = await tmdb_client.search_tv(name)
-    # TMDB's first hit for a game is often an unrelated show: keep it only when its
-    # title starts with the name ("Arknights" → "Arknights: Prelude to Dawn")
-    if found and _norm(found.title).startswith(_norm(name)):
+    # TMDB's first hit for a game is often an unrelated show: keep it only when its title
+    # starts with the name's words ("Arknights" → "Arknights: Prelude to Dawn", but not
+    # "Fate" → "Fated to Love You")
+    words = _words(name)
+    if found and words and _words(found.title)[: len(words)] == words:
         franchise.tmdb_id = found.tmdb_id
         franchise.overview = found.overview
         franchise.poster_path = found.poster_path

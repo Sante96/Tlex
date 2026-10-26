@@ -100,10 +100,11 @@ export function SearchBar({ className, compact }: { className?: string; compact?
       const [mediaRes, seriesRes, concertRes] = await Promise.all([
         getMediaList({ search: term, limit: 4, media_type: "MOVIE" }),
         getSeriesList({ search: term, page_size: 4 }),
-        getMediaList({ search: term, limit: 4, media_type: "CONCERT" }),
+        // On its own: a backend without concerts yet (422) mustn't empty the other results
+        getMediaList({ search: term, limit: 4, media_type: "CONCERT" }).catch(() => null),
       ]);
       setConcerts(
-        concertRes.items.map((c) => ({
+        (concertRes?.items ?? []).map((c) => ({
           id: c.id,
           title: c.title,
           poster_path: c.poster_path,

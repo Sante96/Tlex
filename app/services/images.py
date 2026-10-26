@@ -18,6 +18,9 @@ IMAGES_DIR = Path("images")
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 LOCAL_PREFIX = "local:"
 MAX_REDIRECTS = 3
+# The whole download, redirects included: a server dripping bytes mustn't hold it for
+# minutes (the Next.js proxy gives up after ~30 s anyway)
+DOWNLOAD_DEADLINE = 30
 MEDIA_TYPES = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 _NAME = re.compile(r"[0-9a-f]{32}\.(jpg|png|webp)")
 
@@ -87,8 +90,18 @@ async def _check_public(url: str) -> httpx.URL:
 
 
 async def fetch_image(url: str, transport: httpx.AsyncBaseTransport | None = None) -> bytes:
-    """Download an image from a pasted link, within the size limit."""
+    """Download an image from a pasted link, within the size and time limits."""
     target = await _check_public(url)
+    try:
+        async with asyncio.timeout(DOWNLOAD_DEADLINE):
+            return await _download(target, transport)
+    except TimeoutError as e:
+        raise ImageError("The link took too long to answer") from e
+    except httpx.HTTPError as e:
+        raise ImageError("The link could not be downloaded") from e
+
+
+async def _download(target: httpx.URL, transport: httpx.AsyncBaseTransport | None) -> bytes:
     async with httpx.AsyncClient(follow_redirects=False, timeout=15, transport=transport) as client:
         for _ in range(MAX_REDIRECTS + 1):
             async with client.stream("GET", target) as resp:

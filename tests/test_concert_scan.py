@@ -63,6 +63,9 @@ def tmdb(mocker):
         ("CONCERTI·Genshin Impact", "Genshin Impact"),
         ("Concerti – LiSA", "LiSA"),
         ("Concerti:  Aimer ", "Aimer"),
+        ("Concerti • Love Live!", "Love Live!"),
+        ("Concerti ・ THE IDOLM@STER", "THE IDOLM@STER"),
+        ("Concerti | Genshin Impact", "Genshin Impact"),
         ("Concertino", None),
         ("Arknights", None),
         ("Concerti · ", None),
@@ -129,6 +132,28 @@ async def test_unrelated_tmdb_result_is_ignored(test_session, tmdb):
         None,
         None,
     )
+
+
+@pytest.mark.parametrize(
+    "name, tmdb_title",
+    [("Fate", "Fated to Love You"), ("♪", "Some Anime"), ("Love", "Lovely Complex")],
+)
+async def test_tmdb_match_needs_whole_words(test_session, tmdb, name, tmdb_title):
+    tmdb.search_tv.return_value = _tmdb(tmdb_title)
+
+    await process_concert_group(test_session, _group("Live 2024.mkv", 1), None, name)
+
+    franchise = (await test_session.execute(select(Franchise))).scalar_one()
+    assert franchise.tmdb_id is None
+
+
+async def test_tmdb_match_accepts_the_same_words_and_more(test_session, tmdb):
+    tmdb.search_tv.return_value = _tmdb("Love Live! School Idol Project")
+
+    await process_concert_group(test_session, _group("Live 2024.mkv", 1), None, "Love Live!")
+
+    franchise = (await test_session.execute(select(Franchise))).scalar_one()
+    assert franchise.tmdb_id == 42
 
 
 async def test_rescan_keeps_edits(test_session, tmdb):

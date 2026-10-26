@@ -396,6 +396,10 @@ async def refresh_metadata(
 
     if not item:
         raise HTTPException(status_code=404, detail="Media not found")
+    # A concert isn't on TMDB: a search would bring back some show of the same name over
+    # the details written by hand
+    if item.media_type == MediaType.CONCERT:
+        raise HTTPException(status_code=400, detail="Concerts are edited by hand, not from TMDB")
 
     old_title = item.title
     lang = request.headers.get("Accept-Language", "it-IT")

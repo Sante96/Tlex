@@ -236,8 +236,9 @@ export default function MediaDetailPage() {
               {t("media.edit")}
             </ActionButton>
           )}
-          {/* Re-reading TMDB takes an admin: it failed silently for everyone else */}
-          {user?.is_admin && (
+          {/* Re-reading TMDB takes an admin: it failed silently for everyone else. Not
+              for a concert: TMDB would bring back some show of the same name */}
+          {user?.is_admin && media.media_type !== "CONCERT" && (
             <ActionButton
               variant="secondary"
               icon={

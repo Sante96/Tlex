@@ -100,6 +100,26 @@ async def test_analyze_keeps_setlist_and_images(test_session, mocker):
     assert (row.chapters, row.setlist, row.poster_path) == (chapters, ["Opening"], "local:mine.png")
 
 
+async def test_refresh_metadata_refuses_concerts(
+    client: AsyncClient, admin_headers, test_session, mocker
+):
+    concert = await _concert(test_session, poster_path="local:mine.png")
+    from app.services.tmdb import tmdb_client
+
+    search_tv = mocker.patch.object(tmdb_client, "search_tv", new=AsyncMock())
+
+    resp = await client.post(f"/api/v1/media/{concert.id}/refresh-metadata", headers=admin_headers)
+
+    assert resp.status_code == 400
+    search_tv.assert_not_called()
+    body = (await client.get(f"/api/v1/media/{concert.id}", headers=admin_headers)).json()
+    assert (body["title"], body["poster_path"], body["tmdb_id"]) == (
+        "Ambience Synesthesia",
+        "local:mine.png",
+        None,
+    )
+
+
 async def test_search_finds_concerts_by_franchise(client: AsyncClient, auth_headers, test_session):
     await _concert(test_session)
     test_session.add(MediaItem(title="Arknights: the movie", media_type=MediaType.MOVIE))
