@@ -18,6 +18,8 @@ const MAX_AHEAD_BYTES = 48e6;
 const MAX_BEHIND_BYTES = 16e6;
 // The init segment (ftyp + moov) comes before the first fragment
 const MAX_INIT_BYTES = 4 * 1024 * 1024;
+// A stream that ends this close to the title's end has ended (durations differ a little)
+const END_MARGIN = 5;
 
 // The video's codec string, read from its decoder configuration (avcC/hvcC) in the init
 // segment: Chrome matches only the codec family, but Safari sets its decoder up from the
@@ -124,13 +126,16 @@ async function feed(
   video: HTMLVideoElement,
   ms: MediaSource,
   url: string,
+  duration: () => number,
   signal: AbortSignal,
   onHeaders: (headers: Headers) => void,
 ) {
   const response = await fetch(url, { signal });
   if (!response.ok || !response.body) throw new Error(`stream ${response.status}`);
   onHeaders(response.headers);
-  const reader = response.body.getReader();
+  // Where the stream starts in the title: its time 0 in the buffer
+  const start = parseFloat(response.headers.get("X-Stream-Start-Time") ?? "");
+  let reader = response.body.getReader();
   streamRead.bytes = 0; // a new stream: the backend counts it from zero too
   const ahead = () => video.buffered.end(video.buffered.length - 1) - video.currentTime;
   // The stream's bitrate so far (bytes per second of video), for the iOS byte limits
@@ -161,10 +166,48 @@ async function feed(
     await appended(buffer);
     return true;
   };
+  // A stream that broke or ended before the title's end goes on from the buffer's end, in
+  // a new stream appended to the same buffer at its place: Cloudflare drops a response the
+  // browser hasn't taken data from for 60 s (a pause past a minute), and a failed Telegram
+  // read ends ffmpeg's output early. Null: nothing more to get, or no progress since the
+  // last time.
+  let resumedAt = -1;
+  let resumed = false;
+  const resume = async (buffer: SourceBuffer) => {
+    if (signal.aborted || !video.buffered.length || !Number.isFinite(start)) return null;
+    const at = start + video.buffered.end(video.buffered.length - 1);
+    if (at <= resumedAt || at > duration() - END_MARGIN) return null;
+    resumedAt = at;
+    const next = new URL(url, location.href);
+    next.searchParams.set("t", at.toFixed(3));
+    const res = await fetch(next.pathname + next.search, { signal });
+    const from = parseFloat(res.headers.get("X-Stream-Start-Time") ?? "");
+    if (!res.ok || !res.body || !Number.isFinite(from)) return null;
+    buffer.abort(); // a fragment cut short: the parser starts over at the new init segment
+    buffer.timestampOffset = from - start;
+    keyframes.push(from - start);
+    resumed = true;
+    streamRead.bytes = 0; // a new stream: the backend counts it from zero too
+    return res.body.getReader();
+  };
 
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    let read: Awaited<ReturnType<typeof reader.read>>;
+    try {
+      read = await reader.read();
+    } catch (e) {
+      const next = sb && (await resume(sb));
+      if (!next) throw e;
+      reader = next;
+      continue;
+    }
+    if (read.done) {
+      const next = sb && (await resume(sb));
+      if (!next) break;
+      reader = next;
+      continue;
+    }
+    const value = read.value;
     streamRead.bytes += value.byteLength;
     let chunk = value;
     if (!sb) {
@@ -193,7 +236,10 @@ async function feed(
     for (let at = text.indexOf(MOOF); at >= 0; at = text.indexOf(MOOF, at + 1)) {
       const to = Math.max(from, at - 4); // the box starts with its size
       if (to > from && !(await append(sb, chunk.subarray(from, to)))) return true;
-      if (video.buffered.length) keyframes.push(video.buffered.end(video.buffered.length - 1));
+      // A resumed stream's first fragment: its keyframe went in with resume(), and the
+      // buffer still ends where the broken stream left it
+      if (resumed) resumed = false;
+      else if (video.buffered.length) keyframes.push(video.buffered.end(video.buffered.length - 1));
       from = to;
     }
     if (!(await append(sb, chunk.subarray(from)))) return true;
@@ -219,11 +265,15 @@ export function useMediaSource(
   url: string | undefined,
   /** The stream response's headers (where it starts) */
   onHeaders: (headers: Headers) => void,
+  /** The title's, in seconds: a stream that ends before it goes on */
+  duration: number,
 ) {
   const onHeadersRef = useRef(onHeaders);
+  const durationRef = useRef(duration);
   useEffect(() => {
     onHeadersRef.current = onHeaders;
-  }, [onHeaders]);
+    durationRef.current = duration;
+  }, [onHeaders, duration]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -246,7 +296,7 @@ export function useMediaSource(
     ms.addEventListener(
       "sourceopen",
       () => {
-        feed(video, ms, url, controller.signal, headers)
+        feed(video, ms, url, () => durationRef.current, controller.signal, headers)
           .then((ok) => {
             if (!ok && !controller.signal.aborted) {
               controller.abort();

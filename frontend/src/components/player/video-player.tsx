@@ -220,7 +220,7 @@ export function VideoPlayer({
     seekId,
   );
 
-  useMediaSource(videoRef, videoUrl, applyStreamHeaders);
+  useMediaSource(videoRef, videoUrl, applyStreamHeaders, duration);
 
   useVideoEvents({
     videoRef,
