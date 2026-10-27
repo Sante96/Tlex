@@ -164,7 +164,8 @@ async def topics() -> None:
 async def _existing(client: Client, chat_id: int) -> set[tuple[int, str]]:
     """(topic, file name) of every file already in the group: those are skipped."""
     found = set()
-    async for message in client.get_chat_history(chat_id):
+    # Pyrogram annotates its async generators as coroutines
+    async for message in client.get_chat_history(chat_id):  # pyright: ignore[reportGeneralTypeIssues]
         media = message.document or message.video
         if media and media.file_name:
             found.add((message.message_thread_id or 1, media.file_name))
@@ -197,15 +198,19 @@ async def _send(
             try:
                 message = await client.send_document(
                     chat_id,
-                    part,
+                    part,  # pyright: ignore[reportArgumentType]  (any binary file object)
                     file_name=name,
                     message_thread_id=topic,
                     progress=progress,
                 )
+                if message is None:  # only for a stopped upload: never stopped here
+                    raise RuntimeError("upload stopped")
                 return message.id
             except FloodWait as e:
-                _log(f"  flood wait {e.value} s")
-                await asyncio.sleep(e.value + 1)
+                # Typed int | str | error: for FLOOD_WAIT_X always the int
+                wait = e.value if isinstance(e.value, int) else 1
+                _log(f"  flood wait {wait} s")
+                await asyncio.sleep(wait + 1)
             except Exception as e:  # network drops: try again, then leave it for a rerun
                 _log(f"  {name}: attempt {attempt} failed: {e!r}")
                 if attempt == RETRIES:
