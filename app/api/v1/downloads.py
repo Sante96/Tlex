@@ -9,7 +9,6 @@ from sqlalchemy.orm import defer
 
 from app.api.deps import DBSession
 from app.config import get_settings
-from app.core.worker_manager import worker_manager
 from app.models.download import Download, DownloadKind, DownloadStatus
 from app.schemas.download import (
     AgentCommands,
@@ -20,8 +19,7 @@ from app.schemas.download import (
     SeedboxStatus,
     TorrentPreview,
 )
-from app.services.downloads import service
-from app.services.downloads.move import move_uploaded
+from app.services.downloads import move, service
 
 MAX_TORRENT_BYTES = 10 * 1024 * 1024
 
@@ -48,7 +46,9 @@ async def _read(torrent: UploadFile | None) -> bytes | None:
 
 
 async def _download(session: DBSession, download_id: int) -> Download:
-    download = await session.get(Download, download_id)
+    # Locked: the agent's sync and a move write the same row
+    query = select(Download).where(Download.id == download_id).with_for_update()
+    download = await session.scalar(query)
     if download is None:
         raise HTTPException(status_code=404, detail="Download not found")
     return download
@@ -106,16 +106,11 @@ async def update_download(download_id: int, body: DownloadUpdate, session: DBSes
         service.set_destination(download, body.kind, body.name, body.season)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    # Files on Telegram follow the correction. Each one's topic is checked on Telegram, so
-    # saving again moves the files a failed attempt didn't reach
-    if any(f["uploaded"] for f in download.files):
-        best = await worker_manager.get_best_worker(session)
-        if best is None:  # not saved: the files would stay in the old topic
-            raise HTTPException(
-                status_code=503, detail="No Telegram worker available to move the files"
-            )
-        await move_uploaded(session, download, best[1])
     await session.commit()
+    # Files on Telegram follow the correction, in the background: the move checks each
+    # one's topic on Telegram, so saving again also finishes a move that failed
+    if any(f["uploaded"] for f in download.files):
+        move.schedule_move(download.id)
     return DownloadOut.model_validate(download)
 
 

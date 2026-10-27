@@ -149,8 +149,11 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
         dl_speed=report.dl_speed,
         up_speed=report.up_speed,
     )
-    # The library's history is not the agent's business
-    rows = await session.scalars(select(Download).where(Download.status != DownloadStatus.library))
+    # The library's history is not the agent's business. Locked: a correction and a move
+    # write the same files lists
+    rows = await session.scalars(
+        select(Download).where(Download.status != DownloadStatus.library).with_for_update()
+    )
     downloads = {d.id: d for d in rows}
 
     for t in report.torrents:
@@ -172,15 +175,22 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
             progress = {f.path: f.progress for f in t.files}
             d.files = [{**f, "progress": progress.get(f["path"], f["progress"])} for f in d.files]
 
+    to_move: set[int] = set()
     for u in report.uploads:
-        if d := downloads.get(u.download_id):
-            # Only once: a later move (Task 4) changes the ids, a repeated report must not
-            d.files = [
-                {**f, "uploaded": True, "topic_id": u.topic_id, "message_ids": u.message_ids}
-                if f["path"] == u.path and not f["uploaded"]
-                else f
-                for f in d.files
-            ]
+        if (d := downloads.get(u.download_id)) is None:
+            continue
+        # Only once: a later move changes the ids, a repeated report must not
+        f = next((f for f in d.files if f["path"] == u.path and not f["uploaded"]), None)
+        if f is None:
+            continue
+        d.files = [
+            {**g, "uploaded": True, "topic_id": u.topic_id, "message_ids": u.message_ids}
+            if g is f
+            else g
+            for g in d.files
+        ]
+        if u.topic is not None and u.topic != f["topic"]:
+            to_move.add(d.id)  # corrected during its upload: it went to the old topic
 
     current = report.current_upload
     to_scan: list[Download] = []
@@ -235,6 +245,11 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
 
     for d in to_scan:
         schedule_scan(d.id, sorted({f["topic_id"] for f in d.files}))
+    if to_move:
+        from app.services.downloads.move import schedule_move  # move.py imports this module
+
+        for download_id in to_move:
+            schedule_move(download_id)
     return commands
 
 

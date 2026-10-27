@@ -12,7 +12,7 @@ from app.config import get_settings
 from app.core.worker_manager import worker_manager
 from app.models.download import Download
 from app.models.media import MediaItem, MediaPart, MediaType
-from app.services.downloads import service
+from app.services.downloads import move, service
 from app.services.scanner.service import scanner_service
 
 TOKEN = "t" * 32
@@ -341,3 +341,29 @@ async def test_a_scan_lost_in_a_restart_starts_again(
     scan.assert_awaited_once()
     assert scan.await_args is not None and scan.await_args.kwargs["topic_id"] == 77
     assert (await _sync(client))["remove"] == [download.id]
+
+
+async def test_an_upload_into_the_old_topic_is_moved(
+    client: AsyncClient, auth_headers: dict, mocker
+):
+    schedule = mocker.patch.object(move, "schedule_move")
+    download = await _add(client, auth_headers)
+    await _sync(client)
+    paths = ["S/E01.mkv", "S/E02.mkv", "S/E03.mkv"]
+    await _sync(client, torrents=[_torrent(download["id"], paths)])
+
+    def upload(path: str, topic: str, message_id: int) -> dict:
+        return {
+            "download_id": download["id"],
+            "path": path,
+            "topic_id": 77,
+            "message_ids": [message_id],
+            "topic": topic,
+        }
+
+    await _sync(client, uploads=[upload("S/E01.mkv", "Stargate SG-1 - Stagione 1", 10)])
+    schedule.assert_not_called()
+    # Corrected while E02 was uploading: it went to the topic of before
+    await _sync(client, uploads=[upload("S/E02.mkv", "Stargate - Stagione 1", 11)])
+    schedule.assert_called_once_with(download["id"])
+    assert (await _get(client, auth_headers, download["id"]))["files"][1]["message_ids"] == [11]

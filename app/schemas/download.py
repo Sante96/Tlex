@@ -93,6 +93,8 @@ class AgentUpload(BaseModel):
     path: str
     topic_id: int
     message_ids: list[int]
+    # The topic it went to: a correction made during its upload doesn't reach it
+    topic: str | int | None = None
 
 
 class AgentCurrentUpload(BaseModel):
