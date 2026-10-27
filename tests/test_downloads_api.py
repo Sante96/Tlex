@@ -110,20 +110,24 @@ async def test_an_add_is_sent_again_while_qbittorrent_does_not_list_it(
     download = await _add(client, auth_headers)
     assert [a["download_id"] for a in (await _sync(client))["add"]] == [download["id"]]
 
-    # The answer that carried it was lost, or the agent restarted: not listed a minute later
-    clock[0] += 30
+    # The answer that carried it was lost, or the agent restarted: not listed 3 minutes
+    # later (the agent gives up on one it added after 2, so it never adds it twice)
+    clock[0] += 120
     assert (await _sync(client))["add"] == []
-    clock[0] += 31
+    clock[0] += 61
     assert [a["download_id"] for a in (await _sync(client))["add"]] == [download["id"]]
 
-    # Listed (a magnet waiting for its metadata), or qBittorrent down: not sent again
-    listed = {**_torrent(download["id"], []), "files": []}
+    # qBittorrent down: not sent again
     for _ in range(3):
-        clock[0] += 61
-        assert (await _sync(client, torrents=[listed]))["add"] == []
-    for _ in range(3):
-        clock[0] += 61
+        clock[0] += 181
         assert (await _sync(client, qbit_connected=False))["add"] == []
+    # Listed once (a magnet waiting for its metadata): qBittorrent has it, even when its
+    # first lists after a restart leave it out
+    listed = {**_torrent(download["id"], []), "files": []}
+    await _sync(client, torrents=[listed])
+    for _ in range(3):
+        clock[0] += 181
+        assert (await _sync(client))["add"] == []
 
 
 async def test_a_remove_is_sent_until_the_agent_answers(client: AsyncClient, auth_headers: dict):
@@ -146,6 +150,11 @@ async def test_qbittorrent_restarting_shows_on_the_page(client: AsyncClient, aut
     seedbox = (await client.get("/api/v1/downloads", headers=auth_headers)).json()["seedbox"]
     assert seedbox["qbit_connected"] is True
 
+    # Not restarting: its user and password are wrong
+    await _sync(client, qbit_connected=False, qbit_login_failed=True)
+    seedbox = (await client.get("/api/v1/downloads", headers=auth_headers)).json()["seedbox"]
+    assert (seedbox["qbit_connected"], seedbox["qbit_login_failed"]) == (False, True)
+
 
 async def test_the_same_magnet_twice_is_refused(client: AsyncClient, auth_headers: dict):
     await _add(client, auth_headers)
@@ -166,6 +175,18 @@ async def test_a_name_fits_a_telegram_topic(client: AsyncClient, auth_headers: d
     body["name"] = "x" * 110
     r = await client.patch(f"/api/v1/downloads/{download['id']}", json=body, headers=auth_headers)
     assert r.status_code == 200
+
+    # Nor a season past 999 (or under 0)
+    for season in (1000, -1):
+        r = await client.patch(
+            f"/api/v1/downloads/{download['id']}",
+            json={**body, "season": season},
+            headers=auth_headers,
+        )
+        assert r.status_code == 422
+        data = {"magnet": MAGNET, "kind": "series", "name": "x", "season": str(season)}
+        r = await client.post("/api/v1/downloads", data=data, headers=auth_headers)
+        assert r.status_code == 422
 
 
 async def test_a_broken_torrent_file_is_refused(client: AsyncClient, auth_headers: dict):
@@ -204,6 +225,28 @@ async def test_a_torrent_without_videos_ends_in_error(client: AsyncClient, auth_
     shown = await _get(client, auth_headers, download["id"])
     assert shown["status"] == "error"
     assert shown["error"] == "Nessun video da caricare"
+
+
+async def test_a_file_that_fails_shows_its_error_and_the_download_goes_on(
+    client: AsyncClient, auth_headers: dict
+):
+    download = await _add(client, auth_headers)
+    paths = ["S/E01.mkv", "S/E02.mkv"]
+    await _sync(client)
+    await _sync(client, torrents=[_torrent(download["id"], paths)])
+
+    error = {"download_id": download["id"], "path": "S/E01.mkv", "error": "Upload fallito: x"}
+    commands = await _sync(client, file_errors=[error])
+    shown = await _get(client, auth_headers, download["id"])
+    assert (shown["status"], shown["error"]) == ("downloading", None)
+    assert [f["error"] for f in shown["files"]] == ["Upload fallito: x", None]
+    # Still the agent's to upload, the failed file with the others
+    assert [f["path"] for f in commands["plans"][0]["files"]] == paths
+
+    upload = {"download_id": download["id"], "path": "S/E01.mkv", "topic_id": 77}
+    await _sync(client, uploads=[{**upload, "message_ids": [10]}])
+    shown = await _get(client, auth_headers, download["id"])
+    assert [f["error"] for f in shown["files"]] == [None, None]
 
 
 async def test_all_files_uploaded_scans_then_removes(
@@ -371,8 +414,9 @@ async def test_a_remove_midway_scans_what_is_uploaded_and_forgets_the_rest(
 
 
 async def test_a_scan_lost_in_a_restart_starts_again(
-    client: AsyncClient, test_session: AsyncSession, mocker
+    client: AsyncClient, test_session: AsyncSession, mocker, monkeypatch
 ):
+    monkeypatch.setattr(move, "async_session_maker", lambda: _same(test_session))
     started, release = asyncio.Event(), asyncio.Event()
 
     async def slow_scan(session, topic_id):
@@ -383,26 +427,46 @@ async def test_a_scan_lost_in_a_restart_starts_again(
     scan = mocker.patch.object(
         scanner_service, "scan_all_channels", new=AsyncMock(side_effect=slow_scan)
     )
-    file = {"path": "S/E01.mkv", "size": 50, "topic": "Show - Stagione 1", "topic_id": 77}
+
+    async def get_forum_topics(chat_id):
+        for name, thread in (("Show - Stagione 1", 77), ("Show - Stagione 2", 88)):
+            yield SimpleNamespace(name=name, message_thread_id=thread)
+
+    telegram = MagicMock(
+        get_forum_topics=get_forum_topics,
+        forward_messages=AsyncMock(return_value=[SimpleNamespace(id=900)]),
+        delete_messages=AsyncMock(),
+    )
+    mocker.patch.object(
+        worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), telegram))
+    )
+    # E02 went to season 1's topic before a correction, and its move was lost in the
+    # restart too
+    files = [
+        {"path": "S/E01.mkv", "topic": "Show - Stagione 1", "message_ids": [10]},
+        {"path": "S/E02.mkv", "topic": "Show - Stagione 2", "message_ids": [11]},
+    ]
     download = Download(
         kind="series",
         name="Show",
         season=1,
         status="scanning",
         sent=True,
-        files=[{**file, "progress": 1.0, "message_ids": [10], "uploaded": True}],
+        files=[{**f, "size": 50, "topic_id": 77, "progress": 1.0, "uploaded": True} for f in files],
     )
     test_session.add(download)
     await test_session.commit()
 
-    await _sync(client)  # no task scans it (the backend restarted): started again
+    await _sync(client)  # nothing scans it (the backend restarted): started again
     await asyncio.wait_for(started.wait(), 5)
-    await _sync(client)  # running now: not started twice
+    await asyncio.gather(*move._moves.values())
+    await _sync(client)  # its scan runs now: not started twice
     release.set()
     await asyncio.gather(*list(service._tasks))
 
-    scan.assert_awaited_once()
-    assert scan.await_args is not None and scan.await_args.kwargs["topic_id"] == 77
+    telegram.forward_messages.assert_awaited_once()
+    telegram.delete_messages.assert_awaited_once_with(-100123, [11])
+    assert sorted(c.kwargs["topic_id"] for c in scan.await_args_list) == [77, 88]
     assert (await _sync(client))["remove"] == [download.id]
 
 
@@ -459,6 +523,52 @@ async def test_a_move_that_gives_up_leaves_the_old_topic_unscanned(
     assert sorted(c.kwargs["topic_id"] for c in scanner.await_args_list) == [77, 88]
     shown = await _get(client, auth_headers, download.id)
     assert (shown["status"], shown["error"]) == ("removing", None)
+    assert (await _sync(client))["remove"] == [download.id]
+
+
+async def test_a_remove_during_the_move_that_heals_a_card_stays(
+    client: AsyncClient, auth_headers: dict, test_session: AsyncSession, mocker, monkeypatch
+):
+    monkeypatch.setattr(move, "async_session_maker", lambda: _same(test_session))
+    move_scan = mocker.patch.object(move, "schedule_scan")
+    mocker.patch.object(service, "schedule_scan")
+
+    async def get_forum_topics(chat_id):
+        yield SimpleNamespace(name="Show - Stagione 2", message_thread_id=88)
+
+    async def forward_messages(*args, **kwargs):
+        # The user removes it from the seedbox while its files move
+        r = await client.delete(f"/api/v1/downloads/{download.id}", headers=auth_headers)
+        assert r.status_code == 204
+        return [SimpleNamespace(id=900)]
+
+    telegram = MagicMock(
+        get_forum_topics=get_forum_topics,
+        forward_messages=forward_messages,
+        delete_messages=AsyncMock(),
+    )
+    mocker.patch.object(
+        worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), telegram))
+    )
+    # Its move gave up while it waited for its scan: saved again, it moves now
+    file = {"path": "S/E01.mkv", "size": 50, "topic": "Show - Stagione 2", "topic_id": 77}
+    download = Download(
+        kind="series",
+        name="Show",
+        season=2,
+        status="error",
+        error=f"{move.MOVE_FAILED}: {move.NO_WORKER}",
+        sent=True,
+        files=[{**file, "progress": 1.0, "message_ids": [10], "uploaded": True}],
+    )
+    test_session.add(download)
+    await test_session.commit()
+
+    move.schedule_move(download.id)
+    await asyncio.gather(*move._moves.values())
+
+    assert move_scan.call_args.args[1] == [77, 88]
+    assert (await _get(client, auth_headers, download.id))["status"] == "removing"
     assert (await _sync(client))["remove"] == [download.id]
 
 

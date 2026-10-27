@@ -38,11 +38,18 @@ async def topic_id_for(client: Client, chat_id: int, topic: str | int) -> int:
     return created.message_thread_id or created.id
 
 
-async def _update_file(session: AsyncSession, download_id: int, path: str, **changes) -> None:
-    """This file's entry only, on the row as it is now (the agent's sync and a correction
-    write the same list), and commit."""
+async def _locked(session: AsyncSession, download_id: int) -> Download | None:
+    """The row as it is now, locked until the commit: the agent's sync, a correction, a
+    Remove and a move all write it."""
     query = select(Download).where(Download.id == download_id).with_for_update()
-    row = (await session.scalars(query.execution_options(populate_existing=True))).one()
+    return await session.scalar(query.execution_options(populate_existing=True))
+
+
+async def _update_file(session: AsyncSession, download_id: int, path: str, **changes) -> None:
+    """This file's entry only, on the row as it is now, and commit."""
+    row = await _locked(session, download_id)
+    if row is None:  # removed midway: its copies stay, its originals still go
+        return
     row.files = [{**f, **changes} if f["path"] == path else f for f in row.files]
     await session.commit()
 
@@ -103,6 +110,12 @@ async def _delete_originals(
     await _update_file(session, download_id, path, stale_ids=[])
 
 
+def _failed_move(download: Download) -> bool:
+    """In error because its last move gave up."""
+    failed = (download.error or "").startswith(MOVE_FAILED)
+    return download.status == DownloadStatus.error and failed
+
+
 async def move_uploaded(session: AsyncSession, download: Download, client: Client) -> None:
     """Every uploaded file whose topic is not where its messages are is copied there, then
     its originals are deleted; the topics it reached are scanned (all of the download's when
@@ -111,11 +124,7 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
     download_id = download.id
     topic_ids: dict[str | int, int] = {}
     # One whose earlier move gave up waits for this one too (_move took it out of scanning)
-    gave_up = (
-        download.status == DownloadStatus.error
-        and (download.error or "").startswith(MOVE_FAILED)
-        and all(f["uploaded"] for f in download.files)
-    )
+    gave_up = _failed_move(download) and all(f["uploaded"] for f in download.files)
     # A row waiting for its scan left it to this move (handle_sync): all its topics, after
     to_scan: set[int] = (
         {f["topic_id"] for f in download.files if f["uploaded"]}
@@ -155,7 +164,10 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
             to_scan.add(topic_id)
             await _delete_originals(session, client, chat_id, download_id, path, old_ids, emptied)
         if gave_up:  # before its scan, which then orders the removal it was waiting for
-            download.status, download.error = DownloadStatus.scanning, None
+            row = await _locked(session, download_id)
+            # Not if a Remove came meanwhile
+            if row is not None and _failed_move(row):
+                row.status, row.error = DownloadStatus.scanning, None
             await session.commit()
     finally:
         if to_scan:
@@ -177,13 +189,16 @@ async def _move(download_id: int) -> None:
                     logger.warning(f"Download {download_id}: move failed: {e}")
                     error = str(e)
                     break
-                if download.error and download.error.startswith(MOVE_FAILED):
-                    download.error = None  # an earlier failure, finished now
+                if (download.error or "").startswith(MOVE_FAILED):
+                    # An earlier failure, finished now (unless the row changed meanwhile)
+                    row = await _locked(session, download_id)
+                    if row is not None and (row.error or "").startswith(MOVE_FAILED):
+                        row.error = None
                     await session.commit()
                 return
         await asyncio.sleep(MOVE_RETRY_SECONDS)
     async with async_session_maker() as session:
-        if download := await session.get(Download, download_id):
+        if download := await _locked(session, download_id):
             download.error = f"{MOVE_FAILED}: {error}"
             if download.status == DownloadStatus.scanning:
                 # Not scanned meanwhile (handle_sync would): its files are still in the

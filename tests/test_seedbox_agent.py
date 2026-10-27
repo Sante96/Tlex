@@ -41,12 +41,15 @@ class FakeQBit:
     """qBittorrent's TLEX category; the writes (add, top, pause, resume, delete) are recorded."""
 
     def __init__(self, *torrents, files=()):
-        self.listed: list | None = list(torrents)  # None: qBittorrent is restarting
+        # None: qBittorrent is restarting; an exception: listing raises it
+        self.listed: list | Exception | None = list(torrents)
         self.file_list, self.calls = list(files), []
 
     def torrents(self):
         if self.listed is None:
             raise urllib.error.URLError("Connection refused")
+        if isinstance(self.listed, Exception):
+            raise self.listed
         return self.listed
 
     def files(self, hash_):
@@ -131,6 +134,25 @@ def test_qbit_logs_in_again_after_a_restart():
     urls = [r.full_url for r in opener.requests]
     assert urls.count("https://qb.test/api/v2/auth/login") == 1
     assert urls[0] == urls[2] == "https://qb.test/api/v2/torrents/info?category=TLEX"
+
+
+def test_a_refused_login_waits_before_trying_again(monkeypatch):
+    # Tried every 3 s, qBittorrent would ban the address after a few failures
+    clock = [1000.0]
+    monkeypatch.setattr(seedbox_agent, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    client, opener = qbit(403, b"Fails.", 403, 403, 403, 403, b"Ok.", b"[]")
+    login = "https://qb.test/api/v2/auth/login"
+    with pytest.raises(seedbox_agent.LoginRefused):
+        client.torrents()
+    with pytest.raises(seedbox_agent.LoginRefused):
+        client.torrents()
+    assert [r.full_url for r in opener.requests].count(login) == 1
+    clock[0] += seedbox_agent.LOGIN_RETRY_SECONDS
+    with pytest.raises(seedbox_agent.LoginRefused):
+        client.torrents()  # banned meanwhile: 403 on the login itself
+    clock[0] += seedbox_agent.LOGIN_RETRY_SECONDS
+    assert client.torrents() == []
+    assert [r.full_url for r in opener.requests].count(login) == 3
 
 
 def test_qbit_lists_only_the_tlex_category():
@@ -347,12 +369,22 @@ async def test_the_sync_goes_on_while_qbittorrent_is_down(make_agent):
     report = reports(agent)[1]
     AgentSync.model_validate(report)
     assert (report["qbit_connected"], report["torrents"]) == (False, [])
+    assert report["qbit_login_failed"] is False
     assert reports(agent)[0]["qbit_connected"] is True
     # Without a listing a remove would find no torrent: it waits for qBittorrent
     assert fake.calls == []
     fake.listed = [torrent("tlex-3")]
     await agent.tick()
     assert fake.calls == [("delete", HASH)]
+
+
+async def test_a_refused_login_shows_on_the_page(make_agent):
+    fake = FakeQBit()
+    fake.listed = seedbox_agent.LoginRefused("refused")
+    agent = make_agent(fake, {})
+    await agent.tick()
+    report = reports(agent)[0]
+    assert (report["qbit_connected"], report["qbit_login_failed"]) == (False, True)
 
 
 def test_unfinished_files_are_reported_without_qbittorrents_suffix():
@@ -363,7 +395,9 @@ def test_unfinished_files_are_reported_without_qbittorrents_suffix():
     ]
 
 
-async def test_a_file_that_keeps_failing_waits_then_is_reported(make_agent, tmp_path, monkeypatch):
+async def test_a_file_that_keeps_failing_is_reported_and_tried_again(
+    make_agent, tmp_path, monkeypatch
+):
     clock = [1000.0]
     monkeypatch.setattr(seedbox_agent, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     folder = tmp_path / "downloads/qbittorrent/tlex/5/S"
@@ -394,14 +428,52 @@ async def test_a_file_that_keeps_failing_waits_then_is_reported(make_agent, tmp_
     assert sent == ["a.mkv", "b.mkv", "a.mkv"]
     assert agent.errors == []
     clock[0] += 60
-    await agent.upload_ready()  # the third failure: given up, and told
-    clock[0] += 600
-    await agent.upload_ready()
-    assert sent == ["a.mkv", "b.mkv", "a.mkv", "a.mkv"]
+    await agent.upload_ready()  # the third failure: TLEX is told
+    clock[0] += 90
+    await agent.upload_ready()  # and it goes on trying, the download with it
+    assert sent == ["a.mkv", "b.mkv", "a.mkv", "a.mkv", "a.mkv"]
     await agent.tick()
-    assert reports(agent)[1]["errors"] == [
-        {"download_id": 5, "error": "Upload fallito: a.mkv: FILE_PARTS_INVALID"}
+    report = reports(agent)[1]
+    assert report["errors"] == []
+    assert report["file_errors"] == [
+        {"download_id": 5, "path": "S/a.mkv", "error": "Upload fallito: FILE_PARTS_INVALID"}
     ]
+
+
+async def test_a_missing_file_is_told_once_and_uploaded_when_it_shows_up(
+    make_agent, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(seedbox_agent, "GRACE_SECONDS", -1)
+    sent = []
+
+    async def send(client, chat_id, topic, path, name, offset, length, on_progress):
+        sent.append(name)
+        return 300
+
+    monkeypatch.setattr(seedbox_agent.telegram_upload, "_send", send)
+    fake = FakeQBit(
+        torrent("tlex-5", download_id=5), files=[{"name": "S/x.mkv", "size": 5, "progress": 1}]
+    )
+    plan = {"download_id": 5, "files": [{"path": "S/x.mkv", "topic": 77}]}
+    agent = make_agent(fake, {"plans": [plan]}, {"plans": [plan]}, {})
+    await agent.tick()
+    await agent.upload_ready()
+    await agent.upload_ready()
+    assert sent == []
+    folder = tmp_path / "downloads/qbittorrent/tlex/5/S"
+    folder.mkdir(parents=True)  # path_map fixed, say
+    (folder / "x.mkv").write_bytes(b"x" * 5)
+    await agent.upload_ready()
+    assert sent == ["x.mkv"]
+    await agent.tick()
+    await agent.tick()
+    local = f"{tmp_path}/downloads/qbittorrent/tlex/5/S/x.mkv"
+    first, second = reports(agent)[1:]
+    assert first["file_errors"] == [
+        {"download_id": 5, "path": "S/x.mkv", "error": f"File non trovato sulla seedbox: {local}"}
+    ]
+    assert [u["path"] for u in first["uploads"]] == ["S/x.mkv"]
+    assert (first["errors"], second["file_errors"]) == ([], [])
 
 
 async def test_a_remove_cancels_the_upload_and_deletes_its_parts_first(

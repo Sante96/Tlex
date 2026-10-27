@@ -48,10 +48,17 @@ RETRY_SECONDS = 10
 # still be renamed from .!qB, and qBittorrent's first lists after a restart may miss some
 # torrents: missing for this long, it is not coming
 GRACE_SECONDS = 120
-# A file whose upload fails: tried again after 30 s, 60 s, ... (10 min at most), given up
-# after this many failures
+# A file whose upload fails: tried again after 30 s, 60 s, ... then every 10 min; after this
+# many failures TLEX shows the error on the file (the download goes on)
 UPLOAD_TRIES = 3
 UPLOAD_BACKOFF_SECONDS = 30
+# A refused login: tried again only after this. Every few seconds qBittorrent would ban the
+# address, and the platform's proxy may be the user's own way in too
+LOGIN_RETRY_SECONDS = 1800
+
+
+class LoginRefused(RuntimeError):
+    """qBittorrent turned the agent's user and password away."""
 
 
 def local_path(qbit_path: str, path_map: list[str]) -> str:
@@ -89,6 +96,7 @@ class QBit:
         self.api = url.rstrip("/") + "/api/v2/"
         self.user, self.password = user, password
         self.opener = opener or _opener(urllib.request.HTTPCookieProcessor())
+        self.refused_until = 0.0
 
     def _open(self, path: str, data: bytes | None, headers: dict) -> bytes:
         request = urllib.request.Request(self.api + path, data=data, headers=headers)
@@ -121,9 +129,18 @@ class QBit:
             self._write(old, hash_)  # qBittorrent 4
 
     def login(self) -> None:
+        if time.monotonic() < self.refused_until:
+            raise LoginRefused("qBittorrent refused the login: check qbit_user and qbit_password")
         form = urllib.parse.urlencode({"username": self.user, "password": self.password})
-        if self._open("auth/login", form.encode(), {}).strip() != b"Ok.":
-            raise RuntimeError("qBittorrent refused the login: check qbit_user and qbit_password")
+        try:
+            answer = self._open("auth/login", form.encode(), {})
+        except urllib.error.HTTPError as e:
+            if e.code != 403:
+                raise
+            answer = b"Fails."  # banned after too many failed logins
+        if answer.strip() != b"Ok.":
+            self.refused_until = time.monotonic() + LOGIN_RETRY_SECONDS
+            raise LoginRefused("qBittorrent refused the login: check qbit_user and qbit_password")
 
     def torrents(self) -> list[dict]:
         query = urllib.parse.urlencode({"category": CATEGORY})
@@ -200,10 +217,11 @@ class Agent:
         # For the next sync
         self.uploads: list[dict] = []
         self.removed: list[int] = []
-        self.errors: list[dict] = []
+        self.errors: list[dict] = []  # a download's: it ends there
+        self.file_errors: list[dict] = []  # a file's: it is tried again, the download goes on
         self.current: dict | None = None
-        self.done: set[tuple[int, str]] = set()  # files uploaded (or given up) in this run
-        self.missing: dict[tuple[int, str], float] = {}
+        self.done: set[tuple[int, str]] = set()  # files uploaded in this run
+        self.missing: dict[tuple[int, str], float | None] = {}  # since when; None: told
         self.failures: dict[tuple[int, str], tuple[int, float]] = {}  # count, next try at
         self.uploading: int | None = None
         self.upload_task: asyncio.Task | None = None
@@ -229,30 +247,34 @@ class Agent:
         """Report TLEX's torrents and the uploads, then apply the commands that come back.
         Without qBittorrent's list the sync still goes, but the commands wait: a remove
         would find no torrent."""
+        refused = False
         try:
             self.torrents = await asyncio.to_thread(self._listing)
             listed = self.torrents
             self.seen.update(listed)
         except Exception as e:  # qBittorrent restarting: the uploads go on meanwhile
             _log(f"qBittorrent not listed: {e!r}")
-            listed = None
+            listed, refused = None, isinstance(e, LoginRefused)
         torrents = listed or {}
-        sent = len(self.uploads), len(self.removed), len(self.errors)
+        sent = len(self.uploads), len(self.removed), len(self.errors), len(self.file_errors)
         report = {
             "free_bytes": shutil.disk_usage(self.path_map[1]).free,
             # TLEX's torrents only: the other ones are not the agent's business
             "dl_speed": sum(t["dlspeed"] for t in torrents.values()),
             "up_speed": sum(t["upspeed"] for t in torrents.values()),
             "qbit_connected": listed is not None,
+            "qbit_login_failed": refused,
             "torrents": [_torrent(i, t) for i, t in torrents.items()],
             "uploads": self.uploads[: sent[0]],
             "current_upload": self.current,
             "removed": self.removed[: sent[1]],
             "errors": self.errors[: sent[2]],
+            "file_errors": self.file_errors[: sent[3]],
         }
         commands = await asyncio.to_thread(self._sync, report)
         # Delivered (the upload may have added more meanwhile)
         del self.uploads[: sent[0]], self.removed[: sent[1]], self.errors[: sent[2]]
+        del self.file_errors[: sent[3]]
         for add in commands.get("add", []):
             self.adds[add["download_id"]] = add
         for action in ("pause", "resume", "remove"):
@@ -370,17 +392,17 @@ class Agent:
             self.current = self.uploading = None
 
     def _failed(self, download_id: int, path: str, error: Exception) -> None:
-        """Tried again later, the other files meanwhile; after UPLOAD_TRIES, given up."""
+        """Tried again later, the other files meanwhile; after UPLOAD_TRIES, TLEX is told."""
         count = self.failures.get((download_id, path), (0, 0.0))[0] + 1
-        name = posixpath.basename(path)
-        _log(f"Download {download_id}: {name} not uploaded ({count}): {error!r}")
-        if count >= UPLOAD_TRIES:
-            self.done.add((download_id, path))
+        _log(f"Download {download_id}: {path} not uploaded ({count}): {error!r}")
+        if count == UPLOAD_TRIES:
             reason = str(error) or type(error).__name__
-            error_text = f"Upload fallito: {name}: {reason}"
-            self.errors.append({"download_id": download_id, "error": error_text})
+            self._file_error(download_id, path, f"Upload fallito: {reason}")
         wait = min(UPLOAD_BACKOFF_SECONDS * count, 600)
         self.failures[(download_id, path)] = count, time.monotonic() + wait
+
+    def _file_error(self, download_id: int, path: str, error: str) -> None:
+        self.file_errors.append({"download_id": download_id, "path": path, "error": error})
 
     def _next_ready(self) -> tuple | None:
         now = time.monotonic()
@@ -398,10 +420,11 @@ class Agent:
                 local = posixpath.join(local_path(t["save_path"], self.path_map), path)
                 if os.path.isfile(local):
                     return download_id, path, local, finished[path], p["topic"]
-                if now - self.missing.setdefault((download_id, path), now) > GRACE_SECONDS:
-                    self.done.add((download_id, path))
-                    error = f"File non trovato sulla seedbox: {local}"
-                    self.errors.append({"download_id": download_id, "error": error})
+                # Told once, looked for again on each pass (a path_map fixed, say)
+                since = self.missing.setdefault((download_id, path), now)
+                if since is not None and now - since > GRACE_SECONDS:
+                    self.missing[(download_id, path)] = None
+                    self._file_error(download_id, path, f"File non trovato sulla seedbox: {local}")
         return None
 
     async def _upload(self, download_id: int, path: str, local: str, size: int, topic) -> None:

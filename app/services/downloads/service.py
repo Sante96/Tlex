@@ -24,7 +24,9 @@ from app.services.downloads.plan import (
 from app.services.scanner.service import scanner_service
 
 OFFLINE_AFTER = 30  # seconds without a sync: the page shows the seedbox as not connected
-ADD_AGAIN_AFTER = 60  # seconds an add that was sent stays unlisted before it's sent again
+# Seconds an add that was sent stays unlisted before it's sent again: longer than the agent
+# waits (120 s) for a torrent it added, which by then is an error, not added twice
+ADD_AGAIN_AFTER = 180
 SCAN_RETRY_SECONDS = 30  # the scanner is busy (auto-scan, another download): wait, try again
 SCAN_RETRIES = 20
 _SCAN_LATER = ("Scan already in progress", "No workers available")
@@ -39,6 +41,7 @@ _ENDED = (DownloadStatus.removing, DownloadStatus.library, DownloadStatus.error)
 _seedbox: dict = {
     "last_seen": None,
     "qbit_connected": True,
+    "qbit_login_failed": False,
     "free_bytes": None,
     "dl_speed": None,
     "up_speed": None,
@@ -160,6 +163,7 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
     _seedbox.update(
         last_seen=now,
         qbit_connected=report.qbit_connected,
+        qbit_login_failed=report.qbit_login_failed,
         free_bytes=report.free_bytes,
         dl_speed=report.dl_speed,
         up_speed=report.up_speed,
@@ -198,22 +202,27 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
         f = next((f for f in d.files if f["path"] == u.path and not f["uploaded"]), None)
         if f is None:
             continue
-        d.files = [
-            {**g, "uploaded": True, "topic_id": u.topic_id, "message_ids": u.message_ids}
-            if g is f
-            else g
-            for g in d.files
-        ]
+        uploaded = {"uploaded": True, "topic_id": u.topic_id, "message_ids": u.message_ids}
+        d.files = [{**g, **uploaded, "error": None} if g is f else g for g in d.files]
         if u.topic is not None and u.topic != f["topic"]:
             to_move.add(d.id)  # corrected during its upload: it went to the old topic
+
+    for e in report.file_errors:
+        if d := downloads.get(e.download_id):
+            d.files = [
+                {**f, "error": e.error} if f["path"] == e.path and not f["uploaded"] else f
+                for f in d.files
+            ]
 
     current = report.current_upload
     to_scan: list[Download] = []
     for d in downloads.values():
         if d.status == DownloadStatus.scanning:
-            # Its scan task ended with the backend's last run (a move scans it when done)
+            # Its scan or move ended with the backend's last run: a move checks each file's
+            # topic (one uploaded before a correction may not have left the old one), then
+            # scans them all
             if d.id not in _tasks.values() and d.id not in move._moves:
-                to_scan.append(d)
+                to_move.add(d.id)
             continue
         if d.status not in _TRANSFERRING:
             continue
@@ -248,9 +257,12 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
         if d.status == DownloadStatus.queued:
             if d.id in listed or not report.qbit_connected:
                 _unlisted.pop(d.id, None)
-            # Again after a minute unlisted: the answer that carried it may be lost, or the
-            # agent restarted with it in memory only (it skips one qBittorrent lists)
-            elif not d.sent or now - _unlisted.setdefault(d.id, now) > ADD_AGAIN_AFTER:
+            # Again after a while unlisted: the answer that carried it may be lost, or the
+            # agent restarted with it in memory only. Not once listed (a magnet waiting for
+            # its metadata): qBittorrent has it, its first lists after a restart may not
+            elif not d.sent or (
+                d.live is None and now - _unlisted.setdefault(d.id, now) > ADD_AGAIN_AFTER
+            ):
                 torrent_b64 = base64.b64encode(d.torrent).decode() if d.torrent else None
                 commands.add.append(
                     AgentAdd(download_id=d.id, magnet=d.magnet, torrent_b64=torrent_b64)

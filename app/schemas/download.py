@@ -8,12 +8,15 @@ from app.models.download import DownloadKind
 
 # "<name> - Stagione NNN" within Telegram's 128-character topic titles
 NAME_MAX = 110
+SEASON_MAX = 999
 
 
 class SeedboxStatus(BaseModel):
     connected: bool
     # The agent syncs, but can't list qBittorrent (it restarts every few hours)
     qbit_connected: bool
+    # qBittorrent refuses the agent's user and password (agent.json)
+    qbit_login_failed: bool = False
     last_seen: float | None
     free_bytes: int | None
     dl_speed: int | None
@@ -28,6 +31,8 @@ class DownloadFile(BaseModel):
     progress: float
     message_ids: list[int]
     uploaded: bool
+    # Its upload keeps failing, or the file isn't there: the agent tries again by itself
+    error: str | None = None
 
 
 class DownloadOut(BaseModel):
@@ -67,7 +72,7 @@ class TorrentPreview(BaseModel):
 class DownloadUpdate(BaseModel):
     kind: DownloadKind
     name: str | None = Field(None, max_length=NAME_MAX)
-    season: int | None = None
+    season: int | None = Field(None, ge=0, le=SEASON_MAX)
 
 
 # The agent's paths are qBittorrent file names, relative to the torrent's save path.
@@ -117,17 +122,25 @@ class AgentError(BaseModel):
     error: str
 
 
+class AgentFileError(BaseModel):
+    download_id: int
+    path: str
+    error: str
+
+
 class AgentSync(BaseModel):
     free_bytes: int
     dl_speed: int
     up_speed: int
     # False: qBittorrent can't be listed now, so `torrents` is empty, not "all gone"
     qbit_connected: bool = True
+    qbit_login_failed: bool = False
     torrents: list[AgentTorrent] = []
     uploads: list[AgentUpload] = []
     current_upload: AgentCurrentUpload | None = None
     removed: list[int] = []
     errors: list[AgentError] = []
+    file_errors: list[AgentFileError] = []
 
 
 class AgentAdd(BaseModel):

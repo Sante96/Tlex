@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.models.download import Download, DownloadKind, DownloadStatus
 from app.schemas.download import (
     NAME_MAX,
+    SEASON_MAX,
     AgentCommands,
     AgentSync,
     DownloadOut,
@@ -82,7 +83,7 @@ async def add_download(
     magnet: Annotated[str | None, Form()] = None,
     torrent: Annotated[UploadFile | None, File()] = None,
     name: Annotated[str | None, Form(max_length=NAME_MAX)] = None,
-    season: Annotated[int | None, Form()] = None,
+    season: Annotated[int | None, Form(ge=0, le=SEASON_MAX)] = None,
 ) -> DownloadOut:
     try:
         download = await service.add_download(
