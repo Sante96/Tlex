@@ -219,15 +219,21 @@ async def test_remove_only_touches_the_seedbox(
     await test_session.commit()
     telegram = MagicMock()
     telegram.delete_messages = AsyncMock()
-    mocker.patch.object(
+    best = mocker.patch.object(
         worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), telegram))
     )
+    scan = mocker.patch.object(scanner_service, "scan_all_channels", new=AsyncMock())
 
     r = await client.delete(f"/api/v1/downloads/{download.id}", headers=auth_headers)
     assert r.status_code == 204
+    await asyncio.gather(*list(service._tasks))
 
-    telegram.delete_messages.assert_awaited_once_with(-100123, [50])
+    # The agent deletes its own half-uploaded parts: the backend touches no Telegram message
+    best.assert_not_awaited()
+    telegram.delete_messages.assert_not_awaited()
+    scan.assert_not_awaited()  # already in the library
     assert (await test_session.scalar(select(func.count(MediaItem.id)))) == 1
+    assert (await _get(client, auth_headers, download.id))["status"] == "removing"
     assert (await _sync(client))["remove"] == [download.id]
 
 
@@ -273,14 +279,65 @@ async def test_a_second_torrent_of_the_same_hash_ends_in_error(
     assert (shown["status"], shown["error"]) == ("error", "Già in download")
 
 
-async def test_a_remove_midway_forgets_the_download(client: AsyncClient, auth_headers: dict):
+async def test_a_remove_midway_scans_what_is_uploaded_and_forgets_the_rest(
+    client: AsyncClient, auth_headers: dict, mocker
+):
+    scan = mocker.patch.object(scanner_service, "scan_all_channels", new=AsyncMock(return_value={}))
     download = await _add(client, auth_headers)
     await _sync(client)
     await _sync(client, torrents=[_torrent(download["id"], ["S/E01.mkv", "S/E02.mkv"])])
+    upload = {
+        "download_id": download["id"],
+        "path": "S/E01.mkv",
+        "topic_id": 77,
+        "message_ids": [10],
+    }
+    await _sync(client, uploads=[upload])
 
     await client.delete(f"/api/v1/downloads/{download['id']}", headers=auth_headers)
+    await asyncio.gather(*list(service._tasks))
+
+    scan.assert_awaited_once()
+    assert scan.await_args is not None and scan.await_args.kwargs["topic_id"] == 77
+    assert (await _get(client, auth_headers, download["id"]))["status"] == "removing"
     assert (await _sync(client))["remove"] == [download["id"]]
     await _sync(client, removed=[download["id"]])
 
     r = await client.get("/api/v1/downloads", headers=auth_headers)
     assert r.json()["downloads"] == []
+
+
+async def test_a_scan_lost_in_a_restart_starts_again(
+    client: AsyncClient, test_session: AsyncSession, mocker
+):
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_scan(session, topic_id):
+        started.set()
+        await release.wait()
+        return {}
+
+    scan = mocker.patch.object(
+        scanner_service, "scan_all_channels", new=AsyncMock(side_effect=slow_scan)
+    )
+    file = {"path": "S/E01.mkv", "size": 50, "topic": "Show - Stagione 1", "topic_id": 77}
+    download = Download(
+        kind="series",
+        name="Show",
+        season=1,
+        status="scanning",
+        sent=True,
+        files=[{**file, "progress": 1.0, "message_ids": [10], "uploaded": True}],
+    )
+    test_session.add(download)
+    await test_session.commit()
+
+    await _sync(client)  # no task scans it (the backend restarted): started again
+    await asyncio.wait_for(started.wait(), 5)
+    await _sync(client)  # running now: not started twice
+    release.set()
+    await asyncio.gather(*list(service._tasks))
+
+    scan.assert_awaited_once()
+    assert scan.await_args is not None and scan.await_args.kwargs["topic_id"] == 77
+    assert (await _sync(client))["remove"] == [download.id]

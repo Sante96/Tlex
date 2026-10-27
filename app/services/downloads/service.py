@@ -9,8 +9,6 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
-from app.core.worker_manager import worker_manager
 from app.database import async_session_maker
 from app.models.download import Download, DownloadKind, DownloadStatus
 from app.schemas.download import AgentAdd, AgentCommands, AgentPlan, AgentPlanFile, AgentSync
@@ -36,7 +34,8 @@ _ENDED = (DownloadStatus.removing, DownloadStatus.library, DownloadStatus.error)
 
 # One backend process: the seedbox's last sync lives here, not in the database
 _seedbox: dict = {"last_seen": None, "free_bytes": None, "dl_speed": None, "up_speed": None}
-_tasks: set[asyncio.Task] = set()
+# The running scans, by download: a "scanning" row without one lost it in a restart
+_tasks: dict[asyncio.Task, int] = {}
 
 
 class AlreadyQueued(Exception):
@@ -109,23 +108,15 @@ def set_destination(
 
 
 async def remove_download(session: AsyncSession, download: Download) -> None:
-    """Off the seedbox. On Telegram only the parts of a file left half uploaded go, as
-    nobody could ever read them: whatever is in the library stays."""
-    half = [m for f in download.files if not f["uploaded"] for m in f["message_ids"]]
-    if half:
-        try:
-            result = await worker_manager.get_best_worker(session)
-            if result is None:
-                raise RuntimeError("no worker available")
-            await result[1].delete_messages(get_settings().channel_ids_list[0], half)
-            download.files = [
-                f if f["uploaded"] else {**f, "message_ids": []} for f in download.files
-            ]
-        except Exception as e:
-            # Left as they are: the scanner skips a file whose parts are not all there
-            logger.warning(f"Download {download.id}: half-uploaded parts {half} not deleted: {e}")
+    """Off the seedbox, and nothing else: what is in the library stays. The agent deletes
+    the parts of a file it left half uploaded (it alone knows their ids)."""
+    # Midway, the files already on Telegram still reach the library
+    midway = download.status in (*_TRANSFERRING, DownloadStatus.error)
+    topic_ids = sorted({f["topic_id"] for f in download.files if f["uploaded"]})
     download.action, download.status, download.upload = "remove", DownloadStatus.removing, None
     await session.commit()
+    if midway and topic_ids:
+        schedule_scan(download.id, topic_ids)
 
 
 def _plan_files(download: Download, files: list) -> None:
@@ -194,6 +185,9 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
     current = report.current_upload
     to_scan: list[Download] = []
     for d in downloads.values():
+        if d.status == DownloadStatus.scanning and d.id not in _tasks.values():
+            to_scan.append(d)  # its scan task ended with the backend's last run
+            continue
         if d.status not in _TRANSFERRING:
             continue
         if all(f["uploaded"] for f in d.files):
@@ -278,5 +272,5 @@ def schedule_scan(download_id: int, topic_ids: list[int]) -> None:
     """Scan the topics in the background, then, if the download was waiting for this scan,
     tell the agent to remove the torrent."""
     task = asyncio.create_task(_scan_then_remove(download_id, topic_ids))
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
+    _tasks[task] = download_id
+    task.add_done_callback(_tasks.pop)
