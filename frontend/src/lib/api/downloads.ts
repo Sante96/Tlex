@@ -14,6 +14,8 @@ export interface SeedboxStatus {
   connected: boolean;
   /** False while the agent syncs but can't reach qBittorrent (it restarts every few hours) */
   qbit_connected: boolean;
+  /** qBittorrent refuses the agent's user and password (agent.json) */
+  qbit_login_failed: boolean;
   /** Epoch seconds of the agent's last sync */
   last_seen: number | null;
   free_bytes: number | null;
@@ -30,6 +32,8 @@ export interface DownloadFile {
   progress: number;
   message_ids: number[];
   uploaded: boolean;
+  /** Its upload keeps failing, or the file isn't there: the agent tries again by itself */
+  error: string | null;
 }
 
 /** The torrent in qBittorrent, as the agent last reported it */

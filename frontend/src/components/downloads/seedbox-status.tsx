@@ -19,13 +19,16 @@ export function SeedboxStatus({
   const size = (bytes: number) => formatBytes(bytes, locale);
 
   // The agent is there, qBittorrent isn't: the uploads to Telegram go on meanwhile
-  const restarting = seedbox.connected && !seedbox.qbit_connected;
+  const loginFailed = seedbox.connected && seedbox.qbit_login_failed;
+  const restarting =
+    seedbox.connected && !seedbox.qbit_connected && !loginFailed;
   const parts = seedbox.connected
     ? [
+        loginFailed && t("qbitLoginFailed"),
         restarting && t("qbitRestarting"),
         seedbox.free_bytes !== null &&
           t("seedboxFree", { size: size(seedbox.free_bytes) }),
-        !restarting &&
+        seedbox.qbit_connected &&
           seedbox.dl_speed !== null &&
           `↓ ${size(seedbox.dl_speed)}/s`,
         telegramSpeed !== null &&
@@ -52,18 +55,18 @@ export function SeedboxStatus({
             "w-2 h-2 rounded-full shrink-0",
             restarting
               ? "bg-amber-500"
-              : seedbox.connected
+              : seedbox.connected && !loginFailed
                 ? "bg-green-500"
                 : "bg-red-500",
           )}
         />
         <span>Seedbox: {parts.filter(Boolean).join(" · ")}</span>
       </p>
-      {!seedbox.connected && (
+      {(!seedbox.connected || loginFailed) && (
         <p>
-          {t("seedboxStart")}{" "}
+          {t(loginFailed ? "qbitLoginFix" : "seedboxStart")}{" "}
           <code className="inline-block whitespace-nowrap px-1.5 py-0.5 rounded bg-[#27272a] text-[#fafafa] font-mono select-all">
-            bash ~/tlex-upload/start-agent.sh
+            bash ~/tlex-upload/start-agent.sh{loginFailed && " restart"}
           </code>
         </p>
       )}

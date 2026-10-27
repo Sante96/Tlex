@@ -26,6 +26,8 @@ import {
   destinationTopic,
   hasSeason,
   KindPicker,
+  NAME_MAX,
+  SEASON_MAX,
   seasonValue,
 } from "./add-torrent-card";
 
@@ -123,6 +125,8 @@ export function TorrentCard({
   const onTelegram =
     d.files.length > 0 &&
     t("onTelegram", { done: uploaded, total: d.files.length });
+  // The agent goes on trying these: the download isn't over
+  const failing = d.files.filter((f) => f.error && !f.uploaded);
 
   return (
     <>
@@ -228,6 +232,16 @@ export function TorrentCard({
         {d.error && (
           <p className="text-xs text-red-400 wrap-anywhere">
             {tc("error")}: {d.error}
+          </p>
+        )}
+
+        {failing.length > 0 && (
+          <p className="text-xs text-amber-400 wrap-anywhere">
+            {t("fileError", {
+              file: failing[0].path.split("/").pop() ?? "",
+              error: failing[0].error ?? "",
+              more: failing.length - 1,
+            })}
           </p>
         )}
 
@@ -370,6 +384,7 @@ function EditDownloadModal({
         <DSInput
           label={t("name")}
           value={name}
+          maxLength={NAME_MAX}
           onChange={(e) => setName(e.target.value)}
           data-autofocus
         />
@@ -378,6 +393,7 @@ function EditDownloadModal({
             label={t("season")}
             type="number"
             min={0}
+            max={SEASON_MAX}
             placeholder="1"
             value={season}
             onChange={(e) => setSeason(e.target.value)}

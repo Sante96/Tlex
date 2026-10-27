@@ -16,6 +16,10 @@ import { cn } from "@/lib/utils";
 
 export const KINDS: DownloadKind[] = ["film", "series", "anime", "concert"];
 
+// The backend's limits: "<name> - Stagione NNN" fits a Telegram topic's 128 characters
+export const NAME_MAX = 110;
+export const SEASON_MAX = 999;
+
 /** Series and anime go to one topic per season */
 export const hasSeason = (kind: DownloadKind) =>
   kind === "series" || kind === "anime";
@@ -213,6 +217,7 @@ export function AddTorrentCard({ onAdded }: { onAdded: () => void }) {
             aria-label={t("name")}
             placeholder={t(kind === "film" ? "nameOptional" : "name")}
             value={name}
+            maxLength={NAME_MAX}
             onChange={(e) => setName(e.target.value)}
             className="flex-1 min-w-[180px]"
           />
@@ -222,6 +227,7 @@ export function AddTorrentCard({ onAdded }: { onAdded: () => void }) {
               placeholder={t("season")}
               type="number"
               min={0}
+              max={SEASON_MAX}
               value={season}
               onChange={(e) => setSeason(e.target.value)}
               className="w-[110px]"
