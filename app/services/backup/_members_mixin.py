@@ -58,6 +58,7 @@ class BackupMembersMixin:
                         f"[WORKERS] {me.phone_number} is not in {group}, and no account "
                         "already in it could let it in: add it by hand"
                     )
+        logger.info(f"[WORKERS] {len(joining or accounts)} account(s) checked in {len(groups)} group(s)")
 
     async def invite_members(
         self,
