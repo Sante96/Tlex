@@ -183,6 +183,44 @@ async def test_a_move_clears_the_old_backup_copies(test_session, scan):
     assert [(r.backup_message_id, r.pending_delete) for r in rows] == [(700, True)]
 
 
+async def test_the_titles_go_before_the_backup_deletes_and_a_failed_one_is_retried(
+    test_session, scan
+):
+    workers = BackupChannel(main_channel_id=CHAT, backup_channel_id=-200, title="B")
+    download = corrected([100])
+    test_session.add_all([workers, download, episode(100)])
+    await test_session.flush()
+    test_session.add(
+        BackupMessage(
+            backup_channel_db_id=workers.id,
+            main_channel_id=CHAT,
+            main_message_id=100,
+            backup_message_id=500,
+        )
+    )
+    await test_session.commit()
+    client = telegram({"Show - Stagione 2": 88})
+    client.delete_messages.side_effect = [None, RuntimeError("flood")]
+
+    with pytest.raises(RuntimeError):
+        await move.move_uploaded(test_session, download, client)
+    await test_session.rollback()  # as the failed move's session does
+
+    # Committed before the slow backup deletes, which then hold no title's row lock
+    assert (await test_session.scalars(select(MediaItem.id))).all() == []
+    # The copy still to delete, and the file still owes it
+    assert (await test_session.scalars(select(BackupMessage.backup_message_id))).all() == [500]
+    await test_session.refresh(download)
+    assert download.files[0]["stale_ids"] == [100]
+
+    client.delete_messages.reset_mock(side_effect=True)
+    await move.move_uploaded(test_session, download, client)
+
+    assert client.delete_messages.await_args_list == [call(CHAT, [100]), call(-200, [500])]
+    assert (await test_session.scalars(select(BackupMessage.id))).all() == []
+    assert download.files[0]["stale_ids"] == []
+
+
 async def test_a_move_failed_halfway_is_finished_by_the_next_one(test_session, scan):
     download = corrected([100], [200])
     test_session.add(download)
@@ -279,6 +317,37 @@ async def test_no_title_is_pruned_without_its_scan(test_session, mocker, monkeyp
     assert (await test_session.scalars(select(Series.title))).all() == ["Wrong"]
 
 
+async def test_no_title_is_pruned_after_a_topic_scan_that_failed(test_session, mocker):
+    wrong = Series(title="Wrong")
+    download = corrected([100])
+    test_session.add_all([download, episode(100, series=wrong)])
+    await test_session.commit()
+    # The scanner swallows a topic's failure into "errors"
+    failed = {"topics": 0, "errors": ["Topic 88: Telegram is down"]}
+    mocker.patch.object(scanner_service, "scan_all_channels", return_value=failed)
+
+    await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
+    await asyncio.gather(*list(service._tasks))
+
+    assert (await test_session.scalars(select(Series.title))).all() == ["Wrong"]
+
+
+async def test_a_scan_without_a_worker_is_tried_again(test_session, mocker, monkeypatch):
+    monkeypatch.setattr(service, "SCAN_RETRY_SECONDS", 0)
+    wrong = Series(title="Wrong")
+    download = corrected([100])
+    test_session.add_all([download, episode(100, series=wrong)])
+    await test_session.commit()
+    answers = [{"error": "No workers available"}, {"topics": 1, "errors": []}]
+    scanner = mocker.patch.object(scanner_service, "scan_all_channels", side_effect=answers)
+
+    await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
+    await asyncio.gather(*list(service._tasks))
+
+    assert scanner.await_count == 2
+    assert (await test_session.scalars(select(Series.title))).all() == []
+
+
 async def test_the_archive_deletes_its_pending_copies_at_its_daily_run(test_session, mocker):
     archive = await archive_with(test_session, [(100, 700, True), (5, 505, False)])
     order: list[str] = []
@@ -324,6 +393,19 @@ async def test_a_correction_answers_at_once_and_moves_in_the_background(
     assert r.status_code == 200, r.text
     assert r.json()["files"][0]["topic"] == "Show - Stagione 2"
     schedule.assert_called_once_with(download.id)
+
+
+async def test_a_move_cut_by_a_restart_is_finished_at_startup(test_session, mocker):
+    schedule = mocker.patch.object(move, "schedule_move")
+    cut, done = corrected([100]), corrected([200])
+    cut.files = [{**cut.files[0], "stale_ids": [50]}]  # copied, its originals not deleted
+    done.files = [{**done.files[0], "stale_ids": []}]
+    test_session.add_all([cut, done, corrected([300])])
+    await test_session.commit()
+
+    await move.resume_moves()
+
+    schedule.assert_called_once_with(cut.id)
 
 
 async def test_a_move_without_a_worker_retries_then_shows_an_error(test_session, mocker, scan):

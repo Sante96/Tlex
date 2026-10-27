@@ -50,9 +50,9 @@ async def _update_file(session: AsyncSession, download_id: int, path: str, **cha
 async def _forget(
     session: AsyncSession, chat_id: int, old_ids: list[int], emptied: tuple[set[int], set[int]]
 ) -> dict[int, list[int]]:
-    """Drop the library titles and backup rows of messages that are gone; returns the
-    workers' backup copies to delete, by backup chat. The titles' series and franchises go
-    into `emptied`: the scan step prunes those it leaves empty."""
+    """Drop the library titles of messages that are gone, and their backup rows; returns
+    the workers' backup copies to delete, by backup chat. The titles' series and franchises
+    go into `emptied`: the scan step prunes those it leaves empty."""
     parts = select(MediaPart.media_item_id).where(
         MediaPart.channel_id == chat_id, MediaPart.message_id.in_(old_ids)
     )
@@ -63,6 +63,10 @@ async def _forget(
         if item.franchise_id:
             emptied[1].add(item.franchise_id)
         await session.delete(item)  # through the ORM: its parts and streams go with it
+    # Now: the titles' rows stay locked otherwise across the slow backup deletes. Their
+    # backup rows go with the caller's commit, after those deletes: a failure keeps them
+    # for the next move (deleting a copy twice is harmless)
+    await session.commit()
 
     rows = await session.execute(
         select(BackupMessage, BackupChannel)
@@ -106,10 +110,16 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
     chat_id = get_settings().channel_ids_list[0]
     download_id = download.id
     topic_ids: dict[str | int, int] = {}
+    # One whose earlier move gave up waits for this one too (_move took it out of scanning)
+    gave_up = (
+        download.status == DownloadStatus.error
+        and (download.error or "").startswith(MOVE_FAILED)
+        and all(f["uploaded"] for f in download.files)
+    )
     # A row waiting for its scan left it to this move (handle_sync): all its topics, after
     to_scan: set[int] = (
         {f["topic_id"] for f in download.files if f["uploaded"]}
-        if download.status == DownloadStatus.scanning
+        if download.status == DownloadStatus.scanning or gave_up
         else set()
     )
     emptied: tuple[set[int], set[int]] = (set(), set())  # series, franchises
@@ -144,6 +154,9 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
             )
             to_scan.add(topic_id)
             await _delete_originals(session, client, chat_id, download_id, path, old_ids, emptied)
+        if gave_up:  # before its scan, which then orders the removal it was waiting for
+            download.status, download.error = DownloadStatus.scanning, None
+            await session.commit()
     finally:
         if to_scan:
             schedule_scan(download_id, sorted(to_scan), sorted(emptied[0]), sorted(emptied[1]))
@@ -172,6 +185,11 @@ async def _move(download_id: int) -> None:
     async with async_session_maker() as session:
         if download := await session.get(Download, download_id):
             download.error = f"{MOVE_FAILED}: {error}"
+            if download.status == DownloadStatus.scanning:
+                # Not scanned meanwhile (handle_sync would): its files are still in the
+                # topic they had to leave, under the title of before. A save on its card
+                # moves it again
+                download.status = DownloadStatus.error
             await session.commit()
 
 
@@ -196,3 +214,12 @@ def schedule_move(download_id: int) -> None:
         _again.add(download_id)
     else:
         _moves[download_id] = asyncio.create_task(_run(download_id))
+
+
+async def resume_moves() -> None:
+    """At startup: the moves the last stop cut halfway, with old copies still to delete."""
+    async with async_session_maker() as session:
+        rows = (await session.execute(select(Download.id, Download.files))).all()
+    for download_id, files in rows:
+        if any(f.get("stale_ids") for f in files):
+            schedule_move(download_id)

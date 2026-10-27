@@ -1,5 +1,7 @@
 """Where a downloaded torrent's files go in Telegram, and what to read from a torrent."""
 
+import base64
+import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -11,6 +13,9 @@ from app.services.scanner.processor import special_number
 from app.services.scanner.telegram import TelegramScanner
 
 _SKIPPED_DIRS = {"extra", "extras", "bonus", "ncop", "nced", "nc"}
+_TORRENT_NAME_MAX = 500  # its column
+_HEX_HASH = re.compile(r"[0-9a-f]{40}")
+_BASE32_HASH = re.compile(r"[a-z2-7]{32}")
 
 
 def destination_topic(kind: DownloadKind, name: str | None, season: int | None) -> str | int:
@@ -38,7 +43,7 @@ def file_topic(kind: DownloadKind, name: str | None, season: int | None, path: s
     file_season = guessit(filename).get("season")
     if isinstance(file_season, list):
         file_season = file_season[0]
-    return destination_topic(kind, name, file_season or season or 1)
+    return destination_topic(kind, name, file_season if file_season is not None else season)
 
 
 def uploadable(path: str) -> bool:
@@ -74,20 +79,26 @@ def _bdecode(data: bytes, i: int = 0) -> tuple[Any, int]:
 def torrent_name(magnet: str | None, torrent: bytes | None) -> str | None:
     if magnet:
         dn = parse_qs(urlparse(magnet).query).get("dn")
-        return dn[0] if dn else None
+        return dn[0][:_TORRENT_NAME_MAX] if dn else None
     if torrent:
         try:
             name = _bdecode(torrent)[0][b"info"][b"name"]
-            return name.decode("utf-8", errors="replace")
+            return name.decode("utf-8", errors="replace")[:_TORRENT_NAME_MAX]
         except (ValueError, KeyError, TypeError, IndexError, AttributeError, RecursionError):
             return None
     return None
 
 
 def info_hash(magnet: str) -> str | None:
+    """In hex, as qBittorrent reports it; None for a malformed one (the magnet is still
+    added, without the duplicate check)."""
     for xt in parse_qs(urlparse(magnet).query).get("xt", []):
         if xt.lower().startswith("urn:btih:"):
-            return xt[9:].lower()
+            value = xt[9:].lower()
+            if _HEX_HASH.fullmatch(value):
+                return value
+            if _BASE32_HASH.fullmatch(value):
+                return base64.b32decode(value.upper()).hex()
     return None
 
 

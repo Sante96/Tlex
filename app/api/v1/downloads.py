@@ -11,6 +11,7 @@ from app.api.deps import DBSession
 from app.config import get_settings
 from app.models.download import Download, DownloadKind, DownloadStatus
 from app.schemas.download import (
+    NAME_MAX,
     AgentCommands,
     AgentSync,
     DownloadOut,
@@ -80,7 +81,7 @@ async def add_download(
     kind: Annotated[DownloadKind, Form()],
     magnet: Annotated[str | None, Form()] = None,
     torrent: Annotated[UploadFile | None, File()] = None,
-    name: Annotated[str | None, Form()] = None,
+    name: Annotated[str | None, Form(max_length=NAME_MAX)] = None,
     season: Annotated[int | None, Form()] = None,
 ) -> DownloadOut:
     try:

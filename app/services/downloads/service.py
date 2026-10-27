@@ -24,8 +24,10 @@ from app.services.downloads.plan import (
 from app.services.scanner.service import scanner_service
 
 OFFLINE_AFTER = 30  # seconds without a sync: the page shows the seedbox as not connected
+ADD_AGAIN_AFTER = 60  # seconds an add that was sent stays unlisted before it's sent again
 SCAN_RETRY_SECONDS = 30  # the scanner is busy (auto-scan, another download): wait, try again
 SCAN_RETRIES = 20
+_SCAN_LATER = ("Scan already in progress", "No workers available")
 NO_VIDEOS = "Nessun video da caricare"
 ALREADY_DOWNLOADING = "Già in download"
 
@@ -34,7 +36,15 @@ _TRANSFERRING = (DownloadStatus.downloading, DownloadStatus.uploading)
 _ENDED = (DownloadStatus.removing, DownloadStatus.library, DownloadStatus.error)
 
 # One backend process: the seedbox's last sync lives here, not in the database
-_seedbox: dict = {"last_seen": None, "free_bytes": None, "dl_speed": None, "up_speed": None}
+_seedbox: dict = {
+    "last_seen": None,
+    "qbit_connected": True,
+    "free_bytes": None,
+    "dl_speed": None,
+    "up_speed": None,
+}
+# Queued downloads whose add was sent and that qBittorrent doesn't list: since when
+_unlisted: dict[int, float] = {}
 # The running scans, by download: a "scanning" row without one lost it in a restart
 _tasks: dict[asyncio.Task, int] = {}
 
@@ -146,8 +156,10 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
     """The agent's report every 3 s: record it, move the downloads on, answer with commands."""
     from app.services.downloads import move  # move.py imports this module
 
+    now = time.time()
     _seedbox.update(
-        last_seen=time.time(),
+        last_seen=now,
+        qbit_connected=report.qbit_connected,
         free_bytes=report.free_bytes,
         dl_speed=report.dl_speed,
         up_speed=report.up_speed,
@@ -231,14 +243,25 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
             d.status, d.error = DownloadStatus.error, e.error
 
     commands = AgentCommands()
+    listed = {t.download_id for t in report.torrents}
     for d in downloads.values():
-        if not d.sent and d.status == DownloadStatus.queued:
-            torrent_b64 = base64.b64encode(d.torrent).decode() if d.torrent else None
-            commands.add.append(
-                AgentAdd(download_id=d.id, magnet=d.magnet, torrent_b64=torrent_b64)
-            )
-            d.sent = True
-        if d.action:
+        if d.status == DownloadStatus.queued:
+            if d.id in listed or not report.qbit_connected:
+                _unlisted.pop(d.id, None)
+            # Again after a minute unlisted: the answer that carried it may be lost, or the
+            # agent restarted with it in memory only (it skips one qBittorrent lists)
+            elif not d.sent or now - _unlisted.setdefault(d.id, now) > ADD_AGAIN_AFTER:
+                torrent_b64 = base64.b64encode(d.torrent).decode() if d.torrent else None
+                commands.add.append(
+                    AgentAdd(download_id=d.id, magnet=d.magnet, torrent_b64=torrent_b64)
+                )
+                d.sent, _unlisted[d.id] = True, now
+        if d.status == DownloadStatus.removing:
+            # Until the agent answers it: its removal is idempotent, and a lost answer or
+            # its restart would leave the card removing for good
+            commands.remove.append(d.id)
+            d.action = None
+        elif d.action:
             getattr(commands, d.action).append(d.id)  # "pause", "resume" or "remove"
             d.action = None
         pending = [
@@ -259,16 +282,18 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
 
 
 async def _scan(topic_id: int) -> bool:
-    """Whether the topic was scanned."""
+    """Whether the topic was scanned, all of it."""
     for _ in range(SCAN_RETRIES):
         async with async_session_maker() as session:
             result = await scanner_service.scan_all_channels(session, topic_id=topic_id)
-        if result.get("error") != "Scan already in progress":
-            if "error" in result:
-                logger.warning(f"Scan of topic {topic_id}: {result['error']}")
-            return "error" not in result
+        if result.get("error") not in _SCAN_LATER:
+            # A topic that failed midway ends in "errors", not "error"
+            failed = result.get("error") or result.get("errors")
+            if failed:
+                logger.warning(f"Scan of topic {topic_id}: {failed}")
+            return not failed
         await asyncio.sleep(SCAN_RETRY_SECONDS)
-    logger.warning(f"Topic {topic_id} not scanned: the scanner stayed busy")
+    logger.warning(f"Topic {topic_id} not scanned: the scanner stayed busy or had no worker")
     return False
 
 

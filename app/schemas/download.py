@@ -2,13 +2,18 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.models.download import DownloadKind
+
+# "<name> - Stagione NNN" within Telegram's 128-character topic titles
+NAME_MAX = 110
 
 
 class SeedboxStatus(BaseModel):
     connected: bool
+    # The agent syncs, but can't list qBittorrent (it restarts every few hours)
+    qbit_connected: bool
     last_seen: float | None
     free_bytes: int | None
     dl_speed: int | None
@@ -61,7 +66,7 @@ class TorrentPreview(BaseModel):
 
 class DownloadUpdate(BaseModel):
     kind: DownloadKind
-    name: str | None = None
+    name: str | None = Field(None, max_length=NAME_MAX)
     season: int | None = None
 
 
@@ -116,6 +121,8 @@ class AgentSync(BaseModel):
     free_bytes: int
     dl_speed: int
     up_speed: int
+    # False: qBittorrent can't be listed now, so `torrents` is empty, not "all gone"
+    qbit_connected: bool = True
     torrents: list[AgentTorrent] = []
     uploads: list[AgentUpload] = []
     current_upload: AgentCurrentUpload | None = None

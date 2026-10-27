@@ -94,9 +94,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Workers joining the library's groups failed: {e}")
 
+    # A download's move on Telegram that the last stop cut halfway: finished (each move
+    # waits for a worker itself)
+    async def resume_download_moves_background():
+        try:
+            from app.services.downloads.move import resume_moves
+
+            await resume_moves()
+        except Exception as e:
+            logger.warning(f"Download moves not resumed: {e}")
+
     # Kept: the loop holds only weak references to tasks, and shutdown cancels them
     background = [
         asyncio.create_task(join_library_groups_background()),
+        asyncio.create_task(resume_download_moves_background()),
         asyncio.create_task(classify_library_background()),
         asyncio.create_task(populate_caches_background()),
         asyncio.create_task(backfill_chapters_background()),
