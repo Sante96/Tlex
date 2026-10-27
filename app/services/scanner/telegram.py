@@ -56,7 +56,7 @@ class TelegramScanner:
         return list(groups.values())
 
     async def scan_channel(
-        self, client: Client, channel_id: int, limit: int = 100, topic_id: int | None = None
+        self, client: Client, channel_id: int, limit: int = 0, topic_id: int | None = None
     ) -> list[ScannedFile]:
         """Scan a Telegram channel for video files."""
         files: list[ScannedFile] = []

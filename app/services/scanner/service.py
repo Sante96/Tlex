@@ -1,10 +1,14 @@
 """Scanner service for orchestrating Telegram scans."""
 
+import asyncio
+
 from loguru import logger
 from pyrogram import Client
+from pyrogram.errors import FloodWait
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.utils import flood_seconds
 from app.core.worker_manager import worker_manager
 from app.services.concert_frames import schedule_concert_frames
 from app.services.scanner.concerts import concert_franchise_name, process_concert_group
@@ -12,6 +16,9 @@ from app.services.scanner.processor import process_group
 from app.services.scanner.telegram import TelegramScanner
 
 settings = get_settings()
+
+# A flood wait longer than this ends the topic's scan: the next scan comes in 3 hours
+MAX_FLOOD_WAIT = 300
 
 
 class ScannerService:
@@ -26,9 +33,12 @@ class ScannerService:
         return self._is_scanning
 
     async def scan_all_channels(
-        self, session: AsyncSession, limit: int = 100, topic_id: int | None = None
+        self, session: AsyncSession, limit: int = 0, topic_id: int | None = None
     ) -> dict:
-        """Scan all configured channels and their topics."""
+        """Scan all configured channels and their topics. limit 0: every message of a
+        topic. The latest 100 only left out the older files of a bulk upload (the seedbox
+        puts hundreds of films in one topic between two scans); a known file costs one
+        lookup."""
         if self._is_scanning:
             return {"error": "Scan already in progress"}
 
@@ -125,7 +135,17 @@ class ScannerService:
 
             logger.debug(f"Scanning topic {topic_id} ({topic_name or 'unknown'}) - Type: {kind}")
 
-            files = await self._scanner.scan_channel(client, channel_id, limit, topic_id)
+            # Telegram paces history reads: wait out its flood wait, or this topic and the
+            # ones after it (the wait still running) were all skipped, every scan
+            while True:
+                try:
+                    files = await self._scanner.scan_channel(client, channel_id, limit, topic_id)
+                    break
+                except FloodWait as e:
+                    if flood_seconds(e) > MAX_FLOOD_WAIT:
+                        raise
+                    logger.info(f"Topic {topic_id}: flood wait {flood_seconds(e)} s")
+                    await asyncio.sleep(flood_seconds(e) + 1)
             stats["files_found"] += len(files)
             stats["topics"] += 1
 

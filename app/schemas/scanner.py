@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class ScanRequest(BaseModel):
     """Request model for scan endpoint."""
 
-    limit: int = 100
+    limit: int = 0  # messages per topic; 0: all of them
     topic_id: int | None = None
 
 
