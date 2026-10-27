@@ -11,7 +11,8 @@ torrents in the TLEX category tagged tlex-<download id>, never the user's other 
 
 ~/.tlex-upload/agent.json, chmod 600: {"tlex_url": "https://...", "token": "...",
   "qbit_url": "https://...", "qbit_user": "...", "qbit_password": "...",
-  "path_map": ["/home4/sante/storage", "/storage"]}  (qBittorrent's root, then the shell's)
+  "path_map": ["/home4/sante/storage", "/storage"],  (qBittorrent's root, then the shell's)
+  "quota_bytes": 7000000000000}  (the plan's space: the disk is shared with other users)
 The group and the Telegram app come from ~/.tlex-upload/config.json, as for telegram_upload.py.
 """
 
@@ -23,6 +24,7 @@ import posixpath
 import re
 import secrets
 import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -55,6 +57,8 @@ UPLOAD_BACKOFF_SECONDS = 30
 # A refused login: tried again only after this. Every few seconds qBittorrent would ban the
 # address, and the platform's proxy may be the user's own way in too
 LOGIN_RETRY_SECONDS = 1800
+# The space used, measured this often (du: half a second on the seedbox's ~80k files)
+DU_SECONDS = 60
 
 
 class LoginRefused(RuntimeError):
@@ -67,6 +71,12 @@ def local_path(qbit_path: str, path_map: list[str]) -> str:
     if qbit_path == qbit_root or qbit_path.startswith(qbit_root + "/"):
         return shell_root + qbit_path[len(qbit_root) :]
     return qbit_path
+
+
+def disk_used(root: str) -> int:
+    """Bytes under root, on its own disk only (du -x)."""
+    du = subprocess.run(["du", "-sxB1", root], capture_output=True, text=True, timeout=120)
+    return int(du.stdout.split()[0])
 
 
 def _opener(*handlers) -> urllib.request.OpenerDirector:
@@ -225,6 +235,7 @@ class Agent:
         self.failures: dict[tuple[int, str], tuple[int, float]] = {}  # count, next try at
         self.uploading: int | None = None
         self.upload_task: asyncio.Task | None = None
+        self.used: tuple[int, float] | None = None  # bytes, measured at
 
     def _listing(self) -> dict[int, dict]:
         found = {}
@@ -233,6 +244,22 @@ class Agent:
                 if match := TAG.fullmatch(tag.strip()):
                     found[int(match[1])] = {**t, "files": self.qbit.files(t["hash"])}
         return found
+
+    def _free_bytes(self) -> int:
+        """The plan's space left. The disk is shared with the platform's other users: its
+        own free space is theirs too (6.9 TB free when the plan had 355 GB left)."""
+        root, quota = self.path_map[1], self.config.get("quota_bytes")
+        if not quota:
+            return shutil.disk_usage(root).free
+        now = time.monotonic()
+        if self.used is None or now - self.used[1] >= DU_SECONDS:
+            try:
+                self.used = disk_used(root), now
+            except Exception as e:  # the last measure, if any, until the next one works
+                _log(f"Space used not measured: {e!r}")
+                if self.used is None:
+                    return shutil.disk_usage(root).free
+        return max(quota - self.used[0], 0)
 
     def _sync(self, report: dict) -> dict:
         request = urllib.request.Request(
@@ -258,7 +285,7 @@ class Agent:
         torrents = listed or {}
         sent = len(self.uploads), len(self.removed), len(self.errors), len(self.file_errors)
         report = {
-            "free_bytes": shutil.disk_usage(self.path_map[1]).free,
+            "free_bytes": await asyncio.to_thread(self._free_bytes),
             # TLEX's torrents only: the other ones are not the agent's business
             "dl_speed": sum(t["dlspeed"] for t in torrents.values()),
             "up_speed": sum(t["upspeed"] for t in torrents.values()),

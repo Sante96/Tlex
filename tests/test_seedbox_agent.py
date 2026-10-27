@@ -387,6 +387,27 @@ async def test_a_refused_login_shows_on_the_page(make_agent):
     assert (report["qbit_connected"], report["qbit_login_failed"]) == (False, True)
 
 
+async def test_the_free_space_is_the_plans_not_the_shared_disks(make_agent, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(seedbox_agent, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    measures = []
+
+    def disk_used(root):
+        measures.append(root)
+        return 6_600 + 10 * len(measures)
+
+    monkeypatch.setattr(seedbox_agent, "disk_used", disk_used)
+    agent = make_agent(FakeQBit(), {}, {}, {})
+    agent.config["quota_bytes"] = 7_000
+    await agent.tick()
+    clock[0] += 3
+    await agent.tick()  # measured once a minute, not on every sync
+    clock[0] += seedbox_agent.DU_SECONDS
+    await agent.tick()
+    assert [r["free_bytes"] for r in reports(agent)] == [390, 390, 380]
+    assert measures == [agent.path_map[1]] * 2
+
+
 def test_unfinished_files_are_reported_without_qbittorrents_suffix():
     # qBittorrent < 4.4, or "Append .!qB": the file's name while it downloads
     t = {**torrent("tlex-3"), "files": [{"name": "S/x.mkv.!qB", "size": 5, "progress": 0.5}]}
