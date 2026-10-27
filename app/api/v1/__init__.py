@@ -8,6 +8,7 @@ from app.api.v1 import (
     auth,
     backup,
     device_auth,
+    downloads,
     franchises,
     images,
     media,
@@ -50,3 +51,8 @@ router.include_router(people.router, dependencies=_user_auth)
 router.include_router(images.router, prefix="/images", tags=["images"])
 router.include_router(workers.router, tags=["workers"])
 router.include_router(backup.router)
+router.include_router(
+    downloads.router, prefix="/downloads", tags=["downloads"], dependencies=_user_auth
+)
+# The seedbox agent has no user: its own token (SEEDBOX_AGENT_TOKEN)
+router.include_router(downloads.agent_router, prefix="/downloads/agent", tags=["downloads"])

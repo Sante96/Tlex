@@ -68,6 +68,23 @@ export function yearOf(date: string): string {
   return date.slice(0, 4);
 }
 
+const BYTE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const;
+
+/** A size in the locale's numbers ("48,2 GB"), in steps of 1024 */
+export function formatBytes(bytes: number, locale: string): string {
+  let unit = 0;
+  while (bytes >= 1024 && unit < BYTE_UNITS.length - 1) {
+    bytes /= 1024;
+    unit++;
+  }
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: BYTE_UNITS[unit],
+    minimumFractionDigits: unit >= 2 ? 1 : 0,
+    maximumFractionDigits: unit >= 2 ? 1 : 0,
+  }).format(bytes);
+}
+
 /** A timestamp from the backend: the database keeps UTC without a zone, which new Date()
  * reads as local time (an hour or two early in Italy). */
 export function serverDate(iso: string): Date {

@@ -118,6 +118,8 @@ SCHEMA_UPGRADES = (
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_language VARCHAR(10)",
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_anime BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE media_items ADD COLUMN IF NOT EXISTS anime_override BOOLEAN",
+    # Archive copies of messages a download's correction moved, deleted at the next run
+    "ALTER TABLE backup_messages ADD COLUMN IF NOT EXISTS pending_delete BOOLEAN NOT NULL DEFAULT FALSE",
 )
 
 

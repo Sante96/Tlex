@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from pyrogram import Client
@@ -171,11 +172,20 @@ async def _existing(client: Client, chat_id: int) -> set[tuple[int, str]]:
 
 
 async def _send(
-    client: Client, chat_id: int, topic: int, path: str, name: str, offset: int, length: int
+    client: Client,
+    chat_id: int,
+    topic: int,
+    path: str,
+    name: str,
+    offset: int,
+    length: int,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> int:
     started, last = time.monotonic(), [0.0]
 
     async def progress(current: int, total: int) -> None:
+        if on_progress is not None:
+            on_progress(current, total)
         now = time.monotonic()
         if now - last[0] >= 60 or current == total:
             last[0] = now

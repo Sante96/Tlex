@@ -61,8 +61,15 @@ class ScannerService:
                     stats["channels"] += 1
 
                     if topic_id:
+                        topic_name = await self._topic_name(client, channel_id, topic_id)
                         await self._scan_topic(
-                            session, client, channel_id, topic_id, limit, stats, topic_name=None
+                            session,
+                            client,
+                            channel_id,
+                            topic_id,
+                            limit,
+                            stats,
+                            topic_name=topic_name,
                         )
                     else:
                         await self._scan_all_topics(session, client, channel_id, limit, stats)
@@ -78,6 +85,18 @@ class ScannerService:
         if stats["media_created"]:
             schedule_concert_frames()
         return stats
+
+    async def _topic_name(self, client: Client, channel_id: int, topic_id: int) -> str | None:
+        """A topic scanned alone needs its name too: "Concerti · X" makes its files concerts,
+        "<Title> - Stagione N" gives the series and the season."""
+        try:
+            topic = await client.get_forum_topic(channel_id, topic_id)
+        except Exception as e:
+            logger.warning(f"Topic {topic_id}: name not read, scanned without it: {e}")
+            return None
+        if isinstance(topic, list):
+            topic = topic[0] if topic else None
+        return topic.name if topic else None
 
     async def _scan_all_topics(
         self,

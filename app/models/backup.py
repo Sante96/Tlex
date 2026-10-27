@@ -82,6 +82,9 @@ class BackupMessage(Base):
     main_message_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     backup_message_id: Mapped[int] = mapped_column(Integer, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    # The main message moved (a corrected download): an archive's own account deletes this
+    # copy at its daily run, since no worker is in that group
+    pending_delete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     backup_channel: Mapped["BackupChannel"] = relationship(
         "BackupChannel", back_populates="messages"

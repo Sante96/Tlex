@@ -169,3 +169,24 @@ export { uploadImage, imageFromUrl } from "./images";
 // Anime
 export { getAnimeList } from "./anime";
 export type { AnimeItem } from "./anime";
+
+// Downloads
+export {
+  getDownloads,
+  previewTorrent,
+  addDownload,
+  updateDownload,
+  pauseDownload,
+  resumeDownload,
+  removeDownload,
+} from "./downloads";
+export type {
+  Download,
+  DownloadKind,
+  DownloadStatus,
+  DownloadFile,
+  DownloadLive,
+  DownloadUpload,
+  SeedboxStatus,
+  TorrentPreview,
+} from "./downloads";

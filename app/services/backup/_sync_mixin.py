@@ -3,6 +3,7 @@
 import asyncio
 import random
 from datetime import datetime, timedelta
+from itertools import batched
 
 from loguru import logger
 from pyrogram import Client, raw
@@ -31,6 +32,27 @@ class BackupSyncMixin(BackupFailoverMixin):
         if account is None:
             return 0
         async with archive_client(session, account) as archive:
+            # Copies of messages a download's correction moved (downloads/move.py)
+            pending = (
+                await session.scalars(
+                    select(BackupMessage).where(
+                        BackupMessage.backup_channel_db_id == backup.id,
+                        BackupMessage.pending_delete,
+                    )
+                )
+            ).all()
+            for chunk in batched(pending, 100, strict=False):
+                try:
+                    await archive.delete_messages(
+                        backup.backup_channel_id, [p.backup_message_id for p in chunk]
+                    )
+                except Exception as e:  # these stay pending: the sync must not wait on them
+                    logger.warning(f"[ARCHIVE] {len(chunk)} moved copies not deleted: {e}")
+                    continue
+                for p in chunk:
+                    await session.delete(p)
+            if pending:
+                await session.commit()
             await join_main(worker_manager.primary_clients(), archive, backup.main_channel_id)
             return await self.sync_messages(session, archive, backup)
 

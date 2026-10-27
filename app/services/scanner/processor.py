@@ -36,6 +36,15 @@ def special_number(name: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+_TOPIC_SEASON = re.compile(r"-\s*Stagione\s+(\d+)\s*$", re.IGNORECASE)
+
+
+def topic_season(topic_name: str) -> int | None:
+    """The season of a topic named "<Title> - Stagione N" (how downloads are uploaded)."""
+    match = _TOPIC_SEASON.search(topic_name)
+    return int(match.group(1)) if match else None
+
+
 async def already_scanned(session: AsyncSession, first_file: ScannedFile) -> bool:
     """A media item already holds this Telegram message."""
     existing_part = await session.execute(
@@ -103,6 +112,10 @@ async def process_group(
         season = 0
         if episode is None:
             episode = 1
+
+    # The topic's season wins over the file name's; specials stay in season 0
+    if series_name and not is_special and (s := topic_season(series_name)) is not None:
+        season = s
 
     # Determine media type
     if force_movie:

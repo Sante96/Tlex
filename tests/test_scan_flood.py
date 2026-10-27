@@ -5,8 +5,11 @@ as an error and went on: the wait still running, the next 35 topics failed the s
 and what the seedbox uploaded there never reached the library. And a scan read only each
 topic's latest 100 messages: a bulk upload of more than that between two scans left the
 older files out for good.
+
+A topic scanned alone (after a download) keeps its name: it says what the topic holds.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 from pyrogram.errors import FloodWait
@@ -34,7 +37,9 @@ async def test_a_scan_reads_each_topic_whole(mocker):
     from app.config import Settings
     from app.core.worker_manager import worker_manager
 
-    mocker.patch.object(Settings, "channel_ids_list", new_callable=PropertyMock, return_value=[-100])
+    mocker.patch.object(
+        Settings, "channel_ids_list", new_callable=PropertyMock, return_value=[-100]
+    )
     mocker.patch.object(
         worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), MagicMock()))
     )
@@ -44,3 +49,31 @@ async def test_a_scan_reads_each_topic_whole(mocker):
     await service.scan_all_channels(AsyncMock())  # as the scheduler and the scan button call it
 
     assert topics.await_args.args[3] == 0  # limit 0: every message, not the latest 100
+
+
+async def test_a_topic_scanned_alone_keeps_its_name(mocker):
+    from app.config import Settings
+    from app.core.worker_manager import worker_manager
+
+    mocker.patch.object(
+        Settings, "channel_ids_list", new_callable=PropertyMock, return_value=[-100]
+    )
+    client = MagicMock(
+        get_forum_topic=AsyncMock(return_value=SimpleNamespace(name="Concerti · Love Live!"))
+    )
+    best = mocker.patch.object(
+        worker_manager, "get_best_worker", new=AsyncMock(return_value=(MagicMock(), client))
+    )
+    service = ScannerService()
+    scan_topic = mocker.patch.object(service, "_scan_topic", new=AsyncMock())
+
+    await service.scan_all_channels(AsyncMock(), topic_id=36)
+
+    client.get_forum_topic.assert_awaited_once_with(-100, 36)
+    assert scan_topic.await_args.kwargs["topic_name"] == "Concerti · Love Live!"
+
+    # Its name not readable: scanned all the same, without it
+    client.get_forum_topic.side_effect = RuntimeError("CHANNEL_INVALID")
+    await service.scan_all_channels(AsyncMock(), topic_id=36)
+    assert scan_topic.await_args.kwargs["topic_name"] is None
+    assert best.await_count == 2

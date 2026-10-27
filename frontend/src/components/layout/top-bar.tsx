@@ -6,7 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LogOut, UserCircle, Users, Search, X, Settings } from "lucide-react";
+import { LogOut, UserCircle, Users, Search, X, Settings, Download } from "lucide-react";
 import {
   DSAvatar,
   DSDropdownMenu,
@@ -289,7 +289,12 @@ export function TopBar() {
                     label: t("topbar.switchProfile"),
                     onClick: handleSwitchProfile,
                   },
-                  // The phone's bottom bar has no Settings item: here they are
+                  // The phone's bottom bar has no Download or Settings item: here they are
+                  {
+                    icon: <Download className="h-4 w-4" />,
+                    label: t("nav.downloads"),
+                    onClick: () => router.push("/downloads"),
+                  },
                   {
                     icon: <Settings className="h-4 w-4" />,
                     label: t("nav.settings"),

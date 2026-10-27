@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Obiettivo:** dalla pagina "Download" di TLEX l'admin aggiunge un magnet o un `.torrent` dicendo cos'è. La seedbox lo scarica, lo carica su Telegram nel topic giusto file per file, TLEX lo scansiona e il torrent si cancella dalla seedbox. La pagina mostra tutto in tempo reale.
+**Obiettivo:** dalla pagina "Download" di TLEX un utente aggiunge un magnet o un `.torrent` dicendo cos'è. La seedbox lo scarica, lo carica su Telegram nel topic giusto file per file, TLEX lo scansiona e il torrent si cancella dalla seedbox. La pagina mostra tutto in tempo reale.
 
 **Architettura:**
 - **Programma sulla seedbox** (`tools/seedbox_agent.py`): parla con qBittorrent tramite la sua API WebUI v2 e con TLEX con una sola chiamata `POST /api/v1/downloads/agent/sync` ogni 3 s. Manda lo stato e riceve i comandi.
@@ -15,7 +15,7 @@
 
 ## Vincoli globali
 
-- **Accesso:** solo admin. Backend con `get_admin_user`, frontend con `user.is_admin`.
+- **Accesso:** tutti gli utenti con un account (deciso da Sante). Backend con `get_current_user`; nel frontend nessun controllo su `is_admin`.
 - **Categoria e tag:** in qBittorrent la categoria è esattamente `TLEX`, e ogni torrent ha il tag `tlex-<download_id>`. Il programma legge e tocca solo torrent con categoria `TLEX` **e** un tag `tlex-*`.
 - **Segreti:** in TLEX non entra nessuna password della seedbox o di qBittorrent (né database, né `.env`, né log). TLEX ha solo `SEEDBOX_AGENT_TOKEN` in `.env`, di almeno 32 caratteri. Se è vuoto, gli endpoint dell'agente rispondono 404.
 - **Sessione Telegram dell'agente:** si chiama `agent`, in `~/.tlex-upload/`. Mai `uploader` (quella di `telegram_upload.py`), mai la session string di un worker.
@@ -145,7 +145,7 @@ def test_guess_prefill():
 - Consumes: Task 2 (modello e `plan.*`); `scanner_service.scan_all_channels(session, topic_id=...)`.
 - Produces: gli endpoint qui sotto (il frontend del Task 6 e l'agente del Task 5 usano esattamente queste forme).
 
-Endpoint admin (`/api/v1/downloads`, `get_admin_user`):
+Endpoint della pagina (`/api/v1/downloads`, `get_current_user`):
 - `GET ""` → `{"seedbox": SeedboxStatus, "downloads": [DownloadOut]}`.
   - `SeedboxStatus`: `connected`, `last_seen`, `free_bytes`, `dl_speed`, `up_speed`.
   - `DownloadOut`: `id`, `kind`, `name`, `season`, `torrent_name`, `status`, `paused`, `error`, `files`, `live`, `upload`, `topics` (i topic dei file, senza doppioni), `created_at`, `finished_at`.
@@ -173,8 +173,8 @@ Passaggi di stato dentro `handle_sync`:
 - **Tutti i file caricati:** `scanning`, poi in background `scan_all_channels(session, topic_id=t)` per ogni `topic_id`. Se lo scanner è già occupato si riprova ogni 30 s, al massimo 20 volte. Poi `action="remove"` e `removing`.
 - **`removed` dall'agente:** `library` e `finished_at`.
 
-- [ ] **Step 1: test che falliscono.** Si usano il client e le intestazioni admin e utente delle fixture esistenti. `settings.seedbox_agent_token` si imposta con monkeypatch a `"t" * 32`.
-  - `test_only_admins_reach_downloads`: GET con un utente non admin → 403.
+- [ ] **Step 1: test che falliscono.** Si usano il client e le intestazioni utente delle fixture esistenti. `settings.seedbox_agent_token` si imposta con monkeypatch a `"t" * 32`.
+  - `test_downloads_need_a_login_not_an_admin`: GET senza login → 401; GET con un utente non admin → 200.
   - `test_adding_a_magnet_queues_it_and_the_agent_gets_it`: POST con kind series, name "Stargate SG-1", season 1 e un magnet → 201, `status == "queued"`. La sync risponde con `add[0].download_id` uguale all'id e con il magnet. Una seconda sync non ripete l'`add`.
   - `test_the_same_magnet_twice_is_refused`: lo stesso magnet una seconda volta → 409.
   - `test_a_broken_torrent_file_is_refused`: POST con `torrent=b"junk"` → 400.
@@ -277,7 +277,6 @@ pauseDownload(id: number): Promise<void>; resumeDownload(id: number): Promise<vo
 ```
 
 Comportamento:
-- **Accesso:** se `user.is_admin` è false, `router.replace("/")`.
 - **Aggiornamento:** `getDownloads` ogni 3000 ms finché il documento è visibile.
 - **Schede**, come la variante A della bozza:
   - etichetta del tipo, nome del torrent e topic;
@@ -300,14 +299,12 @@ Comportamento:
 
 **Files:**
 - Modify:
-  - `frontend/src/components/layout/sidebar.tsx`: voce "Download" (icona `Download` di lucide, href `/downloads`) prima di Impostazioni in `bottomRoutes`, solo se `user.is_admin`;
-  - `frontend/src/components/layout/top-bar.tsx`: voce "Download" nel menu dell'avatar, accanto a Impostazioni, con la stessa visibilità e solo per gli admin;
+  - `frontend/src/components/layout/sidebar.tsx`: voce "Download" (icona `Download` di lucide, href `/downloads`) prima di Impostazioni in `bottomRoutes`, per tutti;
+  - `frontend/src/components/layout/top-bar.tsx`: voce "Download" nel menu dell'avatar, accanto a Impostazioni, con la stessa visibilità, per tutti;
   - `messages`: `nav.downloads`, cioè "Download" sia in italiano sia in inglese.
 
 - [ ] **Step 1:** `npx tsc --noEmit && npm run lint` → verde.
-- [ ] **Step 2: controllo CDP**, con `auth/me` sostituito:
-  - con `is_admin` true la sidebar mostra "Download" subito sopra "Impostazioni", e a 393×852 il menu dell'avatar mostra "Download";
-  - con `is_admin` false la voce non c'è in nessuno dei due posti.
+- [ ] **Step 2: controllo CDP**, con `auth/me` sostituito da un utente **non admin**: la sidebar mostra "Download" subito sopra "Impostazioni", e a 393×852 il menu dell'avatar mostra "Download".
 - [ ] **Step 3:** commit `feat(downloads): Download in the sidebar and the avatar menu`.
 
 ### Task 8: messa in funzione
