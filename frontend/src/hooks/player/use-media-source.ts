@@ -197,7 +197,8 @@ async function feed(
       from = to;
     }
     if (!(await append(sb, chunk.subarray(from)))) return true;
-    await trimBehind(video, sb, behindLimit(), keyframes);
+    // Not on an empty buffer: on iOS behindLimit() reads its end
+    if (video.buffered.length) await trimBehind(video, sb, behindLimit(), keyframes);
 
     while (video.buffered.length && ahead() > aheadLimit()) {
       await sleep(1000);
