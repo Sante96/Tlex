@@ -1,6 +1,7 @@
 """Media processing logic for scanner."""
 
 import asyncio
+import re
 from datetime import date
 
 from guessit import guessit
@@ -19,6 +20,20 @@ from app.services.tmdb import tmdb_client
 
 def _first(value):
     return value[0] if isinstance(value, list) else value
+
+
+# "OVA01", "OVA 2", "SP01", "Special 3": guessit reads no episode in these
+_SPECIAL = re.compile(
+    r"(?:^|[\s_.\-\[(])(?:OVA|OAD|ONA|SP|Specials?|Speciale)[\s_.\-]*(\d{1,3})(?=$|[\s_.\-\])])",
+    re.IGNORECASE,
+)
+
+
+def special_number(name: str) -> int | None:
+    """A special's number in a file name: a series' file without an episode was taken
+    for its first special, so Laid-Back Camp's three OVAs were all S00E01."""
+    match = _SPECIAL.search(name)
+    return int(match.group(1)) if match else None
 
 
 async def already_scanned(session: AsyncSession, first_file: ScannedFile) -> bool:
@@ -81,6 +96,8 @@ async def process_group(
     alt_title = guess.get("alternative_title", "")
     if isinstance(alt_title, str) and alt_title.lower() == "special":
         is_special = True
+    if episode is None and (number := special_number(group.base_name)) is not None:
+        season, episode, is_special = 0, number, True
 
     if is_special and season is None:
         season = 0
