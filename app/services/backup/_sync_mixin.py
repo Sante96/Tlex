@@ -31,6 +31,21 @@ class BackupSyncMixin(BackupFailoverMixin):
         if account is None:
             return 0
         async with archive_client(session, account) as archive:
+            # Copies of messages a download's correction moved (downloads/move.py)
+            pending = (
+                await session.scalars(
+                    select(BackupMessage).where(
+                        BackupMessage.backup_channel_db_id == backup.id,
+                        BackupMessage.pending_delete,
+                    )
+                )
+            ).all()
+            if pending:
+                ids = [p.backup_message_id for p in pending]
+                await archive.delete_messages(backup.backup_channel_id, ids)
+                for p in pending:
+                    await session.delete(p)
+                await session.commit()
             await join_main(worker_manager.primary_clients(), archive, backup.main_channel_id)
             return await self.sync_messages(session, archive, backup)
 
