@@ -1,5 +1,6 @@
 """The seedbox agent: only TLEX's torrents, qBittorrent's restarts, resumable uploads."""
 
+import asyncio
 import io
 import json
 import sys
@@ -40,9 +41,12 @@ class FakeQBit:
     """qBittorrent's TLEX category; the writes (add, top, pause, resume, delete) are recorded."""
 
     def __init__(self, *torrents, files=()):
-        self.listed, self.file_list, self.calls = list(torrents), list(files), []
+        self.listed: list | None = list(torrents)  # None: qBittorrent is restarting
+        self.file_list, self.calls = list(files), []
 
     def torrents(self):
+        if self.listed is None:
+            raise urllib.error.URLError("Connection refused")
         return self.listed
 
     def files(self, hash_):
@@ -293,3 +297,148 @@ async def test_partial_parts_are_deleted_on_remove(make_agent):
     assert fake.calls == [("delete", HASH)]
     remaining = json.loads(seedbox_agent.STATE.read_text())
     assert remaining == {k: v for k, v in state.items() if k.startswith("30|")}
+
+
+async def test_an_add_sent_again_is_added_once(make_agent):
+    # TLEX sends an add again when qBittorrent doesn't list it for a while
+    fake = FakeQBit()
+    add = {"download_id": 7, "magnet": "magnet:?xt=urn:btih:abc", "torrent_b64": None}
+    agent = make_agent(fake, {"add": [add]}, {"add": [add]}, {"add": [add]})
+    await agent.tick()
+    await agent.tick()  # added, not listed yet
+    fake.listed = [torrent("tlex-7", download_id=7)]
+    await agent.tick()
+    assert [c[0] for c in fake.calls] == ["add", "top"]
+
+
+async def test_a_remove_waits_while_qbittorrent_lists_again_after_a_restart(make_agent):
+    fake = FakeQBit(torrent("tlex-3"))
+    agent = make_agent(fake, {}, {"remove": [3]}, {"remove": [3]}, {"remove": [3]}, {})
+    await agent.tick()
+    fake.listed = []  # qBittorrent's first listings after its restart: not all there yet
+    await agent.tick()
+    await agent.tick()
+    assert fake.calls == []
+    fake.listed = [torrent("tlex-3")]
+    await agent.tick()
+    assert fake.calls == [("delete", HASH)]
+    await agent.tick()
+    assert [r["removed"] for r in reports(agent)] == [[], [], [], [], [3]]
+
+
+async def test_a_remove_of_a_torrent_gone_for_good_is_answered(make_agent, monkeypatch):
+    monkeypatch.setattr(seedbox_agent, "GRACE_SECONDS", -1)
+    fake = FakeQBit(torrent("tlex-3"))
+    agent = make_agent(fake, {}, {"remove": [3]}, {})
+    await agent.tick()
+    fake.listed = []
+    await agent.tick()
+    await agent.tick()
+    assert reports(agent)[2]["removed"] == [3]
+    assert fake.calls == []
+
+
+async def test_the_sync_goes_on_while_qbittorrent_is_down(make_agent):
+    fake = FakeQBit(torrent("tlex-3"))
+    agent = make_agent(fake, {}, {"remove": [3]}, {})
+    await agent.tick()
+    fake.listed = None
+    await agent.tick()  # the page says qBittorrent is restarting, not "not connected"
+    report = reports(agent)[1]
+    AgentSync.model_validate(report)
+    assert (report["qbit_connected"], report["torrents"]) == (False, [])
+    assert reports(agent)[0]["qbit_connected"] is True
+    # Without a listing a remove would find no torrent: it waits for qBittorrent
+    assert fake.calls == []
+    fake.listed = [torrent("tlex-3")]
+    await agent.tick()
+    assert fake.calls == [("delete", HASH)]
+
+
+def test_unfinished_files_are_reported_without_qbittorrents_suffix():
+    # qBittorrent < 4.4, or "Append .!qB": the file's name while it downloads
+    t = {**torrent("tlex-3"), "files": [{"name": "S/x.mkv.!qB", "size": 5, "progress": 0.5}]}
+    assert seedbox_agent._torrent(3, t)["files"] == [
+        {"path": "S/x.mkv", "size": 5, "progress": 0.5}
+    ]
+
+
+async def test_a_file_that_keeps_failing_waits_then_is_reported(make_agent, tmp_path, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(seedbox_agent, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    folder = tmp_path / "downloads/qbittorrent/tlex/5/S"
+    folder.mkdir(parents=True)
+    for name in ("a.mkv", "b.mkv"):
+        (folder / name).write_bytes(b"x" * 5)
+    sent = []
+
+    async def send(client, chat_id, topic, path, name, offset, length, on_progress):
+        sent.append(name)
+        if name == "a.mkv":
+            raise RuntimeError("FILE_PARTS_INVALID")
+        return 300
+
+    monkeypatch.setattr(seedbox_agent.telegram_upload, "_send", send)
+    files = [{"name": f"S/{n}", "size": 5, "progress": 1} for n in ("a.mkv", "b.mkv")]
+    fake = FakeQBit(torrent("tlex-5", download_id=5), files=files)
+    plan = {"download_id": 5, "files": [{"path": f["name"], "topic": 77} for f in files]}
+    agent = make_agent(fake, {"plans": [plan]}, {"plans": [plan]})
+    await agent.tick()
+
+    await agent.upload_ready()
+    assert sent == ["a.mkv", "b.mkv"]  # b doesn't wait behind a
+    await agent.upload_ready()
+    assert sent == ["a.mkv", "b.mkv"]  # a waits before its next try
+    clock[0] += 30
+    await agent.upload_ready()
+    assert sent == ["a.mkv", "b.mkv", "a.mkv"]
+    assert agent.errors == []
+    clock[0] += 60
+    await agent.upload_ready()  # the third failure: given up, and told
+    clock[0] += 600
+    await agent.upload_ready()
+    assert sent == ["a.mkv", "b.mkv", "a.mkv", "a.mkv"]
+    await agent.tick()
+    assert reports(agent)[1]["errors"] == [
+        {"download_id": 5, "error": "Upload fallito: a.mkv: FILE_PARTS_INVALID"}
+    ]
+
+
+async def test_a_remove_cancels_the_upload_and_deletes_its_parts_first(
+    make_agent, tmp_path, monkeypatch
+):
+    folder = tmp_path / "downloads/qbittorrent/tlex/5/S"
+    folder.mkdir(parents=True)
+    (folder / "x.mkv").write_bytes(b"x" * 15)  # two parts
+    second_part = asyncio.Event()
+
+    async def send(client, chat_id, topic, path, name, offset, length, on_progress):
+        if offset == 0:
+            return 101
+        second_part.set()
+        await asyncio.Event().wait()  # still going when the remove comes
+        raise AssertionError("never sent")
+
+    monkeypatch.setattr(seedbox_agent.telegram_upload, "_send", send)
+    events = []
+
+    class Client(Telegram):
+        async def delete_messages(self, chat_id, ids):
+            events.append(("telegram", chat_id, ids))
+
+    fake = FakeQBit(
+        torrent("tlex-5", download_id=5), files=[{"name": "S/x.mkv", "size": 15, "progress": 1}]
+    )
+    fake.calls = events
+    plan = {"download_id": 5, "files": [{"path": "S/x.mkv", "topic": 77}]}
+    agent = make_agent(fake, {"plans": [plan]}, {"remove": [5]}, client=Client())
+    await agent.tick()
+    agent.start_upload()
+    upload = agent.upload_task
+    await asyncio.wait_for(second_part.wait(), 5)
+
+    await agent.tick()
+
+    assert upload is not None and upload.cancelled()
+    assert events == [("telegram", CHAT, [101]), ("delete", HASH)]
+    assert json.loads(seedbox_agent.STATE.read_text()) == {}

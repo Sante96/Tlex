@@ -44,9 +44,14 @@ TAG = re.compile(r"tlex-(\d+)")
 HASH = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 SYNC_SECONDS = 3
 RETRY_SECONDS = 10
-# A torrent just added shows up in qBittorrent's list a moment later, and a finished file
-# may still be renamed from .!qB: missing for this long, it is not coming
-GRACE_SECONDS = 60
+# A torrent just added shows up in qBittorrent's list a moment later, a finished file may
+# still be renamed from .!qB, and qBittorrent's first lists after a restart may miss some
+# torrents: missing for this long, it is not coming
+GRACE_SECONDS = 120
+# A file whose upload fails: tried again after 30 s, 60 s, ... (10 min at most), given up
+# after this many failures
+UPLOAD_TRIES = 3
+UPLOAD_BACKOFF_SECONDS = 30
 
 
 def local_path(qbit_path: str, path_map: list[str]) -> str:
@@ -170,7 +175,9 @@ def _torrent(download_id: int, t: dict) -> dict:
         "num_peers": t["num_seeds"] + t["num_leechs"],
         "num_seeds": t["num_seeds"],
         "files": [
-            {"path": f["name"], "size": f["size"], "progress": f["progress"]} for f in t["files"]
+            # qBittorrent < 4.4, or "Append .!qB": an unfinished file's name ends in .!qB
+            {"path": f["name"].removesuffix(".!qB"), "size": f["size"], "progress": f["progress"]}
+            for f in t["files"]
         ],
     }
 
@@ -188,6 +195,8 @@ class Agent:
         self.adds: dict[int, dict] = {}
         self.actions: dict[int, str] = {}  # pause, resume or remove
         self.unseen: dict[int, float] = {}  # added, not listed yet: since when
+        self.seen: set[int] = set()  # listed at some point in this run
+        self.vanished: dict[int, float] = {}  # to remove, seen but not listed now: since when
         # For the next sync
         self.uploads: list[dict] = []
         self.removed: list[int] = []
@@ -195,6 +204,7 @@ class Agent:
         self.current: dict | None = None
         self.done: set[tuple[int, str]] = set()  # files uploaded (or given up) in this run
         self.missing: dict[tuple[int, str], float] = {}
+        self.failures: dict[tuple[int, str], tuple[int, float]] = {}  # count, next try at
         self.uploading: int | None = None
         self.upload_task: asyncio.Task | None = None
 
@@ -217,15 +227,24 @@ class Agent:
 
     async def tick(self) -> None:
         """Report TLEX's torrents and the uploads, then apply the commands that come back.
-        Without qBittorrent's list there is no sync: a remove would find no torrent."""
-        self.torrents = await asyncio.to_thread(self._listing)
+        Without qBittorrent's list the sync still goes, but the commands wait: a remove
+        would find no torrent."""
+        try:
+            self.torrents = await asyncio.to_thread(self._listing)
+            listed = self.torrents
+            self.seen.update(listed)
+        except Exception as e:  # qBittorrent restarting: the uploads go on meanwhile
+            _log(f"qBittorrent not listed: {e!r}")
+            listed = None
+        torrents = listed or {}
         sent = len(self.uploads), len(self.removed), len(self.errors)
         report = {
             "free_bytes": shutil.disk_usage(self.path_map[1]).free,
             # TLEX's torrents only: the other ones are not the agent's business
-            "dl_speed": sum(t["dlspeed"] for t in self.torrents.values()),
-            "up_speed": sum(t["upspeed"] for t in self.torrents.values()),
-            "torrents": [_torrent(i, t) for i, t in self.torrents.items()],
+            "dl_speed": sum(t["dlspeed"] for t in torrents.values()),
+            "up_speed": sum(t["upspeed"] for t in torrents.values()),
+            "qbit_connected": listed is not None,
+            "torrents": [_torrent(i, t) for i, t in torrents.items()],
             "uploads": self.uploads[: sent[0]],
             "current_upload": self.current,
             "removed": self.removed[: sent[1]],
@@ -240,7 +259,8 @@ class Agent:
             for download_id in commands.get(action, []):
                 self.actions[download_id] = action
         self.plans = {p["download_id"]: p["files"] for p in commands.get("plans", [])}
-        await self._apply()
+        if listed is not None:
+            await self._apply()
 
     async def _apply(self) -> None:
         now = time.monotonic()
@@ -260,8 +280,12 @@ class Agent:
 
         root = self.path_map[0].rstrip("/")
         for download_id, add in list(self.adds.items()):
-            # Listed: an earlier try got there and only its answer was lost
-            if download_id not in self.torrents and self.actions.get(download_id) != "remove":
+            # Listed, or added and not listed yet: TLEX sent it again (an answer was lost)
+            if (
+                download_id not in self.torrents
+                and download_id not in self.unseen
+                and self.actions.get(download_id) != "remove"
+            ):
                 try:
                     b64 = add["torrent_b64"]
                     torrent = base64.b64decode(b64) if b64 else None
@@ -282,6 +306,11 @@ class Agent:
             t = self.torrents.get(download_id)
             if t is None and (download_id in self.unseen or download_id in self.adds):
                 continue  # on its way into qBittorrent
+            if t is None and action == "remove" and download_id in self.seen:
+                # Listed before: qBittorrent may be listing its torrents again after a
+                # restart, and answered now the torrent would stay there for good
+                if now - self.vanished.setdefault(download_id, now) <= GRACE_SECONDS:
+                    continue
             try:
                 if action == "remove":
                     await self._remove(download_id, t)
@@ -314,6 +343,8 @@ class Agent:
             del self.state[key]
         _save(STATE, self.state)
         self.plans.pop(download_id, None)
+        self.seen.discard(download_id)
+        self.vanished.pop(download_id, None)
         self.removed.append(download_id)
 
     def start_upload(self) -> None:
@@ -330,9 +361,26 @@ class Agent:
         """Upload, part by part, the planned files that qBittorrent has finished."""
         try:
             while job := self._next_ready():
-                await self._upload(*job)
+                try:
+                    await self._upload(*job)
+                except Exception as e:  # a remove's cancel is no Exception: it stops the pass
+                    self.current = None
+                    self._failed(job[0], job[1], e)
         finally:
             self.current = self.uploading = None
+
+    def _failed(self, download_id: int, path: str, error: Exception) -> None:
+        """Tried again later, the other files meanwhile; after UPLOAD_TRIES, given up."""
+        count = self.failures.get((download_id, path), (0, 0.0))[0] + 1
+        name = posixpath.basename(path)
+        _log(f"Download {download_id}: {name} not uploaded ({count}): {error!r}")
+        if count >= UPLOAD_TRIES:
+            self.done.add((download_id, path))
+            reason = str(error) or type(error).__name__
+            error_text = f"Upload fallito: {name}: {reason}"
+            self.errors.append({"download_id": download_id, "error": error_text})
+        wait = min(UPLOAD_BACKOFF_SECONDS * count, 600)
+        self.failures[(download_id, path)] = count, time.monotonic() + wait
 
     def _next_ready(self) -> tuple | None:
         now = time.monotonic()
@@ -345,6 +393,8 @@ class Agent:
                 path = p["path"]
                 if path not in finished or (download_id, path) in self.done:
                     continue
+                if self.failures.get((download_id, path), (0, now))[1] > now:
+                    continue  # failed a moment ago
                 local = posixpath.join(local_path(t["save_path"], self.path_map), path)
                 if os.path.isfile(local):
                     return download_id, path, local, finished[path], p["topic"]
