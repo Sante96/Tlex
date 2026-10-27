@@ -95,12 +95,25 @@ function appended(sb: SourceBuffer) {
   });
 }
 
-/** Remove what was played more than `keep` seconds ago. False: nothing worth it. */
-async function trimBehind(video: HTMLVideoElement, sb: SourceBuffer, keep: number) {
+// ffmpeg starts a fragment at every keyframe (frag_keyframe): the moof box, then its mfhd
+const MOOF = "moof\x00\x00\x00\x10mfhd";
+
+/**
+ * Remove what was played more than `keep` seconds ago. MSE removes on up to the next
+ * keyframe (what follows can't be decoded without it), so the cut is at a keyframe
+ * itself: with keyframes 10+ s apart (an anime's 10-bit encode) the playhead's own
+ * frames went too, and playback stalled for good. False: nothing worth it.
+ */
+async function trimBehind(
+  video: HTMLVideoElement,
+  sb: SourceBuffer,
+  keep: number,
+  keyframes: number[],
+) {
   if (!video.buffered.length) return false;
   const start = video.buffered.start(0);
-  const end = video.currentTime - keep;
-  if (end - start < 1) return false;
+  const end = keyframes.filter((k) => k <= video.currentTime - keep).pop();
+  if (end === undefined || end - start < 1) return false;
   sb.remove(start, end);
   await appended(sb);
   return true;
@@ -129,6 +142,25 @@ async function feed(
     IOS ? Math.min(BEHIND_SECONDS, Math.max(1, MAX_BEHIND_BYTES / perSecond())) : BEHIND_SECONDS;
   let sb: SourceBuffer | null = null;
   let head = new Uint8Array(0);
+  // Where the fragments start, in the buffer's time: where one begins, the buffer ends
+  // at its keyframe. One split across two reads is missed, which only trims less
+  const keyframes: number[] = [];
+  // False: the stream was stopped while the buffer was full
+  const append = async (buffer: SourceBuffer, piece: Uint8Array<ArrayBuffer>) => {
+    for (;;) {
+      try {
+        buffer.appendBuffer(piece);
+        break;
+      } catch (e) {
+        if ((e as DOMException).name !== "QuotaExceededError") throw e;
+        // Full: what was played goes first, else playback makes room
+        if (!(await trimBehind(video, buffer, 2, keyframes))) await sleep(1000);
+        if (signal.aborted) return false;
+      }
+    }
+    await appended(buffer);
+    return true;
+  };
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -156,19 +188,16 @@ async function feed(
       chunk = head;
     }
 
-    for (;;) {
-      try {
-        sb.appendBuffer(chunk);
-        break;
-      } catch (e) {
-        if ((e as DOMException).name !== "QuotaExceededError") throw e;
-        // Full: what was played goes first, else playback makes room
-        if (!(await trimBehind(video, sb, 2))) await sleep(1000);
-        if (signal.aborted) return true;
-      }
+    const text = new TextDecoder("latin1").decode(chunk);
+    let from = 0;
+    for (let at = text.indexOf(MOOF); at >= 0; at = text.indexOf(MOOF, at + 1)) {
+      const to = Math.max(from, at - 4); // the box starts with its size
+      if (to > from && !(await append(sb, chunk.subarray(from, to)))) return true;
+      if (video.buffered.length) keyframes.push(video.buffered.end(video.buffered.length - 1));
+      from = to;
     }
-    await appended(sb);
-    if (video.buffered.length) await trimBehind(video, sb, behindLimit());
+    if (!(await append(sb, chunk.subarray(from)))) return true;
+    await trimBehind(video, sb, behindLimit(), keyframes);
 
     while (video.buffered.length && ahead() > aheadLimit()) {
       await sleep(1000);
