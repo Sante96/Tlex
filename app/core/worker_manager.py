@@ -247,6 +247,9 @@ class WorkerManager:
         """One client per worker account (joining a chat is done once per account)."""
         return list(self._clients.values())
 
+    def primary_client(self, worker_id: int) -> Client | None:
+        return self._clients.get(worker_id)
+
     def pool_pressure(self) -> float:
         """
         Return pool usage ratio (0.0 = all free, 1.0 = all in use).

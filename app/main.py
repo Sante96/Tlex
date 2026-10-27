@@ -84,8 +84,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Anime classification failed: {e}")
 
+    # Accounts added before the panel let them in by itself: into the library's groups
+    async def join_library_groups_background():
+        try:
+            from app.services.backup import backup_service
+
+            async with async_session_maker() as session:
+                await backup_service.join_library_groups(session)
+        except Exception as e:
+            logger.warning(f"Workers joining the library's groups failed: {e}")
+
     # Kept: the loop holds only weak references to tasks, and shutdown cancels them
     background = [
+        asyncio.create_task(join_library_groups_background()),
         asyncio.create_task(classify_library_background()),
         asyncio.create_task(populate_caches_background()),
         asyncio.create_task(backfill_chapters_background()),

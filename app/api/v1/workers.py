@@ -14,6 +14,7 @@ from app.core.worker_manager import worker_manager
 from app.models import ArchiveAccount, MediaItem, Profile, User
 from app.models.media import MediaType
 from app.models.worker import Worker, WorkerStatus
+from app.services.backup import backup_service
 
 router = APIRouter()
 
@@ -252,6 +253,12 @@ async def verify_code(
 
         # Start only the new worker; a full reload would cut every active stream
         await worker_manager.load_workers(db, worker_ids=[worker.id])
+        # Into the library's groups now: outside them, its clients can't read a file
+        if primary := worker_manager.primary_client(worker.id):
+            try:
+                await backup_service.join_library_groups(db, [primary])
+            except Exception as e:
+                logger.warning(f"Worker {worker.id} couldn't join the library's groups: {e}")
 
         logger.info(f"Added new worker: {phone} (premium={is_premium})")
         return {
