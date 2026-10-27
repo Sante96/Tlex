@@ -38,6 +38,7 @@ def test_a_pack_sends_each_file_to_its_season():
     assert t("The.Expanse.S02E03.mkv") == "The Expanse - Stagione 2"
     assert t("Episode 05.mkv") == "The Expanse - Stagione 1"
     assert t("The_Expanse_OVA01.mkv") == "The Expanse - Stagione 0"
+    assert t("Show S1 + OVA 1-2/Show - 05.mkv") == "The Expanse - Stagione 1"
 
 
 def test_uploadable_files():
@@ -55,6 +56,7 @@ def test_torrent_name():
     assert torrent_name("magnet:?xt=urn:btih:ABC", None) is None
     assert torrent_name(None, b"d4:infod4:name9:Some.Showee") == "Some.Show"
     assert torrent_name(None, b"not bencode") is None
+    assert torrent_name(None, b"l" * 5000) is None
     assert torrent_name(None, b"d4:infod4:name99:shortee") is None
     assert info_hash("magnet:?xt=urn:btih:ABCdef&dn=x") == "abcdef"
     assert info_hash("magnet:?dn=x") is None

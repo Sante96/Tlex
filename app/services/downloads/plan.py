@@ -31,9 +31,11 @@ def file_topic(kind: DownloadKind, name: str | None, season: int | None, path: s
     """A pack holds several seasons and specials: each file goes to its own topic."""
     if kind not in (DownloadKind.series, DownloadKind.anime):
         return destination_topic(kind, name, season)
-    if special_number(path) is not None:
+    # The file name only: a batch folder like "Show S1 + OVA 1-2" must not make every file a special.
+    filename = path.replace("\\", "/").rsplit("/", 1)[-1]
+    if special_number(filename) is not None:
         return destination_topic(kind, name, 0)
-    file_season = guessit(path.replace("\\", "/").rsplit("/", 1)[-1]).get("season")
+    file_season = guessit(filename).get("season")
     if isinstance(file_season, list):
         file_season = file_season[0]
     return destination_topic(kind, name, file_season or season or 1)
@@ -77,7 +79,7 @@ def torrent_name(magnet: str | None, torrent: bytes | None) -> str | None:
         try:
             name = _bdecode(torrent)[0][b"info"][b"name"]
             return name.decode("utf-8", errors="replace")
-        except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError, RecursionError):
             return None
     return None
 
