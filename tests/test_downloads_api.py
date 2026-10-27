@@ -1,6 +1,7 @@
 """The Download page's API and the seedbox agent's sync."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -367,3 +368,52 @@ async def test_an_upload_into_the_old_topic_is_moved(
     await _sync(client, uploads=[upload("S/E02.mkv", "Stargate - Stagione 1", 11)])
     schedule.assert_called_once_with(download["id"])
     assert (await _get(client, auth_headers, download["id"]))["files"][1]["message_ids"] == [11]
+
+
+async def test_the_last_file_uploaded_into_the_old_topic_is_scanned_by_its_move(
+    client: AsyncClient, auth_headers: dict, test_session: AsyncSession, mocker, monkeypatch
+):
+    monkeypatch.setattr(move, "async_session_maker", lambda: _same(test_session))
+    handle_sync_scan = mocker.patch.object(service, "schedule_scan")  # move.py keeps its own
+    scanner = mocker.patch.object(
+        scanner_service, "scan_all_channels", new=AsyncMock(return_value={})
+    )
+
+    async def get_forum_topics(chat_id):
+        yield SimpleNamespace(name="Stargate SG-1 - Stagione 1", message_thread_id=88)
+
+    telegram = MagicMock(
+        get_forum_topics=get_forum_topics,
+        forward_messages=AsyncMock(return_value=[SimpleNamespace(id=900)]),
+        delete_messages=AsyncMock(),
+    )
+    worker_back = asyncio.Event()
+
+    async def get_best_worker(session):
+        await worker_back.wait()
+        return MagicMock(), telegram
+
+    mocker.patch.object(worker_manager, "get_best_worker", side_effect=get_best_worker)
+    download = await _add(client, auth_headers)
+    await _sync(client)
+    await _sync(client, torrents=[_torrent(download["id"], ["S/E01.mkv"])])
+
+    # Its only file, uploaded into the topic of before a correction
+    upload = {
+        "download_id": download["id"],
+        "path": "S/E01.mkv",
+        "topic_id": 77,
+        "message_ids": [10],
+        "topic": "Stargate - Stagione 1",
+    }
+    await _sync(client, uploads=[upload])
+    await _sync(client)  # its move waits for a worker: the row isn't rescanned meanwhile
+    handle_sync_scan.assert_not_called()  # the move scans it once the file has left 77
+    worker_back.set()
+    await asyncio.gather(*list(move._moves.values()))
+    await asyncio.gather(*list(service._tasks))
+
+    telegram.delete_messages.assert_awaited_once_with(-100123, [10])
+    assert sorted(c.kwargs["topic_id"] for c in scanner.await_args_list) == [77, 88]
+    assert (await _get(client, auth_headers, download["id"]))["status"] == "removing"
+    assert (await _sync(client))["remove"] == [download["id"]]

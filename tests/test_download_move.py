@@ -249,10 +249,7 @@ async def test_a_title_a_correction_emptied_goes_after_the_scan(test_session, mo
         ]
     )
     await test_session.commit()
-    # Failed: an empty title is dead all the same
-    scanner = mocker.patch.object(
-        scanner_service, "scan_all_channels", side_effect=RuntimeError("Telegram is down")
-    )
+    scanner = mocker.patch.object(scanner_service, "scan_all_channels", return_value={})
 
     await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
 
@@ -262,6 +259,24 @@ async def test_a_title_a_correction_emptied_goes_after_the_scan(test_session, mo
     scanner.assert_awaited_once()
     assert (await test_session.scalars(titles)).all() == ["Kept"]
     assert (await test_session.scalars(select(Franchise.id))).all() == []
+
+
+async def test_no_title_is_pruned_without_its_scan(test_session, mocker, monkeypatch):
+    monkeypatch.setattr(service, "SCAN_RETRY_SECONDS", 0)
+    monkeypatch.setattr(service, "SCAN_RETRIES", 2)
+    wrong = Series(title="Wrong")
+    download = corrected([100])
+    test_session.add_all([download, episode(100, series=wrong)])
+    await test_session.commit()
+    busy = {"error": "Scan already in progress"}
+    scanner = mocker.patch.object(scanner_service, "scan_all_channels", return_value=busy)
+
+    await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
+    await asyncio.gather(*list(service._tasks))
+
+    # The scan that would have put the copy back in it never ran: kept
+    assert scanner.await_count == 2
+    assert (await test_session.scalars(select(Series.title))).all() == ["Wrong"]
 
 
 async def test_the_archive_deletes_its_pending_copies_at_its_daily_run(test_session, mocker):

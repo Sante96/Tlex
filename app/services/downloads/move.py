@@ -13,7 +13,7 @@ from app.config import get_settings
 from app.core.worker_manager import worker_manager
 from app.database import async_session_maker
 from app.models.backup import BackupChannel, BackupMessage
-from app.models.download import Download
+from app.models.download import Download, DownloadStatus
 from app.models.media import MediaItem, MediaPart
 from app.services.downloads.service import schedule_scan
 
@@ -101,11 +101,17 @@ async def _delete_originals(
 
 async def move_uploaded(session: AsyncSession, download: Download, client: Client) -> None:
     """Every uploaded file whose topic is not where its messages are is copied there, then
-    its originals are deleted; the topics it reached are scanned."""
+    its originals are deleted; the topics it reached are scanned (all of the download's when
+    it waits for its scan)."""
     chat_id = get_settings().channel_ids_list[0]
     download_id = download.id
     topic_ids: dict[str | int, int] = {}
-    moved: set[int] = set()
+    # A row waiting for its scan left it to this move (handle_sync): all its topics, after
+    to_scan: set[int] = (
+        {f["topic_id"] for f in download.files if f["uploaded"]}
+        if download.status == DownloadStatus.scanning
+        else set()
+    )
     emptied: tuple[set[int], set[int]] = (set(), set())  # series, franchises
     try:
         for path in [f["path"] for f in download.files if f["uploaded"]]:
@@ -115,7 +121,7 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
                     session, client, chat_id, download_id, path, f["stale_ids"], emptied
                 )
                 f = next(f for f in download.files if f["path"] == path)
-                moved.add(f["topic_id"])  # scanned again before its old titles are pruned
+                to_scan.add(f["topic_id"])  # scanned again before its old titles are pruned
             if f["topic"] not in topic_ids:
                 topic_ids[f["topic"]] = await topic_id_for(client, chat_id, f["topic"])
             topic_id = topic_ids[f["topic"]]
@@ -136,11 +142,11 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
                 message_ids=new_ids,
                 stale_ids=old_ids,
             )
-            moved.add(topic_id)
+            to_scan.add(topic_id)
             await _delete_originals(session, client, chat_id, download_id, path, old_ids, emptied)
     finally:
-        if moved:
-            schedule_scan(download_id, sorted(moved), sorted(emptied[0]), sorted(emptied[1]))
+        if to_scan:
+            schedule_scan(download_id, sorted(to_scan), sorted(emptied[0]), sorted(emptied[1]))
 
 
 async def _move(download_id: int) -> None:

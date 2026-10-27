@@ -144,6 +144,8 @@ def _plan_files(download: Download, files: list) -> None:
 
 async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands:
     """The agent's report every 3 s: record it, move the downloads on, answer with commands."""
+    from app.services.downloads import move  # move.py imports this module
+
     _seedbox.update(
         last_seen=time.time(),
         free_bytes=report.free_bytes,
@@ -196,8 +198,10 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
     current = report.current_upload
     to_scan: list[Download] = []
     for d in downloads.values():
-        if d.status == DownloadStatus.scanning and d.id not in _tasks.values():
-            to_scan.append(d)  # its scan task ended with the backend's last run
+        if d.status == DownloadStatus.scanning:
+            # Its scan task ended with the backend's last run (a move scans it when done)
+            if d.id not in _tasks.values() and d.id not in move._moves:
+                to_scan.append(d)
             continue
         if d.status not in _TRANSFERRING:
             continue
@@ -245,38 +249,42 @@ async def handle_sync(session: AsyncSession, report: AgentSync) -> AgentCommands
     await session.commit()
 
     for d in to_scan:
-        schedule_scan(d.id, sorted({f["topic_id"] for f in d.files}))
-    if to_move:
-        from app.services.downloads.move import schedule_move  # move.py imports this module
-
-        for download_id in to_move:
-            schedule_move(download_id)
+        # Not while a file leaves its topic: the scan could file it there as it goes. Its
+        # move scans the download once done
+        if d.id not in to_move:
+            schedule_scan(d.id, sorted({f["topic_id"] for f in d.files}))
+    for download_id in to_move:
+        move.schedule_move(download_id)
     return commands
 
 
-async def _scan(topic_id: int) -> None:
+async def _scan(topic_id: int) -> bool:
+    """Whether the topic was scanned."""
     for _ in range(SCAN_RETRIES):
         async with async_session_maker() as session:
             result = await scanner_service.scan_all_channels(session, topic_id=topic_id)
         if result.get("error") != "Scan already in progress":
             if "error" in result:
                 logger.warning(f"Scan of topic {topic_id}: {result['error']}")
-            return
+            return "error" not in result
         await asyncio.sleep(SCAN_RETRY_SECONDS)
     logger.warning(f"Topic {topic_id} not scanned: the scanner stayed busy")
+    return False
 
 
 async def _scan_then_remove(
     download_id: int, topic_ids: list[int], series_ids: list[int], franchise_ids: list[int]
 ) -> None:
+    scanned = True
     for topic_id in topic_ids:
         try:
-            await _scan(topic_id)
+            scanned &= await _scan(topic_id)
         except Exception as e:
+            scanned = False
             logger.warning(f"Scan of topic {topic_id} failed: {e}")
     # After the scan, which puts a season's episodes back in their series: only a title
-    # that a correction really emptied goes (a failed scan doesn't bring an empty one back)
-    if series_ids or franchise_ids:
+    # that a correction really emptied goes. A topic left unscanned may still owe it some
+    if scanned and (series_ids or franchise_ids):
         try:
             async with async_session_maker() as session:
                 await session.execute(
