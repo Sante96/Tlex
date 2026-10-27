@@ -40,6 +40,7 @@ import { getTmdbImageUrl, yearOf } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useIsTV } from "@/hooks/use-platform";
 import { useAuth } from "@/contexts/auth-context";
+import { useNavSection } from "@/contexts/sidebar-context";
 import { useDelayed } from "@/hooks/use-delayed";
 
 export default function SeriesDetailPage() {
@@ -62,6 +63,7 @@ export default function SeriesDetailPage() {
   const t = useTranslations();
   const isTV = useIsTV();
   const { user } = useAuth();
+  useNavSection(series?.is_anime ? "/anime" : null);
 
   const handleToggleWatchlist = async () => {
     if (!series) return;

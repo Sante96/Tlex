@@ -11,7 +11,7 @@ import { NAV_FADE, NAV_MOTION } from "@/components/ds/nav-item";
 import { TlexWordmark } from "@/components/tlex-wordmark";
 import Image from "next/image";
 import pkg from "../../../package.json";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { isActive, useSidebar } from "@/contexts/sidebar-context";
 import { useIsTV, useTVTier, type TVTier } from "@/hooks/use-platform";
 import { getScannerStatus } from "@/lib/api";
 import { useIsMobile, useIsTablet } from "@/lib/breakpoints";
@@ -49,13 +49,9 @@ const bottomRoutes = [
   { key: "nav.settings", href: "/settings", icon: Settings },
 ];
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || (href !== "/" && pathname.startsWith(href));
-}
-
 export function Sidebar() {
   const pathname = usePathname();
-  const { isCollapsed, toggleCollapsed, tvExpanded, setTvExpanded } = useSidebar();
+  const { isCollapsed, toggleCollapsed, tvExpanded, setTvExpanded, section } = useSidebar();
   const [isScanning, setIsScanning] = useState(false);
   const t = useTranslations();
   const isTV = useIsTV();
@@ -178,7 +174,7 @@ export function Sidebar() {
             href={item.href}
             icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
-            active={isActive(pathname, item.href)}
+            active={isActive(pathname, item.href, section)}
             collapsed={collapsed}
             tvMode={isTV}
             iconColumn={isTV ? tvIconCol : undefined}
@@ -205,7 +201,7 @@ export function Sidebar() {
             href={item.href}
             icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
-            active={isActive(pathname, item.href)}
+            active={isActive(pathname, item.href, section)}
             collapsed={collapsed}
             tvMode={isTV}
             iconColumn={isTV ? tvIconCol : undefined}
@@ -237,7 +233,7 @@ export function Sidebar() {
             href={item.href}
             icon={<item.icon className={isTV ? "h-5 w-5 tv-1080:h-6 tv-1080:w-6 tv-4k:h-6 tv-4k:w-6" : "h-5 w-5"} />}
             label={t(item.key)}
-            active={isActive(pathname, item.href)}
+            active={isActive(pathname, item.href, section)}
             collapsed={collapsed}
             tvMode={isTV}
             iconColumn={isTV ? tvIconCol : undefined}

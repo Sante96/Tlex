@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ReactNode } from "react";
 
 interface SidebarContextValue {
@@ -8,6 +8,9 @@ interface SidebarContextValue {
   toggleCollapsed: () => void;
   tvExpanded: boolean;
   setTvExpanded: (value: boolean) => void;
+  /** The nav entry the page belongs to when its URL says otherwise */
+  section: string | null;
+  setSection: (href: string | null) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -20,6 +23,7 @@ function getInitialCollapsed(): boolean {
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsed);
   const [tvExpanded, setTvExpanded] = useState(false);
+  const [section, setSection] = useState<string | null>(null);
 
   const toggleCollapsed = useCallback(() => {
     setIsCollapsed((prev) => {
@@ -30,7 +34,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, toggleCollapsed, tvExpanded, setTvExpanded }}>
+    <SidebarContext.Provider
+      value={{ isCollapsed, toggleCollapsed, tvExpanded, setTvExpanded, section, setSection }}
+    >
       {children}
     </SidebarContext.Provider>
   );
@@ -42,4 +48,19 @@ export function useSidebar() {
     throw new Error("useSidebar must be used within SidebarProvider");
   }
   return context;
+}
+
+/** An anime lives under /series or /media, yet belongs to the Anime entry */
+export function useNavSection(href: string | null) {
+  const { setSection } = useSidebar();
+  useEffect(() => {
+    setSection(href);
+    return () => setSection(null);
+  }, [href, setSection]);
+}
+
+/** Whether a nav entry is the current page's */
+export function isActive(pathname: string, href: string, section: string | null) {
+  if (section) return href === section;
+  return pathname === href || (href !== "/" && pathname.startsWith(href));
 }

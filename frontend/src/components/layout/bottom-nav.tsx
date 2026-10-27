@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Home, Heart, Film, Tv, Music, Origami } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { isActive, useSidebar } from "@/contexts/sidebar-context";
 
 // Settings live in the avatar's menu (top bar): a seventh item was too narrow
 const navRoutes = [
@@ -16,10 +17,6 @@ const navRoutes = [
   { key: "nav.watchlist", href: "/watchlist", icon: Heart },
 ];
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || (href !== "/" && pathname.startsWith(href));
-}
-
 /**
  * The phone's navigation: a glass capsule floating above the home indicator, clear of the
  * screen's rounded corners (its own round ends follow them); the active item sits on a
@@ -27,6 +24,7 @@ function isActive(pathname: string, href: string) {
  */
 export function BottomNav() {
   const pathname = usePathname();
+  const { section } = useSidebar();
   const t = useTranslations();
 
   return (
@@ -43,7 +41,7 @@ export function BottomNav() {
       }}
     >
       {navRoutes.map((item) => {
-        const active = isActive(pathname, item.href);
+        const active = isActive(pathname, item.href, section);
         return (
           <Link
             key={item.href}
