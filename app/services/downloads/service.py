@@ -6,11 +6,12 @@ import time
 from datetime import UTC, datetime
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models.download import Download, DownloadKind, DownloadStatus
+from app.models.media import Franchise, Series
 from app.schemas.download import AgentAdd, AgentCommands, AgentPlan, AgentPlanFile, AgentSync
 from app.services.downloads.plan import (
     destination_topic,
@@ -265,12 +266,30 @@ async def _scan(topic_id: int) -> None:
     logger.warning(f"Topic {topic_id} not scanned: the scanner stayed busy")
 
 
-async def _scan_then_remove(download_id: int, topic_ids: list[int]) -> None:
+async def _scan_then_remove(
+    download_id: int, topic_ids: list[int], series_ids: list[int], franchise_ids: list[int]
+) -> None:
     for topic_id in topic_ids:
         try:
             await _scan(topic_id)
         except Exception as e:
             logger.warning(f"Scan of topic {topic_id} failed: {e}")
+    # After the scan, which puts a season's episodes back in their series: only a title
+    # that a correction really emptied goes (a failed scan doesn't bring an empty one back)
+    if series_ids or franchise_ids:
+        try:
+            async with async_session_maker() as session:
+                await session.execute(
+                    delete(Series).where(Series.id.in_(series_ids), ~Series.episodes.any())
+                )
+                await session.execute(
+                    delete(Franchise).where(
+                        Franchise.id.in_(franchise_ids), ~Franchise.concerts.any()
+                    )
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Download {download_id}: empty titles not pruned: {e}")
     # The files are on Telegram whatever the scan did: a later scan finds what it missed
     try:
         async with async_session_maker() as session:
@@ -283,9 +302,17 @@ async def _scan_then_remove(download_id: int, topic_ids: list[int]) -> None:
         logger.warning(f"Download {download_id}: removal not ordered: {e}")
 
 
-def schedule_scan(download_id: int, topic_ids: list[int]) -> None:
-    """Scan the topics in the background, then, if the download was waiting for this scan,
-    tell the agent to remove the torrent."""
-    task = asyncio.create_task(_scan_then_remove(download_id, topic_ids))
+def schedule_scan(
+    download_id: int,
+    topic_ids: list[int],
+    series_ids: list[int] | None = None,
+    franchise_ids: list[int] | None = None,
+) -> None:
+    """Scan the topics in the background, then delete those of these series and franchises
+    left without titles and, if the download was waiting for this scan, tell the agent to
+    remove the torrent."""
+    task = asyncio.create_task(
+        _scan_then_remove(download_id, topic_ids, series_ids or [], franchise_ids or [])
+    )
     _tasks[task] = download_id
     task.add_done_callback(_tasks.pop)

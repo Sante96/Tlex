@@ -6,7 +6,7 @@ from itertools import batched
 
 from loguru import logger
 from pyrogram import Client
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -14,7 +14,7 @@ from app.core.worker_manager import worker_manager
 from app.database import async_session_maker
 from app.models.backup import BackupChannel, BackupMessage
 from app.models.download import Download
-from app.models.media import Franchise, MediaItem, MediaPart, Series
+from app.models.media import MediaItem, MediaPart
 from app.services.downloads.service import schedule_scan
 
 MOVE_RETRY_SECONDS = 30  # no worker connected (a restart): wait, try again
@@ -47,23 +47,22 @@ async def _update_file(session: AsyncSession, download_id: int, path: str, **cha
     await session.commit()
 
 
-async def _forget(session: AsyncSession, chat_id: int, old_ids: list[int]) -> dict[int, list[int]]:
+async def _forget(
+    session: AsyncSession, chat_id: int, old_ids: list[int], emptied: tuple[set[int], set[int]]
+) -> dict[int, list[int]]:
     """Drop the library titles and backup rows of messages that are gone; returns the
-    workers' backup copies to delete, by backup chat."""
+    workers' backup copies to delete, by backup chat. The titles' series and franchises go
+    into `emptied`: the scan step prunes those it leaves empty."""
     parts = select(MediaPart.media_item_id).where(
         MediaPart.channel_id == chat_id, MediaPart.message_id.in_(old_ids)
     )
     items = (await session.scalars(select(MediaItem).where(MediaItem.id.in_(parts)))).all()
-    series_ids = [i.series_id for i in items if i.series_id is not None]
-    franchise_ids = [i.franchise_id for i in items if i.franchise_id is not None]
     for item in items:
+        if item.series_id:
+            emptied[0].add(item.series_id)
+        if item.franchise_id:
+            emptied[1].add(item.franchise_id)
         await session.delete(item)  # through the ORM: its parts and streams go with it
-    await session.flush()
-    # A corrected name leaves no empty series or franchise behind
-    await session.execute(delete(Series).where(Series.id.in_(series_ids), ~Series.episodes.any()))
-    await session.execute(
-        delete(Franchise).where(Franchise.id.in_(franchise_ids), ~Franchise.concerts.any())
-    )
 
     rows = await session.execute(
         select(BackupMessage, BackupChannel)
@@ -81,12 +80,18 @@ async def _forget(session: AsyncSession, chat_id: int, old_ids: list[int]) -> di
 
 
 async def _delete_originals(
-    session: AsyncSession, client: Client, chat_id: int, download_id: int, path: str, ids: list[int]
+    session: AsyncSession,
+    client: Client,
+    chat_id: int,
+    download_id: int,
+    path: str,
+    ids: list[int],
+    emptied: tuple[set[int], set[int]],
 ) -> None:
     """Telegram first, the database last: a failure leaves `stale_ids` for the next move,
     and deleting a message twice is harmless."""
     await client.delete_messages(chat_id, ids)
-    copies = await _forget(session, chat_id, ids)
+    copies = await _forget(session, chat_id, ids, emptied)
     # Left there, a backup promoted to main would bring the old titles back
     for backup_chat_id, copy_ids in copies.items():
         for chunk in batched(copy_ids, 100, strict=False):
@@ -101,12 +106,16 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
     download_id = download.id
     topic_ids: dict[str | int, int] = {}
     moved: set[int] = set()
+    emptied: tuple[set[int], set[int]] = (set(), set())  # series, franchises
     try:
         for path in [f["path"] for f in download.files if f["uploaded"]]:
             f = next(f for f in download.files if f["path"] == path)
             if f.get("stale_ids"):  # copied by an earlier move that failed after
-                await _delete_originals(session, client, chat_id, download_id, path, f["stale_ids"])
+                await _delete_originals(
+                    session, client, chat_id, download_id, path, f["stale_ids"], emptied
+                )
                 f = next(f for f in download.files if f["path"] == path)
+                moved.add(f["topic_id"])  # scanned again before its old titles are pruned
             if f["topic"] not in topic_ids:
                 topic_ids[f["topic"]] = await topic_id_for(client, chat_id, f["topic"])
             topic_id = topic_ids[f["topic"]]
@@ -128,10 +137,10 @@ async def move_uploaded(session: AsyncSession, download: Download, client: Clien
                 stale_ids=old_ids,
             )
             moved.add(topic_id)
-            await _delete_originals(session, client, chat_id, download_id, path, old_ids)
+            await _delete_originals(session, client, chat_id, download_id, path, old_ids, emptied)
     finally:
         if moved:
-            schedule_scan(download_id, sorted(moved))
+            schedule_scan(download_id, sorted(moved), sorted(emptied[0]), sorted(emptied[1]))
 
 
 async def _move(download_id: int) -> None:

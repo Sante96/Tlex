@@ -8,15 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.config import get_settings
 from app.core.worker_manager import worker_manager
 from app.models.backup import ArchiveAccount, BackupChannel, BackupMessage
 from app.models.download import Download
 from app.models.media import Franchise, MediaItem, MediaPart, MediaType, Series
+from app.models.user import Profile, User, Watchlist
 from app.services.backup import _sync_mixin, backup_service
-from app.services.downloads import move
+from app.services.downloads import move, service
+from app.services.scanner.service import scanner_service
 
 CHAT = -100
 
@@ -26,6 +28,7 @@ def setup(monkeypatch, test_session):
     monkeypatch.setattr(get_settings(), "scanner_channel_ids", str(CHAT))
     monkeypatch.setattr(move, "MOVE_RETRY_SECONDS", 0)
     monkeypatch.setattr(move, "async_session_maker", lambda: nullcontext(test_session))
+    monkeypatch.setattr(service, "async_session_maker", lambda: nullcontext(test_session))
 
 
 @pytest.fixture
@@ -147,7 +150,7 @@ async def test_a_move_copies_deletes_and_cleans_the_library(test_session, scan):
     assert (await test_session.scalars(select(MediaPart.message_id))).all() == [200]
     assert download.files[0]["message_ids"] == [900, 901]
     assert (download.files[0]["topic_id"], download.files[0]["stale_ids"]) == (88, [])
-    scan.assert_called_once_with(download.id, [88])
+    scan.assert_called_once_with(download.id, [88], [], [])
 
     # Nothing changed since: a second move touches nothing
     client.forward_messages.reset_mock()
@@ -194,7 +197,7 @@ async def test_a_move_failed_halfway_is_finished_by_the_next_one(test_session, s
     assert (first["topic_id"], first["message_ids"], first["stale_ids"]) == (88, [900], [])
     # Copied, and recorded as such: its originals wait in stale_ids
     assert (second["topic_id"], second["message_ids"], second["stale_ids"]) == (88, [1000], [200])
-    scan.assert_called_once_with(download.id, [88])
+    scan.assert_called_once_with(download.id, [88], [], [])
 
     client.forward_messages.reset_mock()
     client.delete_messages.reset_mock(side_effect=True)
@@ -205,7 +208,34 @@ async def test_a_move_failed_halfway_is_finished_by_the_next_one(test_session, s
     assert download.files[1]["stale_ids"] == []
 
 
-async def test_a_title_left_empty_by_a_move_is_gone(test_session, scan):
+async def test_a_season_fix_keeps_its_series(test_session, mocker):
+    # On: the watchlist row goes with its series, as in PostgreSQL
+    await test_session.execute(text("PRAGMA foreign_keys=ON"))
+    user = User(email="u@example.com", password_hash="h", profiles=[Profile(name="main")])
+    show = Series(title="Show", tmdb_id=1)
+    download = corrected([100])
+    test_session.add_all([user, show, download, episode(100, series=show)])
+    await test_session.flush()
+    test_session.add(Watchlist(user_id=user.id, profile_id=user.profiles[0].id, series_id=show.id))
+    await test_session.commit()
+    show_id = show.id
+
+    async def scan_all_channels(session, topic_id):
+        # The copy's TMDB match is the same series: the scanner files it there
+        session.add(episode(900, series_id=show_id))
+        await session.commit()
+        return {}
+
+    mocker.patch.object(scanner_service, "scan_all_channels", side_effect=scan_all_channels)
+
+    await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
+    await asyncio.gather(*list(service._tasks))
+
+    assert (await test_session.scalars(select(Series.id))).all() == [show_id]
+    assert (await test_session.scalars(select(Watchlist.series_id))).all() == [show_id]
+
+
+async def test_a_title_a_correction_emptied_goes_after_the_scan(test_session, mocker):
     wrong, kept = Series(title="Wrong"), Series(title="Kept")
     franchise = Franchise(key="wrong", title="Wrong")
     download = corrected([100], [200], [300])
@@ -214,15 +244,23 @@ async def test_a_title_left_empty_by_a_move_is_gone(test_session, scan):
             download,
             episode(100, series=wrong),
             episode(200, series=kept),
-            episode(400, series=kept),  # not this download's: "Kept" keeps it
+            episode(400, series=kept),  # not this download's: "Kept" is never deleted
             episode(300, media_type=MediaType.CONCERT, franchise=franchise),
         ]
     )
     await test_session.commit()
+    # Failed: an empty title is dead all the same
+    scanner = mocker.patch.object(
+        scanner_service, "scan_all_channels", side_effect=RuntimeError("Telegram is down")
+    )
 
     await move.move_uploaded(test_session, download, telegram({"Show - Stagione 2": 88}))
 
-    assert (await test_session.scalars(select(Series.title))).all() == ["Kept"]
+    titles = select(Series.title).order_by(Series.title)
+    assert (await test_session.scalars(titles)).all() == ["Kept", "Wrong"]  # not before it
+    await asyncio.gather(*list(service._tasks))
+    scanner.assert_awaited_once()
+    assert (await test_session.scalars(titles)).all() == ["Kept"]
     assert (await test_session.scalars(select(Franchise.id))).all() == []
 
 
