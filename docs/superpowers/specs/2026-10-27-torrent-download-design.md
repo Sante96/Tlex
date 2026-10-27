@@ -13,7 +13,7 @@ Scarica la **seedbox**, non la VPS (scelta di Sante dopo il confronto):
 
 ## Obiettivi
 
-1. **Pagina "Download"**, solo per l'admin, nello stile di TLEX (componenti DS, colori dell'app).
+1. **Pagina "Download"**, per **tutti gli utenti con un account** (deciso da Sante), nello stile di TLEX (componenti DS, colori dell'app). Chiunque può aggiungere, modificare, mettere in pausa e rimuovere.
    - Desktop, TV e iPad: voce nella sidebar, **sopra Impostazioni**.
    - Telefono: la barra in basso non ha Impostazioni, che stanno nel menu dell'avatar, quindi "Download" va lì accanto (*mia scelta*).
 2. **Aggiunta.** Un riquadro in cima alla pagina:
@@ -65,7 +65,6 @@ Scarica la **seedbox**, non la VPS (scelta di Sante dopo il confronto):
 - Seed dopo il caricamento: i torrent di TLEX si cancellano appena caricati.
 - Gestire gli altri torrent della seedbox, e cercare torrent o feed RSS.
 - Scaricare sulla VPS.
-- Più utenti: è una pagina solo per l'admin.
 
 ## Da evitare in ogni caso
 
@@ -99,7 +98,7 @@ Scarica la **seedbox**, non la VPS (scelta di Sante dopo il confronto):
 
 **Nel backend di TLEX:**
 - una tabella per i torrent, con tipo, nome, stagione, topic, hash qBittorrent, stato, ultimo stato ricevuto ed errore;
-- gli endpoint admin della pagina, più quelli del programma della seedbox (protetti dal token);
+- gli endpoint della pagina (per chi ha fatto l'accesso), più quelli del programma della seedbox (protetti dal token);
 - a lavoro finito, la scansione dei topic coinvolti con lo scanner esistente;
 - per una Modifica dopo il caricamento, la copia e la cancellazione dei messaggi, fatte con un client worker del backend, che è admin del gruppo.
 
