@@ -47,7 +47,7 @@ export default function DownloadsPage() {
   const uploading = data?.downloads.find((d) => d.upload)?.upload;
 
   return (
-    <div className="px-4 md:px-12 py-6 md:py-8 flex flex-col gap-4 max-w-6xl">
+    <div className="px-4 md:px-12 py-6 md:py-8 flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <h1 className="text-[28px] font-bold text-[#fafafa]">{t("title")}</h1>
