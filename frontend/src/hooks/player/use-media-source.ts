@@ -20,6 +20,11 @@ const MAX_BEHIND_BYTES = 16e6;
 const MAX_INIT_BYTES = 4 * 1024 * 1024;
 // A stream that ends this close to the title's end has ended (durations differ a little)
 const END_MARGIN = 5;
+// A stream can also stop with neither an error nor an end (an iPad waited forever at the
+// buffer's end behind Cloudflare): playing with under LOW_SECONDS buffered, and nothing
+// for STALL_SECONDS, it counts as broken and goes on in a new stream
+const LOW_SECONDS = 30;
+const STALL_SECONDS = 15;
 
 // The video's codec string, read from its decoder configuration (avcC/hvcC) in the init
 // segment: Chrome matches only the codec family, but Safari sets its decoder up from the
@@ -190,14 +195,40 @@ async function feed(
     streamRead.bytes = 0; // a new stream: the backend counts it from zero too
     return res.body.getReader();
   };
+  // The next read, or "stalled" when playback is about to run dry and nothing comes
+  const readOrStall = () => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const stalled = new Promise<"stalled">((resolve) => {
+      let quiet = 0;
+      timer = setInterval(() => {
+        const low = !video.paused && video.buffered.length > 0 && ahead() < LOW_SECONDS;
+        quiet = low ? quiet + 1 : 0;
+        if (quiet >= STALL_SECONDS) resolve("stalled");
+      }, 1000);
+    });
+    return Promise.race([reader.read(), stalled]).finally(() => clearInterval(timer));
+  };
 
   for (;;) {
-    let read: Awaited<ReturnType<typeof reader.read>>;
+    let read: Awaited<ReturnType<typeof readOrStall>>;
     try {
-      read = await reader.read();
+      read = await readOrStall();
     } catch (e) {
       const next = sb && (await resume(sb));
       if (!next) throw e;
+      reader = next;
+      continue;
+    }
+    if (read === "stalled") {
+      reader.cancel().catch(() => {});
+      // ponytail: temporary, with the player's [DIAG]: how often a stream hangs
+      fetch("/api/v1/stream/diag", {
+        method: "POST",
+        body: JSON.stringify({ event: "stall", t: video.currentTime, buf: ahead() }),
+        keepalive: true,
+      }).catch(() => {});
+      const next = sb && (await resume(sb));
+      if (!next) throw new Error("stream stalled");
       reader = next;
       continue;
     }
