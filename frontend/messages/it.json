@@ -436,6 +436,7 @@
     "seedboxFree": "{size} liberi",
     "seedboxToTelegram": "↑ {speed} verso Telegram",
     "seedboxOffline": "non collegata",
+    "qbitRestarting": "qBittorrent si sta riavviando",
     "seedboxLastSeen": "ultimo contatto {time}",
     "seedboxStart": "Avvia l'agente sulla seedbox:",
     "magnet": "Magnet",

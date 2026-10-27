@@ -12,6 +12,8 @@ export type DownloadStatus =
 
 export interface SeedboxStatus {
   connected: boolean;
+  /** False while the agent syncs but can't reach qBittorrent (it restarts every few hours) */
+  qbit_connected: boolean;
   /** Epoch seconds of the agent's last sync */
   last_seen: number | null;
   free_bytes: number | null;

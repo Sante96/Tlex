@@ -18,11 +18,16 @@ export function SeedboxStatus({
   const locale = useLocale();
   const size = (bytes: number) => formatBytes(bytes, locale);
 
+  // The agent is there, qBittorrent isn't: the uploads to Telegram go on meanwhile
+  const restarting = seedbox.connected && !seedbox.qbit_connected;
   const parts = seedbox.connected
     ? [
+        restarting && t("qbitRestarting"),
         seedbox.free_bytes !== null &&
           t("seedboxFree", { size: size(seedbox.free_bytes) }),
-        seedbox.dl_speed !== null && `↓ ${size(seedbox.dl_speed)}/s`,
+        !restarting &&
+          seedbox.dl_speed !== null &&
+          `↓ ${size(seedbox.dl_speed)}/s`,
         telegramSpeed !== null &&
           t("seedboxToTelegram", { speed: `${size(telegramSpeed)}/s` }),
       ]
@@ -45,7 +50,11 @@ export function SeedboxStatus({
         <span
           className={cn(
             "w-2 h-2 rounded-full shrink-0",
-            seedbox.connected ? "bg-green-500" : "bg-red-500",
+            restarting
+              ? "bg-amber-500"
+              : seedbox.connected
+                ? "bg-green-500"
+                : "bg-red-500",
           )}
         />
         <span>Seedbox: {parts.filter(Boolean).join(" · ")}</span>

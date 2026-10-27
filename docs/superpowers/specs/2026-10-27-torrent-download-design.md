@@ -102,7 +102,7 @@ Scarica la **seedbox**, non la VPS (scelta di Sante dopo il confronto):
 - a lavoro finito, la scansione dei topic coinvolti con lo scanner esistente;
 - per una Modifica dopo il caricamento, la copia e la cancellazione dei messaggi, fatte con un client worker del backend, che è admin del gruppo.
 
-**Pagina:** `app/(main)/downloads/`. Aggiorna i dati ogni 2–3 secondi mentre è aperta. Se il programma della seedbox non manda il battito da un po', mostra "Seedbox non collegata", con il comando per riavviarlo.
+**Pagina:** `app/(main)/downloads/`. Aggiorna i dati ogni 2–3 secondi mentre è aperta. Se il programma della seedbox non manda il battito da un po', mostra "Seedbox non collegata", con il comando per riavviarlo. Se il programma c'è ma qBittorrent non risponde (si sta riavviando), mostra "qBittorrent si sta riavviando".
 
 **File da caricare:** solo i video, con le estensioni che lo scanner riconosce. Si saltano i file di prova (`sample`) e le cartelle di extra (Extras, Bonus, NCOP/NCED) (*mia scelta*).
 
