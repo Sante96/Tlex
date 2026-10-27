@@ -11,6 +11,15 @@ from app.schemas.auth import (
     UserCreate,
     UserResponse,
 )
+from app.schemas.download import (
+    AgentCommands,
+    AgentSync,
+    DownloadOut,
+    DownloadsResponse,
+    DownloadUpdate,
+    SeedboxStatus,
+    TorrentPreview,
+)
 from app.schemas.media import (
     MediaItemDetailResponse,
     MediaItemResponse,
@@ -42,6 +51,14 @@ __all__ = [
     "DeviceCodeResponse",
     "DeviceConfirmRequest",
     "DevicePollResponse",
+    # Downloads
+    "AgentCommands",
+    "AgentSync",
+    "DownloadOut",
+    "DownloadsResponse",
+    "DownloadUpdate",
+    "SeedboxStatus",
+    "TorrentPreview",
     # Media
     "MediaPartResponse",
     "MediaStreamResponse",

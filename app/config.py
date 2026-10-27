@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     scanner_movies_topic_id: int | None = None  # Topic ID for Movies Archive (bucket strategy)
     scanner_auto_interval_hours: int = 0  # Auto-scan interval in hours (0 = disabled)
 
+    # ============================================
+    # Seedbox agent (the Download page)
+    # ============================================
+    # Empty: no agent, its endpoints answer 404
+    seedbox_agent_token: str = ""
+
     @field_validator("jwt_secret")
     @classmethod
     def _require_real_jwt_secret(cls, v: str) -> str:
@@ -107,6 +113,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET must be a random value of 32+ chars, generate one with: "
                 'python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        return v
+
+    @field_validator("seedbox_agent_token")
+    @classmethod
+    def _require_long_agent_token(cls, v: str) -> str:
+        # It lets the seedbox add torrents and order removals
+        if v and len(v) < 32:
+            raise ValueError(
+                "SEEDBOX_AGENT_TOKEN must be 32+ chars, generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(32))"'
             )
         return v
 
